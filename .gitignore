@@ -1,0 +1,70 @@
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
+buildNumber.properties
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+!/.mvn/wrapper/maven-wrapper.jar
+
+# Compiled
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+hs_err_pid*
+replay_pid*
+
+# IDE — IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+out/
+
+# IDE — Eclipse
+.classpath
+.project
+.settings/
+.bin/
+
+# IDE — VS Code / Cursor
+.vscode/
+.cursor/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.p12
+*.jks
+application-local.yml
+application-local.yaml
+application-secret.yml
+**/secrets/
+
+# Logs
+*.log
+logs/
+
+# Test / coverage
+.jacoco/
+coverage/
+*.exec
+
+# Misc
+*.swp
+*.swo
+*~

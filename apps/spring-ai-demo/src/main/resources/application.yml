@@ -1,0 +1,21 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-demo
+
+# 密钥只从环境变量读取，不要把真实 Key 写进本文件。
+llm:
+  base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+  api-key: ${LLM_API_KEY:}
+  model: ${LLM_MODEL:deepseek-chat}
+  max-tokens: 1024
+  temperature: 0.7
+  timeout-seconds: 60
+  # 走代理时设置（本机代理端口，空则直连）
+  proxy-host: ${LLM_PROXY_HOST:}
+  proxy-port: ${LLM_PROXY_PORT:7890}
+
+chat:
+  system-prompt-version: v1
