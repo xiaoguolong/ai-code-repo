@@ -348,7 +348,8 @@ ai-code-repo/
         ├── pom.xml
         └── src/
             ├── main/java/.../
-            │   ├── controller/
+            │   ├── controller/   # 仅 Controller + Advice
+            │   ├── dto/          # 请求/响应体
             │   ├── application/
             │   ├── domain/
             │   └── infrastructure/
@@ -361,7 +362,8 @@ ai-code-repo/
 
 | 包 | 可以有 | 不可以有 |
 |----|--------|----------|
-| `controller` | HTTP、`@Valid`、鉴权注解、DTO 转换 | 调模型、算 Token、拼 Prompt、if 业务规则 |
+| `controller` | 仅 Controller、`@Valid` 校验、`@RestControllerAdvice` | 调模型、算 Token、拼 Prompt、if 业务规则、放 DTO |
+| `dto` | 请求/响应体、错误信封、参数校验注解 | 业务逻辑、依赖领域外类型 |
 | `application` | 用例、事务、编排调用端口 | SQL、厂商 SDK 类型 |
 | `domain` | 实体、值对象、领域异常、Port 接口 | Spring 注解（除纯 POJO）、Http 类型 |
 | `infrastructure` | SDK、JPA、Redis、配置 | 业务决策（如「这是高风险患者」） |

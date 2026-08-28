@@ -2,6 +2,7 @@ package com.aicode.demo.controller;
 
 import com.aicode.demo.domain.exception.ChatModelException;
 import com.aicode.demo.domain.exception.InvalidChatRequestException;
+import com.aicode.demo.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;

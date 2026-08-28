@@ -2,6 +2,9 @@ package com.aicode.demo.controller;
 
 import com.aicode.demo.application.ChatCommand;
 import com.aicode.demo.application.ChatUseCase;
+import com.aicode.demo.dto.ApiResponse;
+import com.aicode.demo.dto.ChatRequest;
+import com.aicode.demo.dto.ChatResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;

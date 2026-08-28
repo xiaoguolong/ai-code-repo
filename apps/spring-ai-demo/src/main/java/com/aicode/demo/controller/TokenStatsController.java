@@ -2,6 +2,7 @@ package com.aicode.demo.controller;
 
 import com.aicode.demo.application.TokenStatsUseCase;
 import com.aicode.demo.domain.model.TokenStats;
+import com.aicode.demo.dto.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
