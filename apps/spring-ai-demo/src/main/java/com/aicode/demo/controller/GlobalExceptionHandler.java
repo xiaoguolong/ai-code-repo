@@ -51,6 +51,16 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * JSON 结构化输出失败 → 422。
+     */
+    @ExceptionHandler(com.aicode.demo.domain.exception.StructuredOutputException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStructured(com.aicode.demo.domain.exception.StructuredOutputException ex) {
+        log.warn("structured output failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .body(ApiResponse.error("structured_output_error", ex.getMessage()));
+    }
+
+    /**
      * 未预期错误 → 500。
      */
     @ExceptionHandler(Exception.class)

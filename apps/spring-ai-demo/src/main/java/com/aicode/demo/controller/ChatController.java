@@ -2,6 +2,7 @@ package com.aicode.demo.controller;
 
 import com.aicode.demo.application.ChatCommand;
 import com.aicode.demo.application.ChatUseCase;
+import com.aicode.demo.domain.model.OutputFormat;
 import com.aicode.demo.dto.ApiResponse;
 import com.aicode.demo.dto.ChatRequest;
 import com.aicode.demo.dto.ChatResponse;
@@ -31,8 +32,12 @@ public class ChatController {
      */
     @PostMapping
     public ApiResponse<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
-        return ApiResponse.of(ChatResponse.from(
-                chatUseCase.chat(new ChatCommand(request.sessionId(), request.message()))
-        ));
+        ChatCommand command = new ChatCommand(
+                request.sessionId(),
+                request.message(),
+                request.template(),
+                OutputFormat.from(request.responseFormat())
+        );
+        return ApiResponse.of(ChatResponse.from(chatUseCase.chat(command)));
     }
 }

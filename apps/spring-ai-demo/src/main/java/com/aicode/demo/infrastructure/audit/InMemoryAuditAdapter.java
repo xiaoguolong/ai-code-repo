@@ -3,15 +3,17 @@ package com.aicode.demo.infrastructure.audit;
 import com.aicode.demo.domain.model.ChatAuditRecord;
 import com.aicode.demo.domain.port.AuditPort;
 import com.aicode.demo.domain.model.TokenStats;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Objects;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * 进程内审计。第1周不引入数据库；重启后统计清零是预期行为。
+ * 进程内审计。显式设置 chat.audit-provider=memory 时启用；默认使用 JPA。
  */
 @Component
+@ConditionalOnProperty(name = "chat.audit-provider", havingValue = "memory")
 public class InMemoryAuditAdapter implements AuditPort {
 
     private final ConcurrentLinkedQueue<ChatAuditRecord> records = new ConcurrentLinkedQueue<>();

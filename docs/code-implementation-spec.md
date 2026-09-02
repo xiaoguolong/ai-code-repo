@@ -174,15 +174,28 @@ flowchart TB
 
 ### 3.5 JDK 运行约定（全局强制，后续所有项目照此）
 
-本机系统 `JAVA_HOME` 固定为 **JDK 1.8**，供其他 1.8 项目使用。**禁止**为了本仓库改系统或会话级 `JAVA_HOME`。
+**系统 / 用户级 `JAVA_HOME` 固定为 `D:\soft\jdk-1.8`**，供其他 1.8 项目使用。**禁止**为了本仓库改系统或会话级 `JAVA_HOME`。
 
-本仓库全部 Java 模块使用 **JDK 17**，只通过 Maven 参数切换编译器与测试 JVM：
+本仓库全部 Java 模块使用 **JDK 17**，通过以下方式运行，不污染全局：
 
 | 项 | 值 |
 |----|----|
-| 参数名 | `jdk.17.home` |
-| 默认路径 | `E:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot` |
-| 命令写法 | `mvn test "-Djdk.17.home=E:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot"` |
+| JDK 17 路径 | `E:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot` |
+| Maven 参数 | `mvn test "-Djdk.17.home=E:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot"` |
+| 快捷脚本（推荐） | `apps/spring-ai-demo/run-maven-jdk17.ps1` |
+
+快捷脚本用法：
+
+```powershell
+# 测试
+.\run-maven-jdk17.ps1 -q test
+
+# 启动
+.\run-maven-jdk17.ps1 spring-boot:run
+
+# 打包（spring-boot-maven-plugin 需要 Maven 本身跑在 JDK 17，所以必须用脚本）
+.\run-maven-jdk17.ps1 -q -DskipTests package
+```
 
 每个 `apps/*/pom.xml` 必须包含：
 
@@ -580,7 +593,7 @@ HTTP 状态码按语义使用，禁止全部 200。
 | 周 | 主题 | Spec | 日志 | 状态 |
 |----|------|------|------|------|
 | 01 | LLM 基础 / spring-ai-demo | docs/specs/week-01.md | notes/impl-logs/week-01.md | 已关闭 |
-| 02 | Java AI 基础 / 模板 / Redis / 表结构 | | | 未开始 |
+| 02 | Java AI 基础 / 模板 / Redis / 表结构 | docs/specs/week-02.md | notes/impl-logs/week-02.md | 已关闭 |
 | 03 | RAG 知识库 | | | 未开始 |
 | 04 | 企业知识库 Agent V1 | | | 未开始 |
 | 05 | Agent 基础 | | | 未开始 |

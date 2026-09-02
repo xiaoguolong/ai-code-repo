@@ -33,11 +33,12 @@ public class DemoConfiguration {
      * 把配置映射为用例所需的运行时参数。
      */
     @Bean
-    ChatRuntimeConfig chatRuntimeConfig(LlmProperties llmProperties) {
+    ChatRuntimeConfig chatRuntimeConfig(LlmProperties llmProperties, ChatAppProperties chatAppProperties) {
         return new ChatRuntimeConfig(
                 llmProperties.model(),
                 llmProperties.temperature(),
-                llmProperties.maxTokens()
+                llmProperties.maxTokens(),
+                chatAppProperties.resolvedMaxMemoryMessages()
         );
     }
 

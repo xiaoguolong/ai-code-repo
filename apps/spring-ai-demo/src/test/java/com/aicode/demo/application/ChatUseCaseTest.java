@@ -11,7 +11,10 @@ import com.aicode.demo.domain.model.PromptTemplate;
 import com.aicode.demo.domain.model.TokenUsage;
 import com.aicode.demo.domain.port.AuditPort;
 import com.aicode.demo.domain.port.ChatModelPort;
+import com.aicode.demo.domain.port.ConversationPort;
 import com.aicode.demo.domain.port.PromptTemplatePort;
+import com.aicode.demo.domain.port.StructuredOutputPort;
+import com.aicode.demo.infrastructure.memory.InMemoryMemoryAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,6 +33,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class ChatUseCaseTest {
@@ -43,6 +47,10 @@ class ChatUseCaseTest {
     private PromptTemplatePort promptTemplatePort;
     @Mock
     private AuditPort auditPort;
+    @Mock
+    private StructuredOutputPort structuredOutputPort;
+    @Mock
+    private ConversationPort conversationPort;
 
     private ChatUseCase useCase;
 
@@ -52,6 +60,9 @@ class ChatUseCaseTest {
                 chatModelPort,
                 promptTemplatePort,
                 auditPort,
+                new InMemoryMemoryAdapter(),
+                conversationPort,
+                structuredOutputPort,
                 new ChatRuntimeConfig("deepseek-chat", 0.7, 1024),
                 Clock.fixed(NOW, ZoneOffset.UTC)
         );
@@ -131,5 +142,127 @@ class ChatUseCaseTest {
         assertThatThrownBy(() -> useCase.chat(new ChatCommand("s1", "  ")))
                 .isInstanceOf(InvalidChatRequestException.class);
         verifyNoInteractions(chatModelPort, promptTemplatePort, auditPort);
+    }
+
+    @Test
+    void shouldIncludePreviousTurns_whenSameSession() {
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("hello", TokenUsage.unknown(), "deepseek-chat"))
+                .thenReturn(new ChatResult("again", TokenUsage.unknown(), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "hi"));
+        useCase.chat(new ChatCommand("s1", "how are you"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(chatModelPort, org.mockito.Mockito.times(2)).chat(messagesCaptor.capture(), any());
+        List<ChatMessage> secondCall = messagesCaptor.getAllValues().get(1);
+        assertThat(secondCall).hasSize(4);
+        assertThat(secondCall.get(0).role()).isEqualTo(MessageRole.SYSTEM);
+        assertThat(secondCall.get(1).role()).isEqualTo(MessageRole.USER);
+        assertThat(secondCall.get(1).content()).isEqualTo("hi");
+        assertThat(secondCall.get(2).role()).isEqualTo(MessageRole.ASSISTANT);
+        assertThat(secondCall.get(2).content()).isEqualTo("hello");
+        assertThat(secondCall.get(3).role()).isEqualTo(MessageRole.USER);
+        assertThat(secondCall.get(3).content()).isEqualTo("how are you");
+    }
+
+    @Test
+    void shouldDropOldestTurns_whenMemoryWindowExceeded() {
+        useCase = new ChatUseCase(
+                chatModelPort,
+                promptTemplatePort,
+                auditPort,
+                new InMemoryMemoryAdapter(),
+                conversationPort,
+                structuredOutputPort,
+                new ChatRuntimeConfig("deepseek-chat", 0.7, 1024, 2),
+                Clock.fixed(NOW, ZoneOffset.UTC)
+        );
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("a1", TokenUsage.unknown(), "deepseek-chat"))
+                .thenReturn(new ChatResult("a2", TokenUsage.unknown(), "deepseek-chat"))
+                .thenReturn(new ChatResult("a3", TokenUsage.unknown(), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "u1"));
+        useCase.chat(new ChatCommand("s1", "u2"));
+        useCase.chat(new ChatCommand("s1", "u3"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(chatModelPort, org.mockito.Mockito.times(3)).chat(messagesCaptor.capture(), any());
+        List<ChatMessage> thirdCall = messagesCaptor.getAllValues().get(2);
+        assertThat(thirdCall).extracting(ChatMessage::content)
+                .containsExactly("SYSTEM_RULES", "u2", "a2", "u3");
+    }
+
+    @Test
+    void shouldLoadNamedTemplate_whenTemplateSpecified() {
+        when(promptTemplatePort.load("json")).thenReturn(new PromptTemplate("v1", "JSON_RULES"));
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("ok", TokenUsage.unknown(), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "hi", "json", com.aicode.demo.domain.model.OutputFormat.TEXT));
+
+        verify(promptTemplatePort).load("json");
+        verify(promptTemplatePort, never()).loadSystemPrompt();
+    }
+
+    @Test
+    void shouldReturnPayload_whenJsonFormat() {
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("{\"a\":1}", new TokenUsage(10, 5, 15), "deepseek-chat"));
+        java.util.Map<String, Object> expected = java.util.Map.of("a", 1);
+        when(structuredOutputPort.parseObject("{\"a\":1}")).thenReturn(expected);
+
+        ChatOutcome outcome = useCase.chat(new ChatCommand("s1", "hi", null, com.aicode.demo.domain.model.OutputFormat.JSON));
+
+        assertThat(outcome.payload()).isEqualTo(expected);
+    }
+
+    @Test
+    void shouldNotParseJson_whenTextFormat() {
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("hello", TokenUsage.unknown(), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "hi", null, com.aicode.demo.domain.model.OutputFormat.TEXT));
+
+        verifyNoInteractions(structuredOutputPort);
+    }
+
+    @Test
+    void shouldEnsureSessionAndAppendMessages() {
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("hello", new TokenUsage(10, 5, 15), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "hi"));
+
+        verify(conversationPort).ensureSession("s1", "deepseek-chat");
+        verify(conversationPort).append("s1", new ChatMessage(MessageRole.USER, "hi"));
+        verify(conversationPort).append("s1", new ChatMessage(MessageRole.ASSISTANT, "hello"));
+    }
+
+    @Test
+    void shouldLoadHistoryFromDatabase_whenMemoryEmpty() {
+        when(promptTemplatePort.loadSystemPrompt()).thenReturn(SYSTEM);
+        when(conversationPort.list("s1")).thenReturn(List.of(
+                new ChatMessage(MessageRole.USER, "prev"),
+                new ChatMessage(MessageRole.ASSISTANT, "ok")
+        ));
+        when(chatModelPort.chat(any(), any()))
+                .thenReturn(new ChatResult("reply", TokenUsage.unknown(), "deepseek-chat"));
+
+        useCase.chat(new ChatCommand("s1", "hi"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<ChatMessage>> messagesCaptor = ArgumentCaptor.forClass(List.class);
+        verify(chatModelPort).chat(messagesCaptor.capture(), any());
+        assertThat(messagesCaptor.getValue()).extracting(ChatMessage::content)
+                .containsExactly("SYSTEM_RULES", "prev", "ok", "hi");
     }
 }

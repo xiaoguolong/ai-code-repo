@@ -8,6 +8,8 @@ import jakarta.validation.constraints.Size;
  */
 public record ChatRequest(
         @Size(max = 64) String sessionId,
-        @NotBlank @Size(max = 8000) String message
+        @NotBlank @Size(max = 8000) String message,
+        @Size(max = 32) String template,
+        @Size(max = 8) String responseFormat
 ) {
 }

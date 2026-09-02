@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(controllers = {ChatController.class, TokenStatsController.class})
 @Import(GlobalExceptionHandler.class)
+@ActiveProfiles("test")
 class ChatControllerTest {
 
     @Autowired
@@ -95,6 +97,31 @@ class ChatControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.requestCount").value(3))
                 .andExpect(jsonPath("$.data.totalTokens").value(30));
+    }
+
+    @Test
+    void shouldReturnJsonPayload_whenJsonFormat() throws Exception {
+        java.util.Map<String, Object> payload = java.util.Map.of("answer", 42);
+        when(chatUseCase.chat(any(ChatCommand.class)))
+                .thenReturn(new ChatOutcome("s1", "m1", "{\"answer\":42}", new TokenUsage(8, 2, 10), "deepseek-chat", payload));
+
+        mockMvc.perform(post("/api/v1/chats")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":\"s1\",\"message\":\"count\",\"responseFormat\":\"json\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.payload.answer").value(42));
+    }
+
+    @Test
+    void shouldReturnUnprocessable_whenJsonInvalid() throws Exception {
+        when(chatUseCase.chat(any(ChatCommand.class)))
+                .thenThrow(new com.aicode.demo.domain.exception.StructuredOutputException("not valid JSON"));
+
+        mockMvc.perform(post("/api/v1/chats")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"sessionId\":\"s1\",\"message\":\"count\",\"responseFormat\":\"json\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.error.code").value("structured_output_error"));
     }
 
     private record ChatRequestBody(String sessionId, String message) {

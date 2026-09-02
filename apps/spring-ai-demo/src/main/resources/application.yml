@@ -4,6 +4,22 @@ server:
 spring:
   application:
     name: spring-ai-demo
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aidemo}
+    username: ${SPRING_DATASOURCE_USERNAME:aidemo}
+    password: ${SPRING_DATASOURCE_PASSWORD:aidemo}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:localhost}
+      port: ${SPRING_REDIS_PORT:6379}
+      database: 0
 
 # 密钥只从环境变量读取，不要把真实 Key 写进本文件。
 llm:
@@ -19,3 +35,6 @@ llm:
 
 chat:
   system-prompt-version: v1
+  memory-provider: ${CHAT_MEMORY_PROVIDER:memory}
+  max-memory-messages: 20
+  audit-provider: ${CHAT_AUDIT_PROVIDER:jpa}
