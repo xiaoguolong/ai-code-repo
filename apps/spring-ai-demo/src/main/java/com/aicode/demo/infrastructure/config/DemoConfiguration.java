@@ -3,7 +3,9 @@ package com.aicode.demo.infrastructure.config;
 import cn.org.atool.fluent.mybatis.metadata.DbType;
 import cn.org.atool.fluent.mybatis.spring.MapperFactory;
 import com.aicode.demo.application.ChatRuntimeConfig;
+import com.aicode.demo.application.RagRuntimeConfig;
 import com.aicode.demo.infrastructure.llm.OpenAiChatResponseMapper;
+import com.aicode.demo.infrastructure.ocr.PaddleOcrResponseMapper;
 import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -21,7 +23,7 @@ import java.time.Duration;
  * 基础设施装配：时钟、RestClient、运行时配置、MyBatis Mapper 扫描。密钥不在此打印。
  */
 @Configuration
-@EnableConfigurationProperties({LlmProperties.class, ChatAppProperties.class})
+@EnableConfigurationProperties({LlmProperties.class, ChatAppProperties.class, EmbeddingProperties.class, RagProperties.class, OcrProperties.class})
 @MapperScan("com.aicode.demo.infrastructure.persistence.mapper")
 public class DemoConfiguration {
 
@@ -58,11 +60,61 @@ public class DemoConfiguration {
     }
 
     /**
+     * 把 RAG 配置映射为用例所需的运行时参数。
+     */
+    @Bean
+    RagRuntimeConfig ragRuntimeConfig(RagProperties ragProperties) {
+        return new RagRuntimeConfig(
+                ragProperties.resolvedDefaultTopK(),
+                ragProperties.resolvedChunkSize(),
+                ragProperties.resolvedChunkOverlap()
+        );
+    }
+
+    /**
      * JSON 映射器，从厂商响应中提取 content 与 usage。
      */
     @Bean
     OpenAiChatResponseMapper openAiChatResponseMapper() {
         return new OpenAiChatResponseMapper();
+    }
+
+    /**
+     * OCR 响应映射器，从千帆响应中提取 result.markdown.text。
+     */
+    @Bean
+    PaddleOcrResponseMapper paddleOcrResponseMapper() {
+        return new PaddleOcrResponseMapper();
+    }
+
+    /**
+     * OCR HTTP 客户端。Authorization 在适配器里按请求附加。
+     * 连接超时固定 15 秒，读超时按 ocr.timeout-seconds（默认 120 秒）配置。
+     */
+    @Bean
+    RestClient ocrRestClient(OcrProperties ocrProperties) {
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(15))
+                .build();
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
+        factory.setReadTimeout(Duration.ofSeconds(ocrProperties.resolvedTimeoutSeconds()));
+        return RestClient.builder()
+                .baseUrl(ocrProperties.baseUrl())
+                .requestFactory(factory)
+                .build();
+    }
+
+    /**
+     * Embedding HTTP 客户端。Authorization 在适配器里按请求附加。
+     */
+    @Bean
+    RestClient embeddingRestClient(EmbeddingProperties embeddingProperties) {
+        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory();
+        factory.setReadTimeout(Duration.ofSeconds(embeddingProperties.resolvedTimeoutSeconds()));
+        return RestClient.builder()
+                .baseUrl(embeddingProperties.baseUrl())
+                .requestFactory(factory)
+                .build();
     }
 
     /**

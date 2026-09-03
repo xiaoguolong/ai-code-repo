@@ -17,3 +17,12 @@ chat:
   memory-provider: memory
   audit-provider: mybatis
   db-type: h2
+
+embedding:
+  provider: hashing
+
+rag:
+  vector-store: memory
+
+ocr:
+  provider: qianfan

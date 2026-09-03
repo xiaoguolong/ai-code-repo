@@ -10,7 +10,9 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:aidemo}
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    locations:
+      - classpath:db/migration
+      - classpath:db/postgresql
     baseline-on-migrate: true
   data:
     redis:
@@ -36,3 +38,27 @@ chat:
   max-memory-messages: 20
   audit-provider: ${CHAT_AUDIT_PROVIDER:mybatis}
   db-type: ${CHAT_DB_TYPE:postgre_sql}
+
+# 向量化。密钥只从环境变量读取，不要把真实 Key 写进本文件。
+# 默认阿里云百炼（DashScope）OpenAI 兼容模式；离线确定性用 provider=hashing。
+embedding:
+  provider: ${EMBEDDING_PROVIDER:hashing}
+  base-url: ${EMBEDDING_BASE_URL:https://ws-7x0g7r1imgk8va7t.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}
+  api-key: ${EMBEDDING_API_KEY:}
+  model: ${EMBEDDING_MODEL:qwen3.7-text-embedding-flash}
+  dimension: 1024
+  timeout-seconds: 60
+
+rag:
+  vector-store: ${RAG_VECTOR_STORE:memory}
+  default-top-k: 4
+  chunk-size: 500
+  chunk-overlap: 50
+
+# 文档 OCR。密钥只从环境变量读取，不要把真实 Key 写进本文件。
+ocr:
+  provider: ${OCR_PROVIDER:qianfan}
+  base-url: ${OCR_BASE_URL:https://qianfan.baidubce.com}
+  api-key: ${OCR_API_KEY:}
+  model: ${OCR_MODEL:paddleocr-vl-0.9b}
+  timeout-seconds: 120

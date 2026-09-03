@@ -1,0 +1,126 @@
+{
+  "info": {
+    "name": "RAG 全链路（OCR → 向量化 → 问答）",
+    "description": "方式一（推荐）：步骤 1 用 form-data 直接上传本地图片/PDF。方式二（备选）：步骤 2 用 URL/Base64。OCR 返回文本经脚本写入 collection 变量 ocrText，供步骤 3 向量化入库、步骤 4 问答。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "ocrFile", "value": "https://example.com/sample.jpg" },
+    { "key": "ocrText", "value": "" },
+    { "key": "question", "value": "请假流程是什么？" }
+  ],
+  "item": [
+    {
+      "name": "1. 上传本地文件 → OCR 识别（推荐）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.text) {",
+              "    pm.collectionVariables.set('ocrText', resp.data.text);",
+              "    console.log('已捕获 OCR 文本：' + resp.data.text.substring(0, 80) + '...');",
+              "} else {",
+              "    console.log('OCR 未返回文本：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "选择本地图片或 PDF 文件"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/ocr/upload",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "ocr", "upload"]
+        }
+      }
+    },
+    {
+      "name": "2. URL/Base64 → OCR 识别（备选）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.text) {",
+              "    pm.collectionVariables.set('ocrText', resp.data.text);",
+              "    console.log('已捕获 OCR 文本：' + resp.data.text.substring(0, 80) + '...');",
+              "} else {",
+              "    console.log('OCR 未返回文本：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"file\": \"{{ocrFile}}\",\n    \"fileType\": \"image\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/ocr",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "ocr"]
+        }
+      }
+    },
+    {
+      "name": "3. OCR 文本 → 向量化入库",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"name\": \"OCR识别文档\",\n    \"content\": \"{{ocrText}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/documents",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "documents"]
+        }
+      }
+    },
+    {
+      "name": "4. RAG 问答",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"question\": \"{{question}}\",\n    \"topK\": 4\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/rag/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "rag", "chats"]
+        }
+      }
+    }
+  ]
+}

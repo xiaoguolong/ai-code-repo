@@ -1,7 +1,9 @@
 package com.aicode.demo.controller;
 
 import com.aicode.demo.domain.exception.ChatModelException;
+import com.aicode.demo.domain.exception.EmbeddingException;
 import com.aicode.demo.domain.exception.InvalidChatRequestException;
+import com.aicode.demo.domain.exception.OcrException;
 import com.aicode.demo.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +50,26 @@ public class GlobalExceptionHandler {
         log.warn("chat model failed: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponse.error("CHAT_MODEL_ERROR", "模型调用失败"));
+    }
+
+    /**
+     * 向量化失败 → 502，对外文案固定，细节只打服务端日志。
+     */
+    @ExceptionHandler(EmbeddingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmbedding(EmbeddingException ex) {
+        log.warn("embedding failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("EMBEDDING_ERROR", "向量化服务不可用"));
+    }
+
+    /**
+     * OCR 失败 → 502，对外文案固定，细节只打服务端日志。
+     */
+    @ExceptionHandler(OcrException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOcr(OcrException ex) {
+        log.warn("ocr failed: {}", ex.getMessage(), ex);
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("OCR_ERROR", "OCR 识别服务不可用"));
     }
 
     /**
