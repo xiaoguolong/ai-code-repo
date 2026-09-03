@@ -57,8 +57,8 @@ flowchart TB
 | Port | PromptTemplatePort | 扩展命名模板与渲染 |
 | Adapter | InMemoryMemoryAdapter | 进程内记忆 |
 | Adapter | RedisMemoryAdapter | Redis 记忆 |
-| Adapter | JpaConversationAdapter | 会话与消息 |
-| Adapter | JpaAuditAdapter | Token 记录 |
+| Adapter | MyBatisConversationAdapter | 会话与消息（Fluent-MyBatis） |
+| Adapter | MyBatisAuditAdapter | Token 记录（Fluent-MyBatis） |
 | Adapter | JacksonStructuredOutputAdapter | JSON 解析 |
 | Controller | MessageController | GET 历史消息 |
 | Controller | PromptController | GET 模板列表 |
@@ -124,6 +124,6 @@ BUILD SUCCESS
 | 决策 | 选项 | 选择 | 理由 |
 |------|------|------|------|
 | 记忆回填 | 仅 Redis / Redis+DB 双写 | Redis miss 读 DB | 重启不丢近期上下文，同时避免每次查 DB |
-| 审计存储 | InMemory / JPA | JPA 默认 | 满足 token_record 表要求；InMemory 可用 `chat.audit-provider=memory` 回退 |
+| 审计存储 | InMemory / JPA / Fluent-MyBatis | Fluent-MyBatis 默认 | 按用户要求替换 JPA；保留 InMemory 回退 `chat.audit-provider=memory` |
 | JSON 解析 | Jackson / LangChain4j | Jackson | Jackson 已在 Spring Boot 中；LangChain4j 用于 Prompt 渲染 |
 | 历史截断 | 按条数 / 按 Token | 按条数 | 本周最小可行；按 Token 需 tokenizer，留待后续 |

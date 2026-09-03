@@ -38,6 +38,6 @@ public class ChatController {
                 request.template(),
                 OutputFormat.from(request.responseFormat())
         );
-        return ApiResponse.of(ChatResponse.from(chatUseCase.chat(command)));
+        return ApiResponse.success(ChatResponse.from(chatUseCase.chat(command)));
     }
 }

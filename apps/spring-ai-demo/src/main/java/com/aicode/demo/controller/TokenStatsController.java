@@ -25,6 +25,6 @@ public class TokenStatsController {
      */
     @GetMapping
     public ApiResponse<TokenStats> stats() {
-        return ApiResponse.of(tokenStatsUseCase.summary());
+        return ApiResponse.success(tokenStatsUseCase.summary());
     }
 }

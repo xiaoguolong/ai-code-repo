@@ -38,6 +38,7 @@ class PromptControllerTest {
 
         mockMvc.perform(get("/api/v1/prompts").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.prompts[0].name").value("system"))
                 .andExpect(jsonPath("$.data.prompts[1].name").value("json"));
     }

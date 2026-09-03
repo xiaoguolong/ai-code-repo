@@ -1,7 +1,10 @@
 package com.aicode.demo.infrastructure.config;
 
+import cn.org.atool.fluent.mybatis.metadata.DbType;
+import cn.org.atool.fluent.mybatis.spring.MapperFactory;
 import com.aicode.demo.application.ChatRuntimeConfig;
 import com.aicode.demo.infrastructure.llm.OpenAiChatResponseMapper;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,11 +18,23 @@ import java.time.Clock;
 import java.time.Duration;
 
 /**
- * 基础设施装配：时钟、RestClient、运行时配置。密钥不在此打印。
+ * 基础设施装配：时钟、RestClient、运行时配置、MyBatis Mapper 扫描。密钥不在此打印。
  */
 @Configuration
 @EnableConfigurationProperties({LlmProperties.class, ChatAppProperties.class})
+@MapperScan("com.aicode.demo.infrastructure.persistence.mapper")
 public class DemoConfiguration {
+
+    /**
+     * Fluent-MyBatis MapperFactory。指定数据库类型，避免默认 MySQL 方言的反引号。
+     * 不传实体类时，dbType 会自动应用到所有实体（RefKit.dbType 内部自动扫描），
+     * 后续新增实体无需修改此配置。
+     */
+    @Bean
+    MapperFactory mapperFactory(ChatAppProperties chatAppProperties) {
+        DbType dbType = DbType.valueOf(chatAppProperties.resolvedDbType().toUpperCase());
+        return new MapperFactory().dbType(dbType);
+    }
 
     /**
      * UTC 时钟，便于单测注入 fixed Clock。
@@ -60,7 +75,7 @@ public class DemoConfiguration {
                 .connectTimeout(Duration.ofSeconds(llmProperties.timeoutSeconds()));
         if (llmProperties.proxyHost() != null && !llmProperties.proxyHost().isBlank()) {
             ProxySelector proxy = ProxySelector.of(
-                    new InetSocketAddress(llmProperties.proxyHost(), llmProperties.proxyPort())
+                    new InetSocketAddress(llmProperties.proxyHost(), llmProperties.resolvedProxyPort())
             );
             httpBuilder.proxy(proxy);
         }

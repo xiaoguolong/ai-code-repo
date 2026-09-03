@@ -5,42 +5,44 @@ import com.aicode.demo.domain.model.MessageRole;
 import com.aicode.demo.domain.port.ConversationPort;
 import com.aicode.demo.infrastructure.persistence.entity.ChatMessageEntity;
 import com.aicode.demo.infrastructure.persistence.entity.ChatSessionEntity;
-import com.aicode.demo.infrastructure.persistence.repository.ChatMessageRepository;
-import com.aicode.demo.infrastructure.persistence.repository.ChatSessionRepository;
+import com.aicode.demo.infrastructure.persistence.mapper.ChatMessageMapper;
+import com.aicode.demo.infrastructure.persistence.mapper.ChatSessionMapper;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
-import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 /**
- * 基于 JPA 的会话持久化适配器。
+ * 基于 Fluent-MyBatis 的会话持久化适配器。
  */
 @Component
-public class JpaConversationAdapter implements ConversationPort {
+public class MyBatisConversationAdapter implements ConversationPort {
 
-    private final ChatSessionRepository sessionRepository;
-    private final ChatMessageRepository messageRepository;
+    private final ChatSessionMapper sessionMapper;
+    private final ChatMessageMapper messageMapper;
     private final Clock clock;
 
-    public JpaConversationAdapter(
-            ChatSessionRepository sessionRepository,
-            ChatMessageRepository messageRepository,
+    public MyBatisConversationAdapter(
+            ChatSessionMapper sessionMapper,
+            ChatMessageMapper messageMapper,
             Clock clock
     ) {
-        this.sessionRepository = sessionRepository;
-        this.messageRepository = messageRepository;
+        this.sessionMapper = sessionMapper;
+        this.messageMapper = messageMapper;
         this.clock = clock;
     }
 
     @Override
     @Transactional
     public void ensureSession(String sessionId, String model) {
-        sessionRepository.findBySessionId(sessionId)
-                .orElseGet(() -> sessionRepository.save(
-                        new ChatSessionEntity(sessionId, model, clock.instant())
-                ));
+        List<ChatSessionEntity> found = sessionMapper.listByMap(false, Map.of("sessionId", sessionId));
+        if (found.isEmpty()) {
+            ChatSessionEntity entity = new ChatSessionEntity(sessionId, model, clock.instant());
+            sessionMapper.insert(entity);
+        }
     }
 
     @Override
@@ -49,20 +51,22 @@ public class JpaConversationAdapter implements ConversationPort {
         if (message.role() == MessageRole.SYSTEM) {
             return;
         }
-        Instant now = clock.instant();
-        messageRepository.save(new ChatMessageEntity(
+        ChatMessageEntity entity = new ChatMessageEntity(
                 sessionId,
                 message.role().name(),
                 message.content(),
-                now
-        ));
+                clock.instant()
+        );
+        messageMapper.insert(entity);
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<ChatMessage> list(String sessionId) {
-        return messageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId).stream()
-                .map(entity -> new ChatMessage(parseRole(entity.role()), entity.content()))
+        List<ChatMessageEntity> found = messageMapper.listByMap(false, Map.of("sessionId", sessionId));
+        return found.stream()
+                .sorted(Comparator.comparing(ChatMessageEntity::getCreatedAt))
+                .map(entity -> new ChatMessage(parseRole(entity.getRole()), entity.getContent()))
                 .toList();
     }
 

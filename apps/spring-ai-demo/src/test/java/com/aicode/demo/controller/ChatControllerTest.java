@@ -47,7 +47,9 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("validation_error"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.message").value("message 不能为空"))
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -59,7 +61,7 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.error.code").value("validation_error"));
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test
@@ -71,6 +73,7 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sessionId\":\"s1\",\"message\":\"ping\"}"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.sessionId").value("s1"))
                 .andExpect(jsonPath("$.data.messageId").value("m1"))
                 .andExpect(jsonPath("$.data.content").value("pong"))
@@ -85,8 +88,8 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"message\":\"ping\"}"))
                 .andExpect(status().isBadGateway())
-                .andExpect(jsonPath("$.error.code").value("chat_model_error"))
-                .andExpect(jsonPath("$.error.stack").doesNotExist());
+                .andExpect(jsonPath("$.code").value("CHAT_MODEL_ERROR"))
+                .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test
@@ -121,7 +124,7 @@ class ChatControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sessionId\":\"s1\",\"message\":\"count\",\"responseFormat\":\"json\"}"))
                 .andExpect(status().isUnprocessableEntity())
-                .andExpect(jsonPath("$.error.code").value("structured_output_error"));
+                .andExpect(jsonPath("$.code").value("STRUCTURED_OUTPUT_ERROR"));
     }
 
     private record ChatRequestBody(String sessionId, String message) {

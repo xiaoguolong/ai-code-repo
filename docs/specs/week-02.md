@@ -8,13 +8,13 @@
 
 - JDK 17、Spring Boot 3.4、Maven（沿用 `-Djdk.17.home` / `settings-ailocal.xml`）
 - LangChain4j **core**（Prompt 变量渲染 + JSON 解析）；不替换第1周 `ChatModelPort` HTTP 适配器
-- Spring Data Redis、Spring Data JPA、Flyway、PostgreSQL
+- Fluent-MyBatis、Spring Data Redis、Flyway、PostgreSQL
 - 单测不连真实 Redis / PostgreSQL（内存端口 + H2 仓储测试）
 
 ## Commands
 
 - 不改 `JAVA_HOME`。JDK17：`-Djdk.17.home=E:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot`
-- Maven：仓库 `.mvn/maven.config` 已指向 `D:\soft\maven-3.8.1\conf\settings-ailocal.xml`
+- Maven：仓库 `.mvn/maven.config` 已指向 `D:\soft\maven-3.9.4\conf\settings-ailocal.xml`
 - 推荐用脚本 `apps/spring-ai-demo/run-maven-jdk17.ps1`，它会临时切到 JDK 17 跑 Maven，不影响全局：
   - 测试：`.\run-maven-jdk17.ps1 -q test`
   - 启动：配置 `LLM_API_KEY` 后 `.\run-maven-jdk17.ps1 spring-boot:run`

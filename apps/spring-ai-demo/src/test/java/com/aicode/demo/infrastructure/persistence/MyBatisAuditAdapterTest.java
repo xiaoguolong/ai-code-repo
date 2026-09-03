@@ -1,41 +1,41 @@
 package com.aicode.demo.infrastructure.persistence;
 
-import com.aicode.demo.TestClockConfig;
 import com.aicode.demo.domain.model.AuditStatus;
 import com.aicode.demo.domain.model.ChatAuditRecord;
 import com.aicode.demo.domain.model.TokenStats;
 import com.aicode.demo.infrastructure.persistence.entity.ChatSessionEntity;
-import com.aicode.demo.infrastructure.persistence.repository.ChatSessionRepository;
-import com.aicode.demo.infrastructure.persistence.repository.TokenRecordRepository;
+import com.aicode.demo.infrastructure.persistence.mapper.ChatSessionMapper;
+import com.aicode.demo.infrastructure.persistence.mapper.TokenRecordMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
-@Import({JpaAuditAdapter.class, TestClockConfig.class})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
-class JpaAuditAdapterTest {
+@Transactional
+class MyBatisAuditAdapterTest {
 
     @Autowired
-    private JpaAuditAdapter adapter;
+    private MyBatisAuditAdapter adapter;
 
     @Autowired
-    private TokenRecordRepository repository;
+    private TokenRecordMapper tokenRecordMapper;
 
     @Autowired
-    private ChatSessionRepository sessionRepository;
+    private ChatSessionMapper sessionMapper;
 
     @BeforeEach
     void setUp() {
-        sessionRepository.save(new ChatSessionEntity("s1", "deepseek-chat", Instant.now()));
-        sessionRepository.save(new ChatSessionEntity("s2", "deepseek-chat", Instant.now()));
+        sessionMapper.insert(new ChatSessionEntity("s1", "deepseek-chat", Instant.now()));
+        sessionMapper.insert(new ChatSessionEntity("s2", "deepseek-chat", Instant.now()));
     }
 
     @Test
@@ -56,11 +56,11 @@ class JpaAuditAdapterTest {
 
         adapter.record(record);
 
-        assertThat(repository.findAll()).hasSize(1);
-        var entity = repository.findAll().get(0);
-        assertThat(entity.sessionId()).isEqualTo("s1");
-        assertThat(entity.totalTokens()).isEqualTo(15);
-        assertThat(entity.status()).isEqualTo("SUCCESS");
+        assertThat(tokenRecordMapper.listByMap(false, Map.of("sessionId", "s1"))).hasSize(1);
+        var entity = tokenRecordMapper.listByMap(false, Map.of("sessionId", "s1")).get(0);
+        assertThat(entity.getSessionId()).isEqualTo("s1");
+        assertThat(entity.getTotalTokens()).isEqualTo(15);
+        assertThat(entity.getStatus()).isEqualTo("SUCCESS");
     }
 
     @Test

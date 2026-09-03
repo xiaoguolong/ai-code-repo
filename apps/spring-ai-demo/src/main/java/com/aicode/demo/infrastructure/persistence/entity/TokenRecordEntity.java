@@ -1,53 +1,49 @@
 package com.aicode.demo.infrastructure.persistence.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import cn.org.atool.fluent.mybatis.annotation.FluentMybatis;
+import cn.org.atool.fluent.mybatis.annotation.TableField;
+import cn.org.atool.fluent.mybatis.annotation.TableId;
+import cn.org.atool.fluent.mybatis.base.RichEntity;
 
 import java.time.Instant;
 
 /**
  * 单次调用 Token 记录。与 chat_session 外键关联，便于按会话统计。
  */
-@Entity
-@Table(name = "token_record")
-public class TokenRecordEntity {
+@FluentMybatis(table = "token_record")
+public class TokenRecordEntity extends RichEntity {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @TableId("id")
     private Long id;
 
-    @Column(name = "session_id", nullable = false, length = 64)
+    @TableField("session_id")
     private String sessionId;
 
-    @Column(nullable = false, length = 128)
+    @TableField("model")
     private String model;
 
-    @Column(name = "prompt_tokens", nullable = false)
+    @TableField("prompt_tokens")
     private int promptTokens;
 
-    @Column(name = "completion_tokens", nullable = false)
+    @TableField("completion_tokens")
     private int completionTokens;
 
-    @Column(name = "total_tokens", nullable = false)
+    @TableField("total_tokens")
     private int totalTokens;
 
-    @Column(name = "latency_ms", nullable = false)
+    @TableField("latency_ms")
     private long latencyMs;
 
-    @Column(nullable = false, length = 32)
+    @TableField("status")
     private String status;
 
-    @Column(name = "error_code", length = 64)
+    @TableField("error_code")
     private String errorCode;
 
-    @Column(name = "occurred_at", nullable = false)
+    @TableField("occurred_at")
     private Instant occurredAt;
 
-    protected TokenRecordEntity() {
+    public TokenRecordEntity() {
     }
 
     public TokenRecordEntity(
@@ -72,43 +68,83 @@ public class TokenRecordEntity {
         this.occurredAt = occurredAt;
     }
 
-    public Long id() {
+    public Long getId() {
         return id;
     }
 
-    public String sessionId() {
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public String getSessionId() {
         return sessionId;
     }
 
-    public String model() {
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    public String getModel() {
         return model;
     }
 
-    public int promptTokens() {
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    public int getPromptTokens() {
         return promptTokens;
     }
 
-    public int completionTokens() {
+    public void setPromptTokens(int promptTokens) {
+        this.promptTokens = promptTokens;
+    }
+
+    public int getCompletionTokens() {
         return completionTokens;
     }
 
-    public int totalTokens() {
+    public void setCompletionTokens(int completionTokens) {
+        this.completionTokens = completionTokens;
+    }
+
+    public int getTotalTokens() {
         return totalTokens;
     }
 
-    public long latencyMs() {
+    public void setTotalTokens(int totalTokens) {
+        this.totalTokens = totalTokens;
+    }
+
+    public long getLatencyMs() {
         return latencyMs;
     }
 
-    public String status() {
+    public void setLatencyMs(long latencyMs) {
+        this.latencyMs = latencyMs;
+    }
+
+    public String getStatus() {
         return status;
     }
 
-    public String errorCode() {
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getErrorCode() {
         return errorCode;
     }
 
-    public Instant occurredAt() {
+    public void setErrorCode(String errorCode) {
+        this.errorCode = errorCode;
+    }
+
+    public Instant getOccurredAt() {
         return occurredAt;
+    }
+
+    public void setOccurredAt(Instant occurredAt) {
+        this.occurredAt = occurredAt;
     }
 }

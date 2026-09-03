@@ -26,9 +26,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex) {
         String message = ex.getBindingResult().getFieldErrors().stream()
                 .findFirst()
-                .map(error -> error.getField() + " " + error.getDefaultMessage())
-                .orElse("invalid request");
-        return ResponseEntity.badRequest().body(ApiResponse.error("validation_error", message));
+                .map(error -> error.getDefaultMessage())
+                .orElse("请求参数不合法");
+        return ResponseEntity.badRequest().body(ApiResponse.error("VALIDATION_ERROR", message));
     }
 
     /**
@@ -36,7 +36,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(InvalidChatRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalid(InvalidChatRequestException ex) {
-        return ResponseEntity.badRequest().body(ApiResponse.error("validation_error", ex.getMessage()));
+        return ResponseEntity.badRequest().body(ApiResponse.error("VALIDATION_ERROR", ex.getMessage()));
     }
 
     /**
@@ -47,7 +47,7 @@ public class GlobalExceptionHandler {
         // 完整堆栈只打服务端日志，帮助定位根因；客户端仍只见固定文案。
         log.warn("chat model failed: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
-                .body(ApiResponse.error("chat_model_error", "LLM call failed"));
+                .body(ApiResponse.error("CHAT_MODEL_ERROR", "模型调用失败"));
     }
 
     /**
@@ -57,7 +57,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleStructured(com.aicode.demo.domain.exception.StructuredOutputException ex) {
         log.warn("structured output failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
-                .body(ApiResponse.error("structured_output_error", ex.getMessage()));
+                .body(ApiResponse.error("STRUCTURED_OUTPUT_ERROR", "模型未返回合法的 JSON"));
     }
 
     /**
@@ -67,6 +67,6 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleUnknown(Exception ex) {
         log.error("unexpected error", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error("internal_error", "An error occurred. Please try again."));
+                .body(ApiResponse.error("INTERNAL_ERROR", "系统繁忙，请稍后重试"));
     }
 }

@@ -1,44 +1,39 @@
 package com.aicode.demo.infrastructure.persistence;
 
-import com.aicode.demo.TestClockConfig;
 import com.aicode.demo.domain.model.ChatMessage;
 import com.aicode.demo.domain.model.MessageRole;
-import com.aicode.demo.infrastructure.persistence.repository.ChatMessageRepository;
-import com.aicode.demo.infrastructure.persistence.repository.ChatSessionRepository;
+import com.aicode.demo.infrastructure.persistence.mapper.ChatMessageMapper;
+import com.aicode.demo.infrastructure.persistence.mapper.ChatSessionMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@DataJpaTest
-@Import({JpaConversationAdapter.class, TestClockConfig.class})
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @ActiveProfiles("test")
-class JpaConversationAdapterTest {
-
-    private static final Instant NOW = Instant.parse("2026-09-02T00:00:00Z");
-
-    @Autowired
-    private JpaConversationAdapter adapter;
+@Transactional
+class MyBatisConversationAdapterTest {
 
     @Autowired
-    private ChatSessionRepository sessionRepository;
+    private MyBatisConversationAdapter adapter;
 
     @Autowired
-    private ChatMessageRepository messageRepository;
+    private ChatSessionMapper sessionMapper;
+
+    @Autowired
+    private ChatMessageMapper messageMapper;
 
     @Test
     void shouldCreateSession_whenEnsuringNewSession() {
         adapter.ensureSession("s1", "deepseek-chat");
 
-        assertThat(sessionRepository.findBySessionId("s1")).isPresent();
+        assertThat(sessionMapper.listByMap(false, Map.of("sessionId", "s1"))).isNotEmpty();
     }
 
     @Test

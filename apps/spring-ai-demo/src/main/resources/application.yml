@@ -8,13 +8,10 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aidemo}
     username: ${SPRING_DATASOURCE_USERNAME:aidemo}
     password: ${SPRING_DATASOURCE_PASSWORD:aidemo}
-  jpa:
-    hibernate:
-      ddl-auto: validate
-    open-in-view: false
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-on-migrate: true
   data:
     redis:
       host: ${SPRING_REDIS_HOST:localhost}
@@ -37,4 +34,5 @@ chat:
   system-prompt-version: v1
   memory-provider: ${CHAT_MEMORY_PROVIDER:memory}
   max-memory-messages: 20
-  audit-provider: ${CHAT_AUDIT_PROVIDER:jpa}
+  audit-provider: ${CHAT_AUDIT_PROVIDER:mybatis}
+  db-type: ${CHAT_DB_TYPE:postgre_sql}

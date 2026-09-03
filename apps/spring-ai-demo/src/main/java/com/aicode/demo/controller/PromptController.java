@@ -27,6 +27,6 @@ public class PromptController {
      */
     @GetMapping
     public ApiResponse<PromptListResponse> list() {
-        return ApiResponse.of(PromptListResponse.from(listPromptsUseCase.list()));
+        return ApiResponse.success(PromptListResponse.from(listPromptsUseCase.list()));
     }
 }

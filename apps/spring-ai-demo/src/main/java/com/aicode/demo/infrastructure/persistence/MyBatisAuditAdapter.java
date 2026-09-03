@@ -4,20 +4,24 @@ import com.aicode.demo.domain.model.ChatAuditRecord;
 import com.aicode.demo.domain.model.TokenStats;
 import com.aicode.demo.domain.port.AuditPort;
 import com.aicode.demo.infrastructure.persistence.entity.TokenRecordEntity;
-import com.aicode.demo.infrastructure.persistence.repository.TokenRecordRepository;
+import com.aicode.demo.infrastructure.persistence.mapper.TokenRecordMapper;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 /**
- * 基于 JPA 的审计适配器。把每次调用写入 token_record。
+ * 基于 Fluent-MyBatis 的审计适配器。把每次调用写入 token_record。
  */
 @Component
-public class JpaAuditAdapter implements AuditPort {
+@ConditionalOnProperty(name = "chat.audit-provider", havingValue = "mybatis", matchIfMissing = true)
+public class MyBatisAuditAdapter implements AuditPort {
 
-    private final TokenRecordRepository tokenRecordRepository;
+    private final TokenRecordMapper tokenRecordMapper;
 
-    public JpaAuditAdapter(TokenRecordRepository tokenRecordRepository) {
-        this.tokenRecordRepository = tokenRecordRepository;
+    public MyBatisAuditAdapter(TokenRecordMapper tokenRecordMapper) {
+        this.tokenRecordMapper = tokenRecordMapper;
     }
 
     @Override
@@ -34,18 +38,18 @@ public class JpaAuditAdapter implements AuditPort {
                 record.errorCode(),
                 record.occurredAt()
         );
-        tokenRecordRepository.save(entity);
+        tokenRecordMapper.insert(entity);
     }
 
     @Override
     @Transactional(readOnly = true)
     public TokenStats summary() {
-        return tokenRecordRepository.findAll().stream()
+        return tokenRecordMapper.listByMapAndDefault(Map.of()).stream()
                 .map(entity -> new TokenStats(
                         1,
-                        entity.promptTokens(),
-                        entity.completionTokens(),
-                        entity.totalTokens()
+                        entity.getPromptTokens(),
+                        entity.getCompletionTokens(),
+                        entity.getTotalTokens()
                 ))
                 .reduce(new TokenStats(0, 0, 0, 0), TokenStats::plus);
     }

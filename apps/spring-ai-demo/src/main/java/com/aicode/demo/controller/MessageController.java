@@ -34,6 +34,6 @@ public class MessageController {
         List<ChatMessageDto> messages = listMessagesUseCase.list(sessionId).stream()
                 .map(ChatMessageDto::from)
                 .toList();
-        return ApiResponse.of(messages);
+        return ApiResponse.success(messages);
     }
 }

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ClasspathPromptTemplateAdapterTest {
 
-    private final ChatAppProperties properties = new ChatAppProperties("v1", "memory", 20);
+    private final ChatAppProperties properties = new ChatAppProperties("v1", "memory", 20, "postgre_sql");
     private final ClasspathPromptTemplateAdapter adapter = new ClasspathPromptTemplateAdapter(properties);
 
     @Test
@@ -32,11 +32,35 @@ class ClasspathPromptTemplateAdapterTest {
     }
 
     @Test
+    void shouldLoadTranslatorPrompt() {
+        PromptTemplate prompt = adapter.load("translator");
+
+        assertThat(prompt.version()).isEqualTo("v1");
+        assertThat(prompt.content()).contains("translator");
+    }
+
+    @Test
+    void shouldLoadCoderPrompt() {
+        PromptTemplate prompt = adapter.load("coder");
+
+        assertThat(prompt.version()).isEqualTo("v1");
+        assertThat(prompt.content()).contains("Java");
+    }
+
+    @Test
+    void shouldLoadQaPrompt() {
+        PromptTemplate prompt = adapter.load("qa");
+
+        assertThat(prompt.version()).isEqualTo("v1");
+        assertThat(prompt.content()).contains("知识库");
+    }
+
+    @Test
     void shouldListAvailablePrompts() {
         List<PromptDescriptor> descriptors = adapter.list();
 
         assertThat(descriptors).extracting(PromptDescriptor::name)
-                .contains("system", "json");
+                .contains("system", "json", "translator", "coder", "qa");
     }
 
     @Test

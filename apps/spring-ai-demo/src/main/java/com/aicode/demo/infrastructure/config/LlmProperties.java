@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param temperature     采样温度
  * @param timeoutSeconds  读超时秒数
  * @param proxyHost       代理主机，空则不启用代理（对应 LLM_PROXY_HOST）
- * @param proxyPort       代理端口，默认 7890
+ * @param proxyPort       代理端口，可空；空时回退 7890
  */
 @ConfigurationProperties(prefix = "llm")
 public record LlmProperties(
@@ -23,6 +23,13 @@ public record LlmProperties(
         double temperature,
         int timeoutSeconds,
         String proxyHost,
-        int proxyPort
+        Integer proxyPort
 ) {
+
+    /**
+     * @return 有效代理端口，缺省或空时回退 7890
+     */
+    public int resolvedProxyPort() {
+        return proxyPort == null ? 7890 : proxyPort;
+    }
 }

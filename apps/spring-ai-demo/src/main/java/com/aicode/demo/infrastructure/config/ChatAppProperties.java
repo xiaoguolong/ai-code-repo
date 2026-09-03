@@ -8,12 +8,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * @param systemPromptVersion 系统提示文件版本，对应 prompts/system-{version}.txt，默认 v1
  * @param memoryProvider      memory 或 redis，默认 memory
  * @param maxMemoryMessages   短期记忆条数上限，默认 20
+ * @param dbType              Fluent-MyBatis 数据库类型，默认 postgre_sql
  */
 @ConfigurationProperties(prefix = "chat")
 public record ChatAppProperties(
         String systemPromptVersion,
         String memoryProvider,
-        Integer maxMemoryMessages
+        Integer maxMemoryMessages,
+        String dbType
 ) {
 
     /**
@@ -24,5 +26,15 @@ public record ChatAppProperties(
             return 20;
         }
         return maxMemoryMessages;
+    }
+
+    /**
+     * @return 数据库类型字符串，缺省 postgre_sql
+     */
+    public String resolvedDbType() {
+        if (dbType == null || dbType.isBlank()) {
+            return "postgre_sql";
+        }
+        return dbType.trim();
     }
 }

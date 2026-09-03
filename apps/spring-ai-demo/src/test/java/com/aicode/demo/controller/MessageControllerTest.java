@@ -39,6 +39,7 @@ class MessageControllerTest {
 
         mockMvc.perform(get("/api/v1/chats/s1/messages").accept(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
                 .andExpect(jsonPath("$.data[0].role").value("user"))
                 .andExpect(jsonPath("$.data[0].content").value("hi"))
                 .andExpect(jsonPath("$.data[1].role").value("assistant"));

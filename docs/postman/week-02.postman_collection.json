@@ -1,0 +1,217 @@
+{
+  "info": {
+    "name": "spring-ai-demo Week 02 - 角色模板测试",
+    "description": "测试不同角色 Prompt 模板、JSON 结构化输出、多轮上下文、历史消息与 Token 统计。Base URL 默认 http://localhost:8080",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "sessionId",
+      "value": "postman-session-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "0. 查询可用模板",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/prompts",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "prompts"]
+        }
+      }
+    },
+    {
+      "name": "1. 默认角色 system（自由文本）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"你好，请用一句话介绍你自己\",\n  \"template\": \"system\",\n  \"responseFormat\": \"text\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "2. JSON 角色（结构化输出）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"用 JSON 格式介绍你自己，包含 name 和 language 两个字段\",\n  \"template\": \"json\",\n  \"responseFormat\": \"json\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "3. 翻译角色 translator",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"请把这句话翻译成英文：企业级 AI Agent 应用架构师\",\n  \"template\": \"translator\",\n  \"responseFormat\": \"text\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "4. 代码助手角色 coder",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"用 Java 17 写一个线程安全的单例模式\",\n  \"template\": \"coder\",\n  \"responseFormat\": \"text\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "5. 企业知识库角色 qa",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"我们公司的请假流程是什么？\",\n  \"template\": \"qa\",\n  \"responseFormat\": \"text\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "6. 多轮上下文验证（追问）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"我刚才问了你什么？\",\n  \"template\": \"system\",\n  \"responseFormat\": \"text\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "7. 查询历史消息",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats/{{sessionId}}/messages",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats", "{{sessionId}}", "messages"]
+        }
+      }
+    },
+    {
+      "name": "8. 查询 Token 累计",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/token-stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "token-stats"]
+        }
+      }
+    },
+    {
+      "name": "9. 异常-空消息（预期 400）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "10. 异常-非法模板名（预期 400）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"hello\",\n  \"template\": \"../etc/passwd\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    },
+    {
+      "name": "11. 异常-JSON 输出非法（预期 422）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"sessionId\": \"{{sessionId}}\",\n  \"message\": \"随便说点非 JSON 内容\",\n  \"template\": \"system\",\n  \"responseFormat\": \"json\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats"]
+        }
+      }
+    }
+  ]
+}

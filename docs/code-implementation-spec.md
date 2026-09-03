@@ -236,16 +236,16 @@ flowchart TB
 
 | 项 | 值 |
 |----|----|
-| Maven Home | `D:\soft\maven-3.8.1` |
-| User settings | `D:\soft\maven-3.8.1\conf\settings-ailocal.xml` |
+| Maven Home | `D:\soft\maven-3.9.4` |
+| User settings | `D:\soft\maven-3.9.4\conf\settings-ailocal.xml` |
 | Local repository | `E:\workRepositoryAi`（已写在 settings-ailocal.xml 的 `<localRepository>`） |
-| CLI | `mvn -s D:\soft\maven-3.8.1\conf\settings-ailocal.xml ...` |
+| CLI | `mvn -s D:\soft\maven-3.9.4\conf\settings-ailocal.xml ...` |
 
 每个可构建模块（及仓库根目录）必须有 `.mvn/maven.config`，与 IDEA「Use settings from .mvn/maven.config」对齐：
 
 ```
 -s
-D:/soft/maven-3.8.1/conf/settings-ailocal.xml
+D:/soft/maven-3.9.4/conf/settings-ailocal.xml
 ```
 
 禁止：改全局 `settings.xml` 去迁就本仓库；把依赖下到 JDK8 项目的仓库。助手跑 Maven 必须带 `-s settings-ailocal.xml`（或依赖 `.mvn/maven.config`）。
