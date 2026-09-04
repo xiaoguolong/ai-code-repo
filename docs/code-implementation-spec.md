@@ -595,7 +595,7 @@ HTTP 状态码按语义使用，禁止全部 200。
 | 01 | LLM 基础 / spring-ai-demo | docs/specs/week-01.md | notes/impl-logs/week-01.md | 已关闭 |
 | 02 | Java AI 基础 / 模板 / Redis / 表结构 | docs/specs/week-02.md | notes/impl-logs/week-02.md | 已关闭 |
 | 03 | RAG 知识库 | docs/specs/week-03.md | notes/impl-logs/week-03.md | 已关闭 |
-| 04 | 企业知识库 Agent V1 | | | 未开始 |
+| 04 | 企业知识库 Agent V1 | docs/specs/week-04.md | notes/impl-logs/week-04.md | 已关闭 |
 | 05 | Agent 基础 | | | 未开始 |
 | 06 | Tool Calling | | | 未开始 |
 | 07 | Agent Memory | | | 未开始 |

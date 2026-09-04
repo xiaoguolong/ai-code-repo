@@ -1,0 +1,38 @@
+version: "3.8"
+
+services:
+  app:
+    build: .
+    container_name: eka-app
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/eka
+      SPRING_DATASOURCE_USERNAME: eka
+      SPRING_DATASOURCE_PASSWORD: eka
+      RAG_VECTOR_STORE: pgvector
+      EMBEDDING_PROVIDER: openai
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      AUTH_PASSWORD_SALT: ${AUTH_PASSWORD_SALT:-change-me-please}
+      FILE_STORAGE_DIR: /app/data/files
+    volumes:
+      - app_files:/app/data/files
+    depends_on:
+      - postgres
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: eka-postgres
+    environment:
+      POSTGRES_USER: eka
+      POSTGRES_PASSWORD: eka
+      POSTGRES_DB: eka
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+  app_files:

@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS app_user (
+    id            BIGSERIAL PRIMARY KEY,
+    username      VARCHAR(64)  NOT NULL UNIQUE,
+    password_hash VARCHAR(128) NOT NULL,
+    created_at    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

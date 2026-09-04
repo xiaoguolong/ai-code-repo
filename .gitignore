@@ -59,6 +59,9 @@ application-secret.yml
 *.log
 logs/
 
+# 本地文件上传存储目录（运行时生成，勿提交）
+**/data/files/
+
 # Test / coverage
 .jacoco/
 coverage/

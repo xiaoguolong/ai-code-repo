@@ -1,0 +1,74 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: enterprise-knowledge-agent
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/eka}
+    username: ${SPRING_DATASOURCE_USERNAME:eka}
+    password: ${SPRING_DATASOURCE_PASSWORD:eka}
+  flyway:
+    enabled: true
+    locations:
+      - classpath:db/migration
+      - classpath:db/postgresql
+    baseline-on-migrate: true
+
+# Sa-Token 登录鉴权。默认随机 UUID 令牌，有效期 30 天。
+sa-token:
+  token-name: satoken
+  timeout: 2592000
+  is-concurrent: true
+  is-share: false
+  token-style: uuid
+  is-log: false
+
+# 密钥只从环境变量读取，不要把真实 Key 写进本文件。
+llm:
+  base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+  api-key: ${LLM_API_KEY:}
+  model: ${LLM_MODEL:deepseek-chat}
+  max-tokens: 1024
+  temperature: 0.7
+  timeout-seconds: 60
+  # 走代理时设置（本机代理端口，空则直连）
+  proxy-host: ${LLM_PROXY_HOST:}
+  proxy-port: ${LLM_PROXY_PORT:7890}
+
+chat:
+  system-prompt-version: v1
+  db-type: ${CHAT_DB_TYPE:postgre_sql}
+
+# 向量化。密钥只从环境变量读取。默认 hashing 离线确定性；生产设 provider=openai。
+embedding:
+  provider: ${EMBEDDING_PROVIDER:hashing}
+  base-url: ${EMBEDDING_BASE_URL:https://ws-7x0g7r1imgk8va7t.cn-beijing.maas.aliyuncs.com/compatible-mode/v1}
+  api-key: ${EMBEDDING_API_KEY:}
+  model: ${EMBEDDING_MODEL:qwen3.7-text-embedding-flash}
+  dimension: 1024
+  timeout-seconds: 60
+
+rag:
+  # pgvector 已装好，生产直接落库；单测用 memory。
+  vector-store: ${RAG_VECTOR_STORE:pgvector}
+  default-top-k: 4
+  chunk-size: 500
+  chunk-overlap: 50
+
+# 文档 OCR。密钥只从环境变量读取。
+ocr:
+  provider: ${OCR_PROVIDER:qianfan}
+  base-url: ${OCR_BASE_URL:https://qianfan.baidubce.com}
+  api-key: ${OCR_API_KEY:}
+  model: ${OCR_MODEL:paddleocr-vl-0.9b}
+  timeout-seconds: 120
+
+# 登录密码哈希盐。生产必须通过环境变量覆盖，禁止用默认值。
+auth:
+  password-salt: ${AUTH_PASSWORD_SALT:}
+
+# 文件上传服务。local 存本地目录；oss/obs 仅接口预留。
+file:
+  storage-dir: ${FILE_STORAGE_DIR:./data/files}
+  public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:8081}

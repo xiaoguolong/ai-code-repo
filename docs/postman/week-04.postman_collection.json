@@ -1,0 +1,313 @@
+{
+  "info": {
+    "name": "企业知识库 Agent V1（登录 → 知识库 → 文档 → 问答 → 历史 → Token → 文件 → OCR）",
+    "description": "按顺序执行：1 注册 → 2 登录（自动捕获 token）→ 3~10 带 token 调业务接口（建库自动捕获 kbId、问答自动捕获 sessionId）。所有需登录接口通过 header `satoken` 传 {{token}}。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8081" },
+    { "key": "username", "value": "pminspect" },
+    { "key": "password", "value": "pass123" },
+    { "key": "token", "value": "" },
+    { "key": "kbId", "value": "" },
+    { "key": "sessionId", "value": "" },
+    { "key": "fileId", "value": "" },
+    { "key": "question", "value": "企业知识库助手能做什么？" }
+  ],
+  "item": [
+    {
+      "name": "1. 注册",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"{{username}}\",\n    \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/register",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "2. 登录（自动捕获 token）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.token) {",
+              "    pm.collectionVariables.set('token', resp.data.token);",
+              "    console.log('已捕获 token');",
+              "} else {",
+              "    console.log('登录失败：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"username\": \"{{username}}\",\n    \"password\": \"{{password}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/login",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "3. 当前用户",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/auth/me",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "auth", "me"]
+        }
+      }
+    },
+    {
+      "name": "4. 创建知识库（自动捕获 kbId）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.id) {",
+              "    pm.collectionVariables.set('kbId', resp.data.id);",
+              "    console.log('已捕获 kbId=' + resp.data.id);",
+              "} else {",
+              "    console.log('创建知识库失败：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "satoken", "value": "{{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"name\": \"测试知识库\",\n    \"description\": \"Postman 调试用\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/knowledge-bases",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "knowledge-bases"]
+        }
+      }
+    },
+    {
+      "name": "5. 知识库列表",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/knowledge-bases",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "knowledge-bases"]
+        }
+      }
+    },
+    {
+      "name": "6. 上传文档（向量化入库）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "satoken", "value": "{{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"name\": \"产品说明\",\n    \"content\": \"企业知识库助手是一款基于检索增强生成的应用，用户可上传文档，助手依据资料回答问题，不编造内容。\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/knowledge-bases/{{kbId}}/documents",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "knowledge-bases", "{{kbId}}", "documents"]
+        }
+      }
+    },
+    {
+      "name": "7. 文档列表",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/knowledge-bases/{{kbId}}/documents",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "knowledge-bases", "{{kbId}}", "documents"]
+        }
+      }
+    },
+    {
+      "name": "8. 知识库问答（自动捕获 sessionId）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.sessionId) {",
+              "    pm.collectionVariables.set('sessionId', resp.data.sessionId);",
+              "    console.log('已捕获 sessionId=' + resp.data.sessionId);",
+              "} else {",
+              "    console.log('问答失败：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "satoken", "value": "{{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"question\": \"{{question}}\",\n    \"topK\": 4\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/knowledge-bases/{{kbId}}/chats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "knowledge-bases", "{{kbId}}", "chats"]
+        }
+      }
+    },
+    {
+      "name": "9. 会话历史",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/chats/{{sessionId}}/messages",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "chats", "{{sessionId}}", "messages"]
+        }
+      }
+    },
+    {
+      "name": "10. Token 统计",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/token-stats",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "token-stats"]
+        }
+      }
+    },
+    {
+      "name": "11. 上传文件（自动捕获 fileId）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const resp = pm.response.json();",
+              "if (resp && resp.code === 'SUCCESS' && resp.data && resp.data.fileId) {",
+              "    pm.collectionVariables.set('fileId', resp.data.fileId);",
+              "    console.log('已捕获 fileId=' + resp.data.fileId);",
+              "} else {",
+              "    console.log('上传失败：' + JSON.stringify(resp));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "选择本地文件（图片/任意文件）"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/files",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "files"]
+        }
+      }
+    },
+    {
+      "name": "12. 取回文件（公开）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/files/{{fileId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "files", "{{fileId}}"]
+        }
+      }
+    },
+    {
+      "name": "13. OCR 识别（URL/Base64）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "satoken", "value": "{{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"file\": \"https://example.com/sample.jpg\",\n    \"fileType\": \"image\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/ocr",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "ocr"]
+        }
+      }
+    },
+    {
+      "name": "14. OCR 上传本地文件",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": [],
+              "description": "选择本地图片或 PDF"
+            }
+          ]
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/ocr/upload",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "ocr", "upload"]
+        }
+      }
+    }
+  ]
+}
