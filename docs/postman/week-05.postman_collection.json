@@ -1,0 +1,61 @@
+{
+  "info": {
+    "name": "patient-agent（第5周 ReAct Agent）",
+    "description": "运行 Agent 任务（ReAct 循环）。启动：apps/patient-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需配置环境变量 LLM_API_KEY，否则返回 502）。端口 8082。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8082" },
+    { "key": "task", "value": "评估患者张三的出院风险，并给出随访建议" }
+  ],
+  "item": [
+    {
+      "name": "1. 运行 Agent 任务（正常）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"{{task}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 运行 Agent 任务（复杂多步，观察 trace）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"已知患者张三：血压 150/95，血糖 8.5，有糖尿病史。请分析风险并给出就医建议\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "3. 运行 Agent 任务（空白任务 → 400）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    }
+  ]
+}

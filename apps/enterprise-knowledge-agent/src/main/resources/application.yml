@@ -14,6 +14,10 @@ spring:
       - classpath:db/migration
       - classpath:db/postgresql
     baseline-on-migrate: true
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
 
 # Sa-Token 登录鉴权。默认随机 UUID 令牌，有效期 30 天。
 sa-token:

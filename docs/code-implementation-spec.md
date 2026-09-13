@@ -1,6 +1,6 @@
 # 企业级 AI Agent 代码实现规范
 
-> 角色：资深 AI 应用架构师  
+> 角色：资深 AI 应用架构师 / 代码架构师 
 > 适用范围：本仓库全部周次代码（第1周起强制执行）  
 > 配套计划：[README.md](../README.md)  
 > 配套阅读：[notes/week-01-llm-basics.md](../notes/week-01-llm-basics.md)
@@ -596,7 +596,7 @@ HTTP 状态码按语义使用，禁止全部 200。
 | 02 | Java AI 基础 / 模板 / Redis / 表结构 | docs/specs/week-02.md | notes/impl-logs/week-02.md | 已关闭 |
 | 03 | RAG 知识库 | docs/specs/week-03.md | notes/impl-logs/week-03.md | 已关闭 |
 | 04 | 企业知识库 Agent V1 | docs/specs/week-04.md | notes/impl-logs/week-04.md | 已关闭 |
-| 05 | Agent 基础 | | | 未开始 |
+| 05 | Agent 基础 | docs/specs/week-05.md | notes/impl-logs/week-05.md | 已关闭 |
 | 06 | Tool Calling | | | 未开始 |
 | 07 | Agent Memory | | | 未开始 |
 | 08 | Spring AI Alibaba | | | 未开始 |
