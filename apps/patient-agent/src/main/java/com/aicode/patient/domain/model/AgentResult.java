@@ -1,5 +1,7 @@
 package com.aicode.patient.domain.model;
 
+import com.aicode.core.domain.model.TokenUsage;
+
 import java.util.List;
 
 /**

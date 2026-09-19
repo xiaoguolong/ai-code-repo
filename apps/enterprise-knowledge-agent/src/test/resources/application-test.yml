@@ -10,8 +10,10 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
 
+prompt:
+  version: v1
+
 chat:
-  system-prompt-version: v1
   db-type: h2
 
 embedding:

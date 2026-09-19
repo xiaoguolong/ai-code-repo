@@ -3,7 +3,7 @@ package com.aicode.enterprise.application;
 import com.aicode.enterprise.domain.model.DocumentMetadata;
 import com.aicode.enterprise.domain.port.DocumentPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
-import com.aicode.enterprise.domain.port.VectorStorePort;
+import com.aicode.core.domain.port.VectorStorePort;
 import org.springframework.stereotype.Service;
 
 /**

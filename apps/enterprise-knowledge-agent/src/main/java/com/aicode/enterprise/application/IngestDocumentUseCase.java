@@ -1,16 +1,16 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.TextChunker;
+import com.aicode.core.domain.TextChunker;
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.exception.NotFoundException;
-import com.aicode.enterprise.domain.model.DocumentChunk;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.model.DocumentChunk;
 import com.aicode.enterprise.domain.model.DocumentMetadata;
 import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.DocumentPort;
-import com.aicode.enterprise.domain.port.EmbeddingModelPort;
+import com.aicode.core.domain.port.EmbeddingModelPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
-import com.aicode.enterprise.domain.port.VectorStorePort;
+import com.aicode.core.domain.port.VectorStorePort;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;

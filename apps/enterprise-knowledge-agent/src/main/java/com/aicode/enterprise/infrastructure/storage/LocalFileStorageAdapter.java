@@ -1,13 +1,13 @@
 package com.aicode.enterprise.infrastructure.storage;
 
-import com.aicode.enterprise.domain.FileUrlAssembler;
-import com.aicode.enterprise.domain.exception.FileStorageException;
-import com.aicode.enterprise.domain.exception.NotFoundException;
-import com.aicode.enterprise.domain.model.FileContent;
-import com.aicode.enterprise.domain.model.FileReference;
-import com.aicode.enterprise.domain.model.StorageType;
-import com.aicode.enterprise.domain.port.FileStoragePort;
-import com.aicode.enterprise.infrastructure.config.FileProperties;
+import com.aicode.core.domain.FileUrlAssembler;
+import com.aicode.core.domain.exception.FileStorageException;
+import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.model.FileContent;
+import com.aicode.core.domain.model.FileReference;
+import com.aicode.core.domain.model.StorageType;
+import com.aicode.core.domain.port.FileStoragePort;
+import com.aicode.core.infrastructure.config.FileProperties;
 import com.aicode.enterprise.infrastructure.persistence.entity.FileRecordEntity;
 import com.aicode.enterprise.infrastructure.persistence.mapper.FileRecordMapper;
 import org.springframework.stereotype.Component;

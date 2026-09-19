@@ -1,5 +1,5 @@
 server:
-  port: 8082
+  port: 8083
 
 spring:
   application:
@@ -17,7 +17,10 @@ llm:
   proxy-host: ${LLM_PROXY_HOST:}
   proxy-port: ${LLM_PROXY_PORT:7890}
 
+# Prompt 模板版本（由 ai-core 统一读取）。
+prompt:
+  version: ${PROMPT_VERSION:v1}
+
 # Agent 循环参数。max-iterations 兜底防止死循环烧钱。
 agent:
-  prompt-version: v1
   max-iterations: 5

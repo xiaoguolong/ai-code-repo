@@ -40,8 +40,11 @@ llm:
   proxy-host: ${LLM_PROXY_HOST:}
   proxy-port: ${LLM_PROXY_PORT:7890}
 
+# Prompt 模板版本（由 ai-core 统一读取）。
+prompt:
+  version: ${PROMPT_VERSION:v1}
+
 chat:
-  system-prompt-version: v1
   db-type: ${CHAT_DB_TYPE:postgre_sql}
 
 # 向量化。密钥只从环境变量读取。默认 hashing 离线确定性；生产设 provider=openai。

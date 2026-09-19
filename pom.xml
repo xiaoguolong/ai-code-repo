@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>com.aicode</groupId>
+    <artifactId>ai-code-repo</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>ai-code-repo</name>
+    <description>Java 企业级 AI Agent 学习仓库聚合构建</description>
+
+    <modules>
+        <module>libs/ai-core</module>
+        <module>apps/enterprise-knowledge-agent</module>
+        <module>apps/patient-agent</module>
+    </modules>
+</project>

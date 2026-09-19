@@ -1,8 +1,8 @@
 package com.aicode.enterprise.infrastructure.persistence;
 
-import com.aicode.enterprise.domain.model.TokenRecord;
-import com.aicode.enterprise.domain.model.TokenStats;
-import com.aicode.enterprise.domain.port.AuditPort;
+import com.aicode.core.domain.model.TokenRecord;
+import com.aicode.core.domain.model.TokenStats;
+import com.aicode.core.domain.port.AuditPort;
 import com.aicode.enterprise.infrastructure.persistence.entity.TokenRecordEntity;
 import com.aicode.enterprise.infrastructure.persistence.mapper.TokenRecordMapper;
 import org.springframework.stereotype.Component;

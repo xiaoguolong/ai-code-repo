@@ -1,6 +1,6 @@
 package com.aicode.enterprise.dto;
 
-import com.aicode.enterprise.domain.model.ChatMessage;
+import com.aicode.core.domain.model.ChatMessage;
 
 /**
  * 会话消息项。

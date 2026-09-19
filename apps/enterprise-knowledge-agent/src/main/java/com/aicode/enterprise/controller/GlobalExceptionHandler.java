@@ -1,15 +1,15 @@
 package com.aicode.enterprise.controller;
 
 import cn.dev33.satoken.exception.NotLoginException;
-import com.aicode.enterprise.domain.exception.AuthenticationException;
-import com.aicode.enterprise.domain.exception.ChatModelException;
+import com.aicode.core.domain.exception.AuthenticationException;
+import com.aicode.core.domain.exception.ChatModelException;
 import com.aicode.enterprise.domain.exception.ConflictException;
-import com.aicode.enterprise.domain.exception.EmbeddingException;
-import com.aicode.enterprise.domain.exception.FileStorageException;
+import com.aicode.core.domain.exception.EmbeddingException;
+import com.aicode.core.domain.exception.FileStorageException;
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.exception.NotFoundException;
-import com.aicode.enterprise.domain.exception.OcrException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.exception.OcrException;
 import com.aicode.enterprise.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

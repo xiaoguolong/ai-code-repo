@@ -1,6 +1,6 @@
 package com.aicode.enterprise.domain.port;
 
-import com.aicode.enterprise.domain.model.ChatMessage;
+import com.aicode.core.domain.model.ChatMessage;
 
 import java.util.List;
 import java.util.Optional;

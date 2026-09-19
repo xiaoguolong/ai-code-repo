@@ -1,7 +1,7 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.exception.NotFoundException;
-import com.aicode.enterprise.domain.model.User;
+import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.model.User;
 import com.aicode.enterprise.domain.port.UserPort;
 import org.springframework.stereotype.Service;
 

@@ -1,9 +1,9 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.NotFoundException;
-import com.aicode.enterprise.domain.model.ChatMessage;
-import com.aicode.enterprise.domain.model.MessageRole;
+import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.model.ChatMessage;
+import com.aicode.core.domain.model.MessageRole;
 import com.aicode.enterprise.domain.port.ConversationPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

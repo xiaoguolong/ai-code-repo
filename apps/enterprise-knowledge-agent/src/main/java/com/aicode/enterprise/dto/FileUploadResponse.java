@@ -1,6 +1,6 @@
 package com.aicode.enterprise.dto;
 
-import com.aicode.enterprise.domain.model.FileReference;
+import com.aicode.core.domain.model.FileReference;
 
 /**
  * 文件上传成功体。url 为拼接好的访问路径。

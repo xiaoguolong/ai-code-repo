@@ -1,9 +1,9 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.exception.ConflictException;
-import com.aicode.enterprise.domain.port.PasswordHasher;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.model.User;
+import com.aicode.core.domain.port.PasswordHasher;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.User;
 import com.aicode.enterprise.domain.port.UserPort;
 import org.springframework.stereotype.Service;
 

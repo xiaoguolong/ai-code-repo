@@ -1,0 +1,77 @@
+{
+  "info": {
+    "name": "patient-agent（第6周 Tool Calling）",
+    "description": "运行 Agent 任务（原生 Function Calling + 4 个业务工具）。启动：apps/patient-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需配置环境变量 LLM_API_KEY，否则返回 502）。端口 8082。可用工具：PatientTool/ReportTool/HealthDataTool/OrderTool。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8082" },
+    { "key": "task", "value": "查询患者 P001 的基本信息" }
+  ],
+  "item": [
+    {
+      "name": "1. 查询患者信息",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"查询患者 P001 的基本信息\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 组合多数据源（患者+报告+指标+医嘱）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"评估患者 P001 的出院风险，结合检查报告、健康指标和医嘱给出随访建议\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "3. 查询不存在的患者（模型如实说明）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"查询患者 P999 的健康指标\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "4. 空白任务 → 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    }
+  ]
+}

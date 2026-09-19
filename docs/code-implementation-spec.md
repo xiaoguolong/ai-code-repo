@@ -182,7 +182,7 @@ flowchart TB
 |----|----|
 | JDK 17 路径 | `E:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot` |
 | Maven 参数 | `mvn test "-Djdk.17.home=E:\Program Files\Eclipse Adoptium\jdk-17.0.20.8-hotspot"` |
-| 快捷脚本（推荐） | `apps/spring-ai-demo/run-maven-jdk17.ps1` |
+| 快捷脚本（推荐） | 根 `run-maven-jdk17.ps1`（聚合构建）；各模块 `run-maven-jdk17.ps1`（单模块） |
 
 快捷脚本用法：
 
@@ -348,16 +348,28 @@ flowchart TB
 ```text
 ai-code-repo/
 ├── README.md
+├── pom.xml                             ← 根聚合（packaging=pom，聚合 libs + apps）
+├── run-maven-jdk17.ps1                 ← 根聚合构建脚本
+├── .mvn/maven.config                   ← -s settings-ailocal.xml
 ├── docs/
 │   ├── code-implementation-spec.md    ← 本文件
-│   └── specs/
-│       └── week-XX.md                 ← 本周 Spec
+│   ├── specs/week-XX.md               ← 本周 Spec
+│   ├── architecture/week-XX-*.md      ← 本周架构图
+│   ├── api/week-XX-api.md             ← 本周接口文档
+│   └── postman/week-XX.postman_collection.json
 ├── notes/
 │   ├── week-XX-*.md                   ← 精读提纲
-│   └── impl-logs/
-│       └── week-XX.md                 ← 本周实现日志
+│   └── impl-logs/week-XX.md           ← 本周实现日志
+├── libs/
+│   └── ai-core/                        ← 横切能力共享库（com.aicode.core，第6周起）
+│       ├── pom.xml
+│       └── src/main/java/com/aicode/core/
+│           ├── domain/                 # model / port / exception / 领域服务 / 工具契约
+│           └── infrastructure/         # llm / prompt / embedding / vector / ocr / security / storage / config
 └── apps/
-    └── spring-ai-demo/                ← 第1–2周
+    ├── spring-ai-demo/                ← 第1–3周（历史演示，保留自含，不收敛到 ai-core）
+    ├── enterprise-knowledge-agent/    ← 第4周（依赖 ai-core）
+    └── patient-agent/                 ← 第5–6周（依赖 ai-core）
         ├── pom.xml
         └── src/
             ├── main/java/.../
@@ -369,7 +381,7 @@ ai-code-repo/
             └── test/java/.../
 ```
 
-后续 `enterprise-knowledge-agent`、`patient-agent` 以独立模块出现在 `apps/` 下，共享规范，不共享错误的上帝类。
+各 app 模块在 `apps/` 下独立存在，共享规范，不共享错误的上帝类。**新应用在旧模块基础上改造，不再复制代码**（第 6 周起，横切能力一律进 `libs/ai-core`）。
 
 ### 5.2 包内职责
 
@@ -459,6 +471,31 @@ HTTP 状态码按语义使用，禁止全部 200。
 - 用户输入作为 `user` role 内容，不得拼进系统提示。
 - 超时、重试、`max_tokens` 必配。
 - 对外错误信息不含堆栈、不含厂商原始报文。
+
+### 5.8 共享库 ai-core 约定（第 6 周起强制）
+
+横切能力（模型 / Prompt / Embedding / 向量 / RAG / OCR / 鉴权 / 文件 / 审计 / 工具契约）统一收敛到 `libs/ai-core`（包 `com.aicode.core`），app 模块依赖它，不再内部复制。
+
+#### 5.8.1 依赖拆分原则
+
+ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止一刀切全塞 `compile`：
+
+| 类别 | 处理 | 例子 |
+|------|------|------|
+| 真正横切、每个 app 都用 | 常规 `compile` 依赖（随 ai-core 传递） | `spring-boot-starter-web`（RestClient/Jackson）、`langchain4j-core`（Prompt 渲染） |
+| 仅个别适配器用、按 app 可选 | `<optional>true</optional>` + `@ConditionalOnClass` 守卫 | `spring-boot-starter-jdbc`（仅 `PgVectorStoreAdapter`）、`sa-token`（仅鉴权适配器） |
+
+规则：
+
+- 可选依赖在 ai-core 内声明为 `optional`，**不向 app 传递**；需要它的 app（如 enterprise 用 jdbc / sa-token）在自身 `pom.xml` 显式声明。
+- 依赖可选类的适配器必须加 `@ConditionalOnClass(name = "全限定类名")`（**用字符串类名**，避免类缺失时 `NoClassDefFoundError`），与已有 `@ConditionalOnProperty` 并列。
+- 引入新横切能力时先回答「是每个 app 都要，还是可选」，再决定依赖形态；不确定就先用 `optional` + `@ConditionalOnClass`，宁可少传递。
+
+#### 5.8.2 边界
+
+- ai-core 只放**契约（Port + 模型）+ 无状态适配器 + 配置**；绑定某个 app 持久化 schema 的适配器（如 `LocalFileStorageAdapter` 绑定 `file_record` 表）**留在 app**，只把 Port 放进 core。
+- ai-core **禁止**有 `main` / `@SpringBootApplication`；装配集中在 `AiCoreConfiguration`（`@EnableConfigurationProperties` + `@ComponentScan("com.aicode.core.infrastructure")` + 公共 Bean），app 用 `scanBasePackages = {"com.aicode.<app>", "com.aicode.core"}` 引入。
+- 历史演示 `spring-ai-demo` 不收敛到 ai-core，保持独立；后续新 app 一律依赖 ai-core。
 
 ---
 
@@ -597,7 +634,7 @@ HTTP 状态码按语义使用，禁止全部 200。
 | 03 | RAG 知识库 | docs/specs/week-03.md | notes/impl-logs/week-03.md | 已关闭 |
 | 04 | 企业知识库 Agent V1 | docs/specs/week-04.md | notes/impl-logs/week-04.md | 已关闭 |
 | 05 | Agent 基础 | docs/specs/week-05.md | notes/impl-logs/week-05.md | 已关闭 |
-| 06 | Tool Calling | | | 未开始 |
+| 06 | Tool Calling | docs/specs/week-06.md | notes/impl-logs/week-06.md | 已关闭 |
 | 07 | Agent Memory | | | 未开始 |
 | 08 | Spring AI Alibaba | | | 未开始 |
 | 09 | Workflow | | | 未开始 |

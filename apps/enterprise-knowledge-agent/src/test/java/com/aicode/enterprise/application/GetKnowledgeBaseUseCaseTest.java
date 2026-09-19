@@ -1,7 +1,7 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.NotFoundException;
+import com.aicode.core.domain.exception.NotFoundException;
 import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
 import org.junit.jupiter.api.BeforeEach;

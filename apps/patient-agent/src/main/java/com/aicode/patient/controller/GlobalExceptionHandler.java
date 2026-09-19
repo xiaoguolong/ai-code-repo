@@ -2,8 +2,9 @@ package com.aicode.patient.controller;
 
 import com.aicode.patient.domain.exception.AgentExecutionException;
 import com.aicode.patient.domain.exception.AgentLoopExceededException;
-import com.aicode.patient.domain.exception.ChatModelException;
-import com.aicode.patient.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.ChatModelException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.patient.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +50,16 @@ public class GlobalExceptionHandler {
         log.warn("chat model failed: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponse.error("CHAT_MODEL_ERROR", "模型调用失败"));
+    }
+
+    /**
+     * 工具执行失败（未知工具/参数非法）→ 502。
+     */
+    @ExceptionHandler(ToolExecutionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTool(ToolExecutionException ex) {
+        log.warn("tool execution failed: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+                .body(ApiResponse.error("TOOL_EXECUTION_ERROR", "工具执行失败"));
     }
 
     /**

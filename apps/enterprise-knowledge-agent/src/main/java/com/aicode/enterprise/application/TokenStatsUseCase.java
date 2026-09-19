@@ -1,7 +1,7 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.model.TokenStats;
-import com.aicode.enterprise.domain.port.AuditPort;
+import com.aicode.core.domain.model.TokenStats;
+import com.aicode.core.domain.port.AuditPort;
 import org.springframework.stereotype.Service;
 
 /**

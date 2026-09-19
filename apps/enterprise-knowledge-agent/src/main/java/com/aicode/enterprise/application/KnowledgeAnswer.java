@@ -1,6 +1,6 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.model.VectorSearchHit;
+import com.aicode.core.domain.model.VectorSearchHit;
 
 import java.util.List;
 

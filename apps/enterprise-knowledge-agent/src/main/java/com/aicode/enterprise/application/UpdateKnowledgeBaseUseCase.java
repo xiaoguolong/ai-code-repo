@@ -1,6 +1,6 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
 import org.springframework.stereotype.Service;

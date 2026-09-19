@@ -1,8 +1,8 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.model.FileReference;
-import com.aicode.enterprise.domain.port.FileStoragePort;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.FileReference;
+import com.aicode.core.domain.port.FileStoragePort;
 import org.springframework.stereotype.Service;
 
 /**

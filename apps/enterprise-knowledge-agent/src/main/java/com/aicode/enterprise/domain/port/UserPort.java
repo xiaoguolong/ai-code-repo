@@ -1,6 +1,6 @@
 package com.aicode.enterprise.domain.port;
 
-import com.aicode.enterprise.domain.model.User;
+import com.aicode.core.domain.model.User;
 
 import java.util.Optional;
 

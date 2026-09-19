@@ -2,7 +2,7 @@ package com.aicode.enterprise.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.enterprise.application.TokenStatsUseCase;
-import com.aicode.enterprise.domain.model.TokenStats;
+import com.aicode.core.domain.model.TokenStats;
 import com.aicode.enterprise.dto.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

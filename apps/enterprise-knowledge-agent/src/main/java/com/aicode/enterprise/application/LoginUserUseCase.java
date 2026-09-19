@@ -1,9 +1,9 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.exception.AuthenticationException;
-import com.aicode.enterprise.domain.port.PasswordHasher;
-import com.aicode.enterprise.domain.model.User;
-import com.aicode.enterprise.domain.port.AuthTokenPort;
+import com.aicode.core.domain.exception.AuthenticationException;
+import com.aicode.core.domain.port.PasswordHasher;
+import com.aicode.core.domain.model.User;
+import com.aicode.core.domain.port.AuthTokenPort;
 import com.aicode.enterprise.domain.port.UserPort;
 import org.springframework.stereotype.Service;
 

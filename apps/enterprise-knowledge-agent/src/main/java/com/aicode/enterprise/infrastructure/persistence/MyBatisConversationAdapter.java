@@ -1,7 +1,7 @@
 package com.aicode.enterprise.infrastructure.persistence;
 
-import com.aicode.enterprise.domain.model.ChatMessage;
-import com.aicode.enterprise.domain.model.MessageRole;
+import com.aicode.core.domain.model.ChatMessage;
+import com.aicode.core.domain.model.MessageRole;
 import com.aicode.enterprise.domain.port.ConversationPort;
 import com.aicode.enterprise.infrastructure.persistence.entity.ChatMessageEntity;
 import com.aicode.enterprise.infrastructure.persistence.entity.ChatSessionEntity;

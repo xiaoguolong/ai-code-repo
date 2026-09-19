@@ -1,19 +1,20 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.model.ChatResult;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.FinishReason;
 import com.aicode.enterprise.domain.model.KnowledgeBase;
-import com.aicode.enterprise.domain.model.PromptTemplate;
-import com.aicode.enterprise.domain.model.TokenUsage;
-import com.aicode.enterprise.domain.model.VectorSearchHit;
-import com.aicode.enterprise.domain.port.AuditPort;
-import com.aicode.enterprise.domain.port.ChatModelPort;
+import com.aicode.core.domain.model.PromptTemplate;
+import com.aicode.core.domain.model.TokenUsage;
+import com.aicode.core.domain.model.VectorSearchHit;
+import com.aicode.core.domain.port.AuditPort;
+import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.enterprise.domain.port.ConversationPort;
-import com.aicode.enterprise.domain.port.EmbeddingModelPort;
+import com.aicode.core.domain.port.EmbeddingModelPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
-import com.aicode.enterprise.domain.port.PromptTemplatePort;
-import com.aicode.enterprise.domain.port.VectorStorePort;
+import com.aicode.core.domain.port.PromptTemplatePort;
+import com.aicode.core.domain.port.VectorStorePort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -88,7 +89,7 @@ class AskKnowledgeUseCaseTest {
                 .thenReturn(List.of(new VectorSearchHit("doc-1", 1L, 0, "片段", 0.9)));
         when(promptTemplatePort.load("rag")).thenReturn(new PromptTemplate("v1", "系统提示"));
         when(chatModelPort.chat(any(), any()))
-                .thenReturn(new ChatResult("答案", new TokenUsage(10, 20, 30), "deepseek-chat"));
+                .thenReturn(new ChatResult("答案", List.of(), FinishReason.STOP, new TokenUsage(10, 20, 30), "deepseek-chat"));
 
         KnowledgeAnswer answer = useCase.ask(new KnowledgeQuestion(1L, 1L, "sess-1", "问题？", null));
 

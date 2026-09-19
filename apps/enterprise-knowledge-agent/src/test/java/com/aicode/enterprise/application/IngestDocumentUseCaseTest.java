@@ -1,12 +1,12 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.exception.ForbiddenException;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.DocumentPort;
-import com.aicode.enterprise.domain.port.EmbeddingModelPort;
+import com.aicode.core.domain.port.EmbeddingModelPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
-import com.aicode.enterprise.infrastructure.vector.InMemoryVectorStoreAdapter;
+import com.aicode.core.infrastructure.vector.InMemoryVectorStoreAdapter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

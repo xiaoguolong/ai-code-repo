@@ -1,7 +1,7 @@
 package com.aicode.patient.application;
 
 import com.aicode.patient.domain.ReActAgent;
-import com.aicode.patient.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.patient.domain.model.AgentResult;
 import com.aicode.patient.domain.model.AgentTask;
 import org.springframework.stereotype.Service;

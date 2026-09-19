@@ -1,10 +1,10 @@
 package com.aicode.patient.application;
 
 import com.aicode.patient.domain.ReActAgent;
-import com.aicode.patient.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.patient.domain.model.AgentResult;
 import com.aicode.patient.domain.model.AgentTask;
-import com.aicode.patient.domain.model.TokenUsage;
+import com.aicode.core.domain.model.TokenUsage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

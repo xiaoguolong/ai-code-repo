@@ -1,6 +1,6 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.port.AuthTokenPort;
+import com.aicode.core.domain.port.AuthTokenPort;
 import org.springframework.stereotype.Service;
 
 /**

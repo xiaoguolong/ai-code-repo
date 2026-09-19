@@ -1,10 +1,10 @@
 package com.aicode.enterprise.application;
 
-import com.aicode.enterprise.domain.OcrMarkdownImageProcessor;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.model.OcrFileType;
-import com.aicode.enterprise.domain.model.OcrResult;
-import com.aicode.enterprise.domain.port.DocumentOcrPort;
+import com.aicode.core.domain.OcrMarkdownImageProcessor;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.OcrFileType;
+import com.aicode.core.domain.model.OcrResult;
+import com.aicode.core.domain.port.DocumentOcrPort;
 import org.springframework.stereotype.Service;
 
 /**

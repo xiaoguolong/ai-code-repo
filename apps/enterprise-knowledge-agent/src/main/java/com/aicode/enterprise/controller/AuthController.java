@@ -9,7 +9,7 @@ import com.aicode.enterprise.application.LogoutUseCase;
 import com.aicode.enterprise.application.RegisterUserCommand;
 import com.aicode.enterprise.application.RegisterUserOutcome;
 import com.aicode.enterprise.application.RegisterUserUseCase;
-import com.aicode.enterprise.domain.model.User;
+import com.aicode.core.domain.model.User;
 import com.aicode.enterprise.dto.ApiResponse;
 import com.aicode.enterprise.dto.AuthResponse;
 import com.aicode.enterprise.dto.LoginRequest;

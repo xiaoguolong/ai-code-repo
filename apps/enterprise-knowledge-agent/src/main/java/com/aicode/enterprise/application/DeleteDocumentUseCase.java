@@ -1,7 +1,7 @@
 package com.aicode.enterprise.application;
 
 import com.aicode.enterprise.domain.port.DocumentPort;
-import com.aicode.enterprise.domain.port.VectorStorePort;
+import com.aicode.core.domain.port.VectorStorePort;
 import org.springframework.stereotype.Service;
 
 /**

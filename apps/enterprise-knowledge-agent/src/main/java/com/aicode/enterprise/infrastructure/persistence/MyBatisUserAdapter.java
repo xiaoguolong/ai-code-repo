@@ -1,6 +1,6 @@
 package com.aicode.enterprise.infrastructure.persistence;
 
-import com.aicode.enterprise.domain.model.User;
+import com.aicode.core.domain.model.User;
 import com.aicode.enterprise.domain.port.UserPort;
 import com.aicode.enterprise.infrastructure.persistence.entity.AppUserEntity;
 import com.aicode.enterprise.infrastructure.persistence.mapper.AppUserMapper;

@@ -2,9 +2,9 @@ package com.aicode.enterprise.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.enterprise.application.RecognizeOcrUseCase;
-import com.aicode.enterprise.domain.exception.FileStorageException;
-import com.aicode.enterprise.domain.exception.InvalidChatRequestException;
-import com.aicode.enterprise.domain.model.OcrFileType;
+import com.aicode.core.domain.exception.FileStorageException;
+import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.OcrFileType;
 import com.aicode.enterprise.dto.ApiResponse;
 import com.aicode.enterprise.dto.OcrRecognizeRequest;
 import com.aicode.enterprise.dto.OcrRecognizeResponse;

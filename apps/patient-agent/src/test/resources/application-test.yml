@@ -2,6 +2,8 @@ spring:
   application:
     name: patient-agent-test
 
+prompt:
+  version: v1
+
 agent:
-  prompt-version: v1
   max-iterations: 5

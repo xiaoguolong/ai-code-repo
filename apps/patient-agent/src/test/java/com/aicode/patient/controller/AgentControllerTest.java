@@ -3,7 +3,7 @@ package com.aicode.patient.controller;
 import com.aicode.patient.application.AgentRunUseCase;
 import com.aicode.patient.domain.model.AgentResult;
 import com.aicode.patient.domain.model.AgentStep;
-import com.aicode.patient.domain.model.TokenUsage;
+import com.aicode.core.domain.model.TokenUsage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,7 +40,7 @@ class AgentControllerTest {
         when(agentRunUseCase.run(any())).thenReturn(new AgentResult(
                 "task-1",
                 "建议随访",
-                List.of(new AgentStep(1, "思考", "行动", "观察")),
+                List.of(new AgentStep(1, "PatientTool", "{\"patientId\":\"P001\"}", "{\"name\":\"张三\"}")),
                 1,
                 new TokenUsage(10, 20, 30),
                 "deepseek-chat"
@@ -54,6 +54,7 @@ class AgentControllerTest {
                 .andExpect(jsonPath("$.data.answer").value("建议随访"))
                 .andExpect(jsonPath("$.data.totalSteps").value(1))
                 .andExpect(jsonPath("$.data.steps[0].stepNo").value(1))
+                .andExpect(jsonPath("$.data.steps[0].toolName").value("PatientTool"))
                 .andExpect(jsonPath("$.data.usage.totalTokens").value(30));
     }
 

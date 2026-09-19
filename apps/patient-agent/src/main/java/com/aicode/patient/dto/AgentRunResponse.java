@@ -6,7 +6,7 @@ import com.aicode.patient.domain.model.AgentStep;
 import java.util.List;
 
 /**
- * Agent 运行成功体：最终答案 + 完整步骤轨迹 + 汇总用量。
+ * Agent 运行成功体：最终答案 + 完整工具调用轨迹 + 汇总用量。
  */
 public record AgentRunResponse(
         String taskId,
@@ -39,6 +39,6 @@ public record AgentRunResponse(
     }
 
     private static AgentStepDto toStep(AgentStep step) {
-        return new AgentStepDto(step.stepNo(), step.thought(), step.action(), step.observation());
+        return new AgentStepDto(step.stepNo(), step.toolName(), step.arguments(), step.observation());
     }
 }

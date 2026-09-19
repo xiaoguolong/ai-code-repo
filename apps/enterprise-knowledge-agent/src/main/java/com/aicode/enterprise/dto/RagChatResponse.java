@@ -1,7 +1,7 @@
 package com.aicode.enterprise.dto;
 
 import com.aicode.enterprise.application.KnowledgeAnswer;
-import com.aicode.enterprise.domain.model.VectorSearchHit;
+import com.aicode.core.domain.model.VectorSearchHit;
 
 import java.util.List;
 
