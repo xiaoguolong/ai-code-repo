@@ -1,8 +1,10 @@
 package com.aicode.patient.domain;
 
+import com.aicode.core.domain.MemoryContextAssembler;
 import com.aicode.core.domain.model.ChatMessage;
 import com.aicode.core.domain.model.ChatOptions;
 import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.MemoryHit;
 import com.aicode.core.domain.model.MessageRole;
 import com.aicode.core.domain.model.PromptTemplate;
 import com.aicode.core.domain.model.TokenUsage;
@@ -24,6 +26,7 @@ import java.util.List;
 
 /**
  * 原生 Function Calling Agent 编排（领域服务）。循环：调模型（带工具）→ 若要求工具则执行并回填观察 → 直到模型给出最终答案或超迭代。
+ * 上下文装配：system 提示 + 短期历史 + user（召回的历史任务 + 当前任务）；历史任务只作数据，不进 system。
  */
 public class ReActAgent {
 
@@ -47,20 +50,29 @@ public class ReActAgent {
     /**
      * 执行 Function Calling 循环并返回最终结果与完整工具调用轨迹。
      *
+     * @param task            任务（含 taskId / sessionId / 内容）
+     * @param history         同一会话的历史消息（短期记忆，已截断），可为空
+     * @param recalledMemories 语义召回的历史任务（长期记忆），可为空
      * @throws AgentLoopExceededException 达到最大迭代次数仍未收敛
      * @throws AgentExecutionException    模型输出空白且无工具调用，无法推进循环
      */
-    public AgentResult run(AgentTask task) {
+    public AgentResult run(AgentTask task, List<ChatMessage> history, List<MemoryHit> recalledMemories) {
         PromptTemplate system = promptTemplatePort.load("agent");
         List<ChatMessage> messages = new ArrayList<>();
         messages.add(new ChatMessage(MessageRole.SYSTEM, system.content()));
-        messages.add(new ChatMessage(MessageRole.USER, task.content()));
+        if (history != null && !history.isEmpty()) {
+            messages.addAll(history);
+        }
+        messages.add(new ChatMessage(
+                MessageRole.USER,
+                MemoryContextAssembler.buildUserMessage(recalledMemories, task.content())));
 
         List<AgentStep> steps = new ArrayList<>();
         TokenUsage totalUsage = TokenUsage.unknown();
         ChatOptions options = new ChatOptions(config.model(), config.temperature(), config.maxTokens());
         String model = config.model();
         List<ToolDefinition> tools = toolPort.definitions();
+        int recalledCount = recalledMemories == null ? 0 : recalledMemories.size();
 
         for (int i = 0; i < config.maxIterations(); i++) {
             ChatResult result = chatModelPort.chat(messages, options, tools);
@@ -81,7 +93,15 @@ public class ReActAgent {
             if (output.isEmpty()) {
                 throw new AgentExecutionException("agent produced empty output");
             }
-            return new AgentResult(task.taskId(), output, List.copyOf(steps), steps.size(), totalUsage, model);
+            return new AgentResult(
+                    task.taskId(),
+                    task.sessionId(),
+                    output,
+                    List.copyOf(steps),
+                    steps.size(),
+                    recalledCount,
+                    totalUsage,
+                    model);
         }
         throw new AgentLoopExceededException("agent exceeded max iterations: " + config.maxIterations());
     }

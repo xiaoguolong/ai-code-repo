@@ -1,5 +1,6 @@
 package com.aicode.core.infrastructure.vector;
 
+import com.aicode.core.domain.VectorMath;
 import com.aicode.core.domain.model.DocumentChunk;
 import com.aicode.core.domain.model.VectorSearchHit;
 import com.aicode.core.domain.port.VectorStorePort;
@@ -41,7 +42,7 @@ public class InMemoryVectorStoreAdapter implements VectorStorePort {
                         entry.chunk.knowledgeBaseId(),
                         entry.chunk.chunkIndex(),
                         entry.chunk.content(),
-                        cosine(query, entry.vector)
+                        VectorMath.cosine(query, entry.vector)
                 ))
                 .sorted(Comparator.comparingDouble(VectorSearchHit::score).reversed())
                 .limit(limit)
@@ -51,25 +52,5 @@ public class InMemoryVectorStoreAdapter implements VectorStorePort {
     @Override
     public void deleteByDocumentId(String documentId) {
         entries.removeIf(entry -> entry.chunk.documentId().equals(documentId));
-    }
-
-    static double cosine(float[] a, float[] b) {
-        double dot = 0;
-        int length = Math.min(a.length, b.length);
-        for (int i = 0; i < length; i++) {
-            dot += (double) a[i] * b[i];
-        }
-        double normA = 0;
-        double normB = 0;
-        for (float value : a) {
-            normA += (double) value * value;
-        }
-        for (float value : b) {
-            normB += (double) value * value;
-        }
-        if (normA == 0 || normB == 0) {
-            return 0;
-        }
-        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
     }
 }

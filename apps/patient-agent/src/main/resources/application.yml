@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: patient-agent
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 3s
 
 # 密钥只从环境变量读取，不要把真实 Key 写进本文件。
 llm:
@@ -24,3 +30,17 @@ prompt:
 # Agent 循环参数。max-iterations 兜底防止死循环烧钱。
 agent:
   max-iterations: 5
+
+# Agent 记忆：短期会话上下文 + 长期历史任务语义检索。
+memory:
+  # memory（进程内，默认）或 redis（多实例共享，需 Redis）
+  short-term-provider: ${MEMORY_SHORT_TERM_PROVIDER:memory}
+  long-term-provider: ${MEMORY_LONG_TERM_PROVIDER:memory}
+  max-messages: 20
+  long-term-top-k: 3
+  redis-ttl-hours: 24
+
+# 长期记忆向量化：默认离线哈希，生产切 openai（配合 EMBEDDING_API_KEY）。
+embedding:
+  provider: ${EMBEDDING_PROVIDER:hashing}
+  dimension: 1024

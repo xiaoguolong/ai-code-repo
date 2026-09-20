@@ -1,0 +1,157 @@
+{
+  "info": {
+    "name": "patient-agent（第7周 Agent Memory）",
+    "description": "运行 Agent 任务（原生 Function Calling + 短期会话记忆 + 长期向量记忆）。启动：apps/patient-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需配置环境变量 LLM_API_KEY，否则返回 502）。端口 8083。先执行「1. 第一轮」会自动把返回的 sessionId 写进集合变量，后续「2. 第二轮」即复用同一会话上下文；相似任务之间会触发长期记忆召回（recalledMemories>0）。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8083" },
+    { "key": "sessionId", "value": "" },
+    { "key": "task", "value": "评估患者 P001 的出院风险，结合检查报告、健康指标和医嘱给出随访建议" }
+  ],
+  "item": [
+    {
+      "name": "1. 第一轮（不带 sessionId，自动生成并保存）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "if (body && body.data && body.data.sessionId) {",
+              "    pm.collectionVariables.set('sessionId', body.data.sessionId);",
+              "    console.log('sessionId =', body.data.sessionId);",
+              "}",
+              "pm.test('返回 sessionId', function () {",
+              "    pm.expect(body.data.sessionId).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"评估患者 P001 的出院风险，结合检查报告、健康指标和医嘱给出随访建议\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 第二轮（复用 sessionId，多轮上下文）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('复用同一 sessionId', function () {",
+              "    pm.expect(body.data.sessionId).to.eql(pm.collectionVariables.get('sessionId'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionId\": \"{{sessionId}}\",\n    \"task\": \"那他的血压和血糖控制得怎么样？\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "3. 长期记忆召回（相似历史任务）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "console.log('recalledMemories =', body.data.recalledMemories);",
+              "pm.test('recalledMemories 为非负整数', function () {",
+              "    pm.expect(body.data.recalledMemories).to.be.at.least(0);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"task\": \"评估患者 P001 的血压和血糖风险并给出随访建议\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "4. 指定 sessionId 查询",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionId\": \"demo-session-001\",\n    \"task\": \"查询患者 P002 的健康指标\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "5. 空白任务 → 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionId\": \"demo-session-001\",\n    \"task\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    },
+    {
+      "name": "6. sessionId 超长（120 字符）→ 400",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"sessionId\": \"012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789\",\n    \"task\": \"查询患者 P001 的基本信息\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/agents/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "agents", "runs"]
+        }
+      }
+    }
+  ]
+}

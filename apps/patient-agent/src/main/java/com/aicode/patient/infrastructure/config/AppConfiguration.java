@@ -6,6 +6,7 @@ import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.core.infrastructure.config.LlmProperties;
+import com.aicode.core.infrastructure.config.MemoryProperties;
 import com.aicode.patient.application.AgentRuntimeConfig;
 import com.aicode.patient.domain.ReActAgent;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,15 +25,21 @@ import java.util.List;
 public class AppConfiguration {
 
     /**
-     * 把 LLM + Agent 配置映射为用例/领域所需的运行时参数。
+     * 把 LLM + Agent + 记忆配置映射为用例/领域所需的运行时参数。
      */
     @Bean
-    AgentRuntimeConfig agentRuntimeConfig(LlmProperties llmProperties, AgentProperties agentProperties) {
+    AgentRuntimeConfig agentRuntimeConfig(
+            LlmProperties llmProperties,
+            AgentProperties agentProperties,
+            MemoryProperties memoryProperties
+    ) {
         return new AgentRuntimeConfig(
                 llmProperties.model(),
                 llmProperties.temperature(),
                 llmProperties.maxTokens(),
-                agentProperties.maxIterations()
+                agentProperties.maxIterations(),
+                memoryProperties.resolvedMaxMessages(),
+                memoryProperties.resolvedLongTermTopK()
         );
     }
 

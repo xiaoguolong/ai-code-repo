@@ -25,11 +25,11 @@ public class AgentController {
     }
 
     /**
-     * 提交任务并同步执行 ReAct 循环。
+     * 提交任务并同步执行 ReAct 循环，携带记忆上下文。
      */
     @PostMapping("/runs")
     public ApiResponse<AgentRunResponse> run(@Valid @RequestBody AgentRunRequest request) {
-        AgentResult result = agentRunUseCase.run(request.task());
+        AgentResult result = agentRunUseCase.run(request.sessionId(), request.task());
         return ApiResponse.success(AgentRunResponse.from(result));
     }
 }

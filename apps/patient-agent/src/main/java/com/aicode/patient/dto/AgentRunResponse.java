@@ -6,13 +6,15 @@ import com.aicode.patient.domain.model.AgentStep;
 import java.util.List;
 
 /**
- * Agent 运行成功体：最终答案 + 完整工具调用轨迹 + 汇总用量。
+ * Agent 运行成功体：最终答案 + 完整工具调用轨迹 + 记忆信息 + 汇总用量。
  */
 public record AgentRunResponse(
         String taskId,
+        String sessionId,
         String answer,
         List<AgentStepDto> steps,
         int totalSteps,
+        int recalledMemories,
         String model,
         AgentUsageDto usage
 ) {
@@ -26,9 +28,11 @@ public record AgentRunResponse(
                 .toList();
         return new AgentRunResponse(
                 result.taskId(),
+                result.sessionId(),
                 result.answer(),
                 stepDtos,
                 result.totalSteps(),
+                result.recalledMemories(),
                 result.model(),
                 new AgentUsageDto(
                         result.totalUsage().promptTokens(),

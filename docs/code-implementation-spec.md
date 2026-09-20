@@ -635,7 +635,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 04 | 企业知识库 Agent V1 | docs/specs/week-04.md | notes/impl-logs/week-04.md | 已关闭 |
 | 05 | Agent 基础 | docs/specs/week-05.md | notes/impl-logs/week-05.md | 已关闭 |
 | 06 | Tool Calling | docs/specs/week-06.md | notes/impl-logs/week-06.md | 已关闭 |
-| 07 | Agent Memory | | | 未开始 |
+| 07 | Agent Memory | docs/specs/week-07.md | notes/impl-logs/week-07.md | 已关闭 |
 | 08 | Spring AI Alibaba | | | 未开始 |
 | 09 | Workflow | | | 未开始 |
 | 10 | Human in the Loop | | | 未开始 |

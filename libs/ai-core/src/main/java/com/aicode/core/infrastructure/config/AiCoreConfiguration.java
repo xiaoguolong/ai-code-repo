@@ -26,7 +26,8 @@ import java.time.Duration;
         OcrProperties.class,
         AuthProperties.class,
         FileProperties.class,
-        PromptProperties.class
+        PromptProperties.class,
+        MemoryProperties.class
 })
 public class AiCoreConfiguration {
 
