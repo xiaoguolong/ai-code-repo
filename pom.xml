@@ -15,5 +15,6 @@
         <module>libs/ai-core</module>
         <module>apps/enterprise-knowledge-agent</module>
         <module>apps/patient-agent</module>
+        <module>apps/spring-ai-alibaba-agent</module>
     </modules>
 </project>

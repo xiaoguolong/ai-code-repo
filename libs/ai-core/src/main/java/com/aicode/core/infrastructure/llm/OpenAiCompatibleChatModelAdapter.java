@@ -11,6 +11,7 @@ import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.infrastructure.config.LlmProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -25,6 +26,7 @@ import java.util.Map;
  * 支持原生 Function Calling：下发 tools，解析 tool_calls 与 finish_reason。
  */
 @Component
+@ConditionalOnProperty(prefix = "framework", name = "model-provider", havingValue = "openai-compatible", matchIfMissing = true)
 public class OpenAiCompatibleChatModelAdapter implements ChatModelPort {
 
     private static final Logger log = LoggerFactory.getLogger(OpenAiCompatibleChatModelAdapter.class);
