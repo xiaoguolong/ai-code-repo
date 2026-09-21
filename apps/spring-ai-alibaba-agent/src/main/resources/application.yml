@@ -1,0 +1,43 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: spring-ai-alibaba-agent
+  # Spring AI OpenAI 兼容通道，指向 DeepSeek。密钥只从环境变量读取，不要写真实 Key。
+  # 注意：Spring AI 自行拼接 /v1/chat/completions，base-url 只写主机名，切勿带 /v1。
+  ai:
+    openai:
+      base-url: ${SPRING_AI_OPENAI_BASE_URL:https://api.deepseek.com}
+      api-key: ${LLM_API_KEY:}
+      chat:
+        options:
+          model: ${LLM_MODEL:deepseek-chat}
+          temperature: 0.7
+    mcp:
+      server:
+        name: patient-tools-mcp
+        version: 0.1.0
+        type: SYNC
+
+# 框架适配器选择：spring-ai 用本模块的 Spring AI 适配器；openai-compatible 用第 1 周 RestClient 适配器。
+framework:
+  model-provider: ${FRAMEWORK_MODEL_PROVIDER:spring-ai}
+  agent:
+    # 模型带工具循环上限，兜底防止死循环烧钱。
+    max-iterations: 5
+
+# ai-core 统一读取的 LLM 参数（运行时常量与统计口径）。
+llm:
+  base-url: ${LLM_BASE_URL:https://api.deepseek.com/v1}
+  api-key: ${LLM_API_KEY:}
+  model: ${LLM_MODEL:deepseek-chat}
+  max-tokens: 2048
+  temperature: 0.7
+  timeout-seconds: 60
+  proxy-host: ${LLM_PROXY_HOST:}
+  proxy-port: ${LLM_PROXY_PORT:7890}
+
+# Prompt 模板版本（由 ai-core 统一读取）。
+prompt:
+  version: ${PROMPT_VERSION:v1}

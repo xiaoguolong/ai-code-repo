@@ -369,7 +369,8 @@ ai-code-repo/
 └── apps/
     ├── spring-ai-demo/                ← 第1–3周（历史演示，保留自含，不收敛到 ai-core）
     ├── enterprise-knowledge-agent/    ← 第4周（依赖 ai-core）
-    └── patient-agent/                 ← 第5–6周（依赖 ai-core）
+    ├── patient-agent/                 ← 第5–7周（依赖 ai-core）
+    └── spring-ai-alibaba-agent/       ← 第8周（Spring AI Alibaba Graph，依赖 ai-core）
         ├── pom.xml
         └── src/
             ├── main/java/.../
@@ -636,7 +637,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 05 | Agent 基础 | docs/specs/week-05.md | notes/impl-logs/week-05.md | 已关闭 |
 | 06 | Tool Calling | docs/specs/week-06.md | notes/impl-logs/week-06.md | 已关闭 |
 | 07 | Agent Memory | docs/specs/week-07.md | notes/impl-logs/week-07.md | 已关闭 |
-| 08 | Spring AI Alibaba | | | 未开始 |
+| 08 | Spring AI Alibaba | docs/specs/week-08.md | notes/impl-logs/week-08.md | 已关闭 |
 | 09 | Workflow | | | 未开始 |
 | 10 | Human in the Loop | | | 未开始 |
 | 11 | Multi Agent | | | 未开始 |
