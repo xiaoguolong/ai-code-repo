@@ -1,0 +1,124 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第11周 Multi Agent：医疗助手 Supervisor）",
+    "description": "Supervisor 调度 数据 / 分析 / 报告 / 随访 四 Agent。启动：apps/spring-ai-alibaba-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需 LLM_API_KEY，否则报告/随访 LLM 502）。端口 8084。\n\ndemo 工具 HealthMetricTool 返回 148/92/8.6/7.9（中风险）；响应含 report、followUpPlan 与 steps 轨迹。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "patientId", "value": "P001" },
+    { "key": "runId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 启动 Multi Agent（P001 → 完整 report + followUpPlan）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "if (body && body.data && body.data.runId) {",
+              "    pm.collectionVariables.set('runId', body.data.runId);",
+              "    console.log('runId =', body.data.runId);",
+              "}",
+              "pm.test('200 + SUCCESS', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "});",
+              "pm.test('返回患者、指标、报告与随访计划', function () {",
+              "    pm.expect(body.data.patient.patientId).to.eql('P001');",
+              "    pm.expect(body.data.metrics).to.have.property('hba1c');",
+              "    pm.expect(body.data.report).to.be.a('string').and.not.empty;",
+              "    pm.expect(body.data.followUpPlan).to.be.a('string').and.not.empty;",
+              "});",
+              "pm.test('steps 含 supervisor 与四 Worker', function () {",
+              "    const names = body.data.steps.map(s => s.agentName);",
+              "    pm.expect(names).to.include('supervisor');",
+              "    pm.expect(names).to.include('data_agent');",
+              "    pm.expect(names).to.include('analysis_agent');",
+              "    pm.expect(names).to.include('report_agent');",
+              "    pm.expect(names).to.include('followup_agent');",
+              "});",
+              "console.log('riskLevel =', body.data.riskLevel, body.data.riskLabel);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"{{patientId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/multi-agent/medical-assistant/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "multi-agent", "medical-assistant", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 启动 Multi Agent（自定义 task）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('200 + 自定义 task 回显', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.data.task).to.include('综合评估');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"{{patientId}}\",\n    \"task\": \"为患者 P001 做综合评估并制定随访方案\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/multi-agent/medical-assistant/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "multi-agent", "medical-assistant", "runs"]
+        }
+      }
+    },
+    {
+      "name": "3. 校验 patientId 空白 → 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 Bad Request', function () {",
+              "    pm.response.to.have.status(400);",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/multi-agent/medical-assistant/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "multi-agent", "medical-assistant", "runs"]
+        }
+      }
+    }
+  ]
+}

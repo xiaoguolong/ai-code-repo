@@ -9,6 +9,9 @@ import com.aicode.core.infrastructure.config.LlmProperties;
 import com.aicode.core.infrastructure.springai.SpringAiToolCallbackFactory;
 import com.aicode.framework.application.FrameworkRuntimeConfig;
 import com.aicode.framework.domain.FrameworkAgentGraph;
+import com.aicode.framework.multiagent.application.MedicalAssistantRuntimeConfig;
+import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisor;
+import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisorGraph;
 import com.aicode.framework.workflow.application.PatientRiskRuntimeConfig;
 import com.aicode.framework.workflow.domain.PatientRiskAssessor;
 import com.aicode.framework.workflow.domain.PatientRiskToolResultMapper;
@@ -114,5 +117,47 @@ public class AppConfiguration {
         return new PatientRiskWorkflow(
                 chatModelPort, promptTemplatePort, frameworkToolPort,
                 patientRiskAssessor, patientRiskToolResultMapper, patientRiskRuntimeConfig);
+    }
+
+    /**
+     * Supervisor 路由规划（规则驱动）。
+     */
+    @Bean
+    MedicalAssistantSupervisor medicalAssistantSupervisor() {
+        return new MedicalAssistantSupervisor();
+    }
+
+    /**
+     * 医疗助手多 Agent 运行时参数。
+     */
+    @Bean
+    MedicalAssistantRuntimeConfig medicalAssistantRuntimeConfig(
+            LlmProperties llmProperties,
+            FrameworkAgentProperties frameworkAgentProperties
+    ) {
+        return new MedicalAssistantRuntimeConfig(
+                llmProperties.model(),
+                llmProperties.temperature(),
+                llmProperties.maxTokens(),
+                frameworkAgentProperties.resolvedMaxIterations() + 5);
+    }
+
+    /**
+     * 医疗助手 Supervisor 多 Agent Graph。
+     */
+    @Bean
+    MedicalAssistantSupervisorGraph medicalAssistantSupervisorGraph(
+            ChatModelPort chatModelPort,
+            PromptTemplatePort promptTemplatePort,
+            ToolPort frameworkToolPort,
+            PatientRiskAssessor patientRiskAssessor,
+            PatientRiskToolResultMapper patientRiskToolResultMapper,
+            MedicalAssistantSupervisor medicalAssistantSupervisor,
+            MedicalAssistantRuntimeConfig medicalAssistantRuntimeConfig
+    ) {
+        return new MedicalAssistantSupervisorGraph(
+                chatModelPort, promptTemplatePort, frameworkToolPort,
+                patientRiskAssessor, patientRiskToolResultMapper,
+                medicalAssistantSupervisor, medicalAssistantRuntimeConfig);
     }
 }

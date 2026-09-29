@@ -3,6 +3,9 @@ package com.aicode.framework;
 import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.domain.FrameworkAgentGraph;
+import com.aicode.framework.multiagent.application.MedicalAssistantUseCase;
+import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisor;
+import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisorGraph;
 import com.aicode.framework.workflow.application.PatientRiskUseCase;
 import com.aicode.framework.workflow.domain.PatientRiskAssessor;
 import com.aicode.framework.workflow.domain.PatientRiskWorkflow;
@@ -40,5 +43,8 @@ class SpringAiAlibabaAgentApplicationTest {
         assertThat(context.getBean(PatientRiskAssessor.class)).isNotNull();
         assertThat(context.getBean(PatientRiskWorkflow.class)).isNotNull();
         assertThat(context.getBean(PatientRiskUseCase.class)).isNotNull();
+        assertThat(context.getBean(MedicalAssistantSupervisor.class)).isNotNull();
+        assertThat(context.getBean(MedicalAssistantSupervisorGraph.class)).isNotNull();
+        assertThat(context.getBean(MedicalAssistantUseCase.class)).isNotNull();
     }
 }
