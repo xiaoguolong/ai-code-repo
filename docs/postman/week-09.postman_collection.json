@@ -1,0 +1,115 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第9周 Workflow：患者风险分析）",
+    "description": "运行 Spring AI Alibaba Graph 编排的固定多节点流程（query_patient → query_metrics → judge_risk →(条件边)→ escalate/generate_report）。启动：apps/spring-ai-alibaba-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需配置环境变量 LLM_API_KEY，否则报告生成返回 502）。端口 8084。demo 患者 P001 指标为 148/92/8.6/7.9，属中风险（MEDIUM），走 routine 分支；高风险（escalated=true）分支由单元测试覆盖。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "patientId", "value": "P001" }
+  ],
+  "item": [
+    {
+      "name": "1. 运行患者风险分析（P001 → 中风险）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('code 为 SUCCESS', function () {",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "});",
+              "pm.test('返回患者与指标', function () {",
+              "    pm.expect(body.data.patient.patientId).to.eql('P001');",
+              "    pm.expect(body.data.metrics).to.have.property('hba1c');",
+              "});",
+              "pm.test('返回风险等级与报告', function () {",
+              "    pm.expect(['LOW', 'MEDIUM', 'HIGH']).to.include(body.data.riskLevel);",
+              "    pm.expect(body.data.report).to.be.a('string').and.not.empty;",
+              "});",
+              "console.log('riskLevel =', body.data.riskLevel, '(', body.data.riskLabel, ') escalated =', body.data.escalated);",
+              "console.log('justification =', body.data.justification);",
+              "console.log('report =', body.data.report);",
+              "console.log('usage =', JSON.stringify(body.data.usage));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"P001\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 空白 patientId → 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 + VALIDATION_ERROR', function () {",
+              "    pm.response.to.have.status(400);",
+              "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    },
+    {
+      "name": "3. patientId 超长（101 字符）→ 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 + VALIDATION_ERROR', function () {",
+              "    pm.response.to.have.status(400);",
+              "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    }
+  ]
+}

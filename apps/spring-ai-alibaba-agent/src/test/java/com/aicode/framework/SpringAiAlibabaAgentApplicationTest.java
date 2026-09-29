@@ -3,6 +3,9 @@ package com.aicode.framework;
 import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.domain.FrameworkAgentGraph;
+import com.aicode.framework.workflow.application.PatientRiskUseCase;
+import com.aicode.framework.workflow.domain.PatientRiskAssessor;
+import com.aicode.framework.workflow.domain.PatientRiskWorkflow;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,5 +37,8 @@ class SpringAiAlibabaAgentApplicationTest {
         assertThat(context.getBean(ToolPort.class).definitions()).hasSize(2);
         assertThat(context.getBean(FrameworkAgentGraph.class)).isNotNull();
         assertThat(context.getBean(ToolCallbackProvider.class).getToolCallbacks()).hasSize(2);
+        assertThat(context.getBean(PatientRiskAssessor.class)).isNotNull();
+        assertThat(context.getBean(PatientRiskWorkflow.class)).isNotNull();
+        assertThat(context.getBean(PatientRiskUseCase.class)).isNotNull();
     }
 }

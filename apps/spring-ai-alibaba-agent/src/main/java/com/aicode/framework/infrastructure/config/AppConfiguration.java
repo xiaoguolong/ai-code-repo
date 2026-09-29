@@ -9,6 +9,10 @@ import com.aicode.core.infrastructure.config.LlmProperties;
 import com.aicode.core.infrastructure.springai.SpringAiToolCallbackFactory;
 import com.aicode.framework.application.FrameworkRuntimeConfig;
 import com.aicode.framework.domain.FrameworkAgentGraph;
+import com.aicode.framework.workflow.application.PatientRiskRuntimeConfig;
+import com.aicode.framework.workflow.domain.PatientRiskAssessor;
+import com.aicode.framework.workflow.domain.PatientRiskToolResultMapper;
+import com.aicode.framework.workflow.domain.PatientRiskWorkflow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -68,5 +72,47 @@ public class AppConfiguration {
     ToolCallbackProvider mcpToolCallbackProvider(List<Tool> tools, ObjectMapper objectMapper) {
         return ToolCallbackProvider.from(
                 new SpringAiToolCallbackFactory(objectMapper).toExecutableCallbacks(tools));
+    }
+
+    /**
+     * 患者风险判断纯领域服务。
+     */
+    @Bean
+    PatientRiskAssessor patientRiskAssessor() {
+        return new PatientRiskAssessor();
+    }
+
+    /**
+     * 工具结果 JSON 解析器（领域工具与值对象之间的映射）。
+     */
+    @Bean
+    PatientRiskToolResultMapper patientRiskToolResultMapper(ObjectMapper objectMapper) {
+        return new PatientRiskToolResultMapper(objectMapper);
+    }
+
+    /**
+     * 把 LLM 配置映射为患者风险分析 Workflow 所需的运行时参数。
+     */
+    @Bean
+    PatientRiskRuntimeConfig patientRiskRuntimeConfig(LlmProperties llmProperties) {
+        return new PatientRiskRuntimeConfig(
+                llmProperties.model(), llmProperties.temperature(), llmProperties.maxTokens());
+    }
+
+    /**
+     * 患者风险分析 Workflow（领域服务）：固定多节点图 + 条件边，复用同一 ToolPort 与模型端口。
+     */
+    @Bean
+    PatientRiskWorkflow patientRiskWorkflow(
+            ChatModelPort chatModelPort,
+            PromptTemplatePort promptTemplatePort,
+            ToolPort frameworkToolPort,
+            PatientRiskAssessor patientRiskAssessor,
+            PatientRiskToolResultMapper patientRiskToolResultMapper,
+            PatientRiskRuntimeConfig patientRiskRuntimeConfig
+    ) {
+        return new PatientRiskWorkflow(
+                chatModelPort, promptTemplatePort, frameworkToolPort,
+                patientRiskAssessor, patientRiskToolResultMapper, patientRiskRuntimeConfig);
     }
 }
