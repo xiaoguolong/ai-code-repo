@@ -6,18 +6,20 @@ import com.aicode.core.domain.model.TokenUsage;
  * 患者风险分析 Workflow 运行结果。
  *
  * @param workflowId    流程标识
+ * @param status        运行状态（完成 / 待审 / 已拒绝）
  * @param patientId     患者编号
  * @param patient       患者基础信息
  * @param metrics       健康指标
  * @param riskLevel     风险等级
  * @param justification 判断依据
- * @param escalated     是否加急（高风险为 true）
- * @param report        报告文本（模型生成）
+ * @param escalated     是否加急（高风险审核通过后为 true）
+ * @param report        报告文本（待审/拒绝时为空）
  * @param usage         汇总 Token 用量
  * @param model         报告生成所用模型名
  */
 public record PatientRiskWorkflowResult(
         String workflowId,
+        WorkflowStatus status,
         String patientId,
         PatientProfile patient,
         HealthMetrics metrics,

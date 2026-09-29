@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第10周 HITL：患者风险 Workflow）",
+    "description": "患者风险分析 Workflow + Human-in-the-Loop（HIGH 暂停人工审核 → resume）。启动：apps/spring-ai-alibaba-agent 下 .\\run-maven-jdk17.ps1 spring-boot:run（需 LLM_API_KEY，否则报告生成 502）。端口 8084。\n\n说明：demo 工具 HealthMetricTool 对任意 patientId 返回 148/92/8.6/7.9（中风险），POST /runs 通常直接 status=COMPLETED。完整 HIGH→PENDING→resume 链路见单元测试 PatientRiskWorkflowTest；若手工验证审核通过/拒绝，将 PENDING 运行返回的 workflowId 写入集合变量 pendingWorkflowId 后执行第 8、9 条。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "patientId", "value": "P001" },
+    { "key": "workflowId", "value": "" },
+    { "key": "pendingWorkflowId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 启动 Workflow（P001 → 中风险 COMPLETED）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "if (body && body.data && body.data.workflowId) {",
+              "    pm.collectionVariables.set('workflowId', body.data.workflowId);",
+              "    console.log('workflowId =', body.data.workflowId);",
+              "}",
+              "pm.test('200 + SUCCESS', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "});",
+              "pm.test('status 为 COMPLETED（demo 中风险）', function () {",
+              "    pm.expect(body.data.status).to.eql('COMPLETED');",
+              "});",
+              "pm.test('返回患者、指标与报告', function () {",
+              "    pm.expect(body.data.patient.patientId).to.eql('P001');",
+              "    pm.expect(body.data.metrics).to.have.property('hba1c');",
+              "    pm.expect(body.data.report).to.be.a('string').and.not.empty;",
+              "});",
+              "console.log('riskLevel =', body.data.riskLevel, body.data.riskLabel, 'escalated =', body.data.escalated);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"{{patientId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    },
+    {
+      "name": "2. 查询 Workflow 状态（GET workflowId）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const body = pm.response.json();",
+              "pm.test('200 + 同一 workflowId', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "    pm.expect(body.data.workflowId).to.eql(pm.collectionVariables.get('workflowId'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/{{workflowId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "{{workflowId}}"]
+        }
+      }
+    },
+    {
+      "name": "3. 非待审 resume（已完成 → 409）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('409 + WORKFLOW_NOT_PENDING', function () {",
+              "    pm.response.to.have.status(409);",
+              "    pm.expect(pm.response.json().code).to.eql('WORKFLOW_NOT_PENDING');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"approved\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/{{workflowId}}/resume",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "{{workflowId}}", "resume"]
+        }
+      }
+    },
+    {
+      "name": "4. 未知 workflowId（GET → 404）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 + WORKFLOW_NOT_FOUND', function () {",
+              "    pm.response.to.have.status(404);",
+              "    pm.expect(pm.response.json().code).to.eql('WORKFLOW_NOT_FOUND');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/00000000-0000-0000-0000-000000000000",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "00000000-0000-0000-0000-000000000000"]
+        }
+      }
+    },
+    {
+      "name": "5. 空白 patientId → 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 + VALIDATION_ERROR', function () {",
+              "    pm.response.to.have.status(400);",
+              "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"   \"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    },
+    {
+      "name": "6. patientId 超长（101 字符）→ 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 + VALIDATION_ERROR', function () {",
+              "    pm.response.to.have.status(400);",
+              "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"patientId\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs"]
+        }
+      }
+    },
+    {
+      "name": "7. resume 缺少 approved → 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 + VALIDATION_ERROR', function () {",
+              "    pm.response.to.have.status(400);",
+              "    pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/{{workflowId}}/resume",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "{{workflowId}}", "resume"]
+        }
+      }
+    },
+    {
+      "name": "8. [可选] 人工审核通过（pendingWorkflowId → COMPLETED）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const pendingId = pm.collectionVariables.get('pendingWorkflowId');",
+              "if (!pendingId) {",
+              "    pm.test.skip('未设置 pendingWorkflowId，跳过（demo P001 为中风险不会 PENDING）');",
+              "    return;",
+              "}",
+              "const body = pm.response.json();",
+              "pm.test('200 + COMPLETED + 报告非空', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "    pm.expect(body.data.status).to.eql('COMPLETED');",
+              "    pm.expect(body.data.escalated).to.eql(true);",
+              "    pm.expect(body.data.report).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"approved\": true\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/{{pendingWorkflowId}}/resume",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "{{pendingWorkflowId}}", "resume"]
+        }
+      }
+    },
+    {
+      "name": "9. [可选] 人工审核拒绝（pendingWorkflowId → REJECTED）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const pendingId = pm.collectionVariables.get('pendingWorkflowId');",
+              "if (!pendingId) {",
+              "    pm.test.skip('未设置 pendingWorkflowId，跳过');",
+              "    return;",
+              "}",
+              "const body = pm.response.json();",
+              "pm.test('200 + REJECTED + 无报告', function () {",
+              "    pm.response.to.have.status(200);",
+              "    pm.expect(body.code).to.eql('SUCCESS');",
+              "    pm.expect(body.data.status).to.eql('REJECTED');",
+              "    pm.expect(body.data.report).to.eql('');",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"approved\": false\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/workflows/patient-risk/runs/{{pendingWorkflowId}}/resume",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "v1", "workflows", "patient-risk", "runs", "{{pendingWorkflowId}}", "resume"]
+        }
+      }
+    }
+  ]
+}

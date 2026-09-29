@@ -15,8 +15,11 @@ import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.workflow.application.PatientRiskRuntimeConfig;
+import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
+import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import com.aicode.framework.workflow.domain.model.PatientRiskWorkflowResult;
 import com.aicode.framework.workflow.domain.model.RiskLevel;
+import com.aicode.framework.workflow.domain.model.WorkflowStatus;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -27,8 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 患者风险分析 Workflow 领域服务测试：用 fake ToolPort + 脚本化 ChatModelPort 驱动固定流程，
- * 不依赖真实网络。验证固定顺序、条件边（HIGH→escalate）、报告生成与异常解包。
+ * 患者风险分析 Workflow 领域服务测试：固定流程、HITL 暂停/恢复、异常解包。
  */
 class PatientRiskWorkflowTest {
 
@@ -63,28 +65,89 @@ class PatientRiskWorkflowTest {
 
         PatientRiskWorkflowResult result = workflow.run("wf-1", "P001");
 
+        assertThat(result.status()).isEqualTo(WorkflowStatus.COMPLETED);
         assertThat(result.workflowId()).isEqualTo("wf-1");
-        assertThat(result.patientId()).isEqualTo("P001");
-        assertThat(result.patient().name()).isEqualTo("张三");
-        assertThat(result.metrics().hba1c()).isEqualTo(7.9);
         assertThat(result.riskLevel()).isEqualTo(RiskLevel.MEDIUM);
         assertThat(result.escalated()).isFalse();
         assertThat(result.report()).isEqualTo("中风险报告");
         assertThat(result.usage().totalTokens()).isEqualTo(30);
-        assertThat(result.model()).isEqualTo("test-model");
     }
 
     @Test
-    void runsEscalatedReportForHighRisk() {
+    void pausesHighRiskForHumanReview() {
         CapturingChatModelPort chat = new CapturingChatModelPort("高风险报告");
         PatientRiskWorkflow workflow = workflow(chat,
                 "{\"systolic\":162,\"diastolic\":98,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
 
-        PatientRiskWorkflowResult result = workflow.run("wf-2", "P001");
+        PatientRiskWorkflowResult pending = workflow.start("wf-2", "P001");
 
-        assertThat(result.riskLevel()).isEqualTo(RiskLevel.HIGH);
-        assertThat(result.escalated()).isTrue();
-        assertThat(result.report()).isEqualTo("高风险报告");
+        assertThat(pending.status()).isEqualTo(WorkflowStatus.PENDING_APPROVAL);
+        assertThat(pending.riskLevel()).isEqualTo(RiskLevel.HIGH);
+        assertThat(pending.escalated()).isFalse();
+        assertThat(pending.report()).isEmpty();
+        assertThat(chat.callCount).isZero();
+    }
+
+    @Test
+    void resumesApprovedHighRiskToCompletedReport() {
+        CapturingChatModelPort chat = new CapturingChatModelPort("高风险报告");
+        PatientRiskWorkflow workflow = workflow(chat,
+                "{\"systolic\":162,\"diastolic\":98,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
+
+        workflow.start("wf-3", "P001");
+        PatientRiskWorkflowResult completed = workflow.resume("wf-3", true);
+
+        assertThat(completed.status()).isEqualTo(WorkflowStatus.COMPLETED);
+        assertThat(completed.escalated()).isTrue();
+        assertThat(completed.report()).isEqualTo("高风险报告");
+        assertThat(chat.callCount).isEqualTo(1);
+    }
+
+    @Test
+    void resumesRejectedHighRiskWithoutReport() {
+        CapturingChatModelPort chat = new CapturingChatModelPort("不应调用");
+        PatientRiskWorkflow workflow = workflow(chat,
+                "{\"systolic\":162,\"diastolic\":98,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
+
+        workflow.start("wf-4", "P001");
+        PatientRiskWorkflowResult rejected = workflow.resume("wf-4", false);
+
+        assertThat(rejected.status()).isEqualTo(WorkflowStatus.REJECTED);
+        assertThat(rejected.report()).isEmpty();
+        assertThat(rejected.escalated()).isFalse();
+        assertThat(chat.callCount).isZero();
+    }
+
+    @Test
+    void getRunReturnsPendingSnapshot() {
+        PatientRiskWorkflow workflow = workflow(new CapturingChatModelPort("x"),
+                "{\"systolic\":162,\"diastolic\":98,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
+
+        workflow.start("wf-5", "P001");
+        PatientRiskWorkflowResult snapshot = workflow.getRun("wf-5");
+
+        assertThat(snapshot.status()).isEqualTo(WorkflowStatus.PENDING_APPROVAL);
+        assertThat(snapshot.patient().name()).isEqualTo("张三");
+    }
+
+    @Test
+    void resumeFailsWhenNotPending() {
+        PatientRiskWorkflow workflow = workflow(new CapturingChatModelPort("中风险报告"),
+                "{\"systolic\":148,\"diastolic\":92,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
+
+        workflow.start("wf-6", "P001");
+
+        assertThatThrownBy(() -> workflow.resume("wf-6", true))
+                .isInstanceOf(WorkflowNotPendingException.class);
+    }
+
+    @Test
+    void getRunFailsWhenUnknownWorkflow() {
+        PatientRiskWorkflow workflow = workflow(new CapturingChatModelPort("x"),
+                "{\"systolic\":148,\"diastolic\":92,\"fastingGlucose\":8.6,\"hba1c\":7.9}");
+
+        assertThatThrownBy(() -> workflow.getRun("unknown"))
+                .isInstanceOf(WorkflowNotFoundException.class);
     }
 
     @Test
@@ -105,7 +168,7 @@ class PatientRiskWorkflowTest {
                 new PatientRiskAssessor(), mapper,
                 new PatientRiskRuntimeConfig("test-model", 0.0, 128));
 
-        assertThatThrownBy(() -> workflow.run("wf-3", "P001"))
+        assertThatThrownBy(() -> workflow.run("wf-7", "P001"))
                 .isInstanceOf(ToolExecutionException.class);
     }
 
@@ -139,13 +202,10 @@ class PatientRiskWorkflowTest {
         };
     }
 
-    /**
-     * 脚本化模型端口：记录最后一次调用的消息并返回固定报告。
-     */
     private static final class CapturingChatModelPort implements ChatModelPort {
 
         private final String report;
-        private List<ChatMessage> lastMessages = List.of();
+        private int callCount;
 
         private CapturingChatModelPort(String report) {
             this.report = report;
@@ -153,7 +213,7 @@ class PatientRiskWorkflowTest {
 
         @Override
         public ChatResult chat(List<ChatMessage> messages, ChatOptions options, List<ToolDefinition> tools) {
-            this.lastMessages = messages;
+            callCount++;
             return new ChatResult(report, List.of(), FinishReason.STOP, new TokenUsage(10, 20, 30), "test-model");
         }
     }

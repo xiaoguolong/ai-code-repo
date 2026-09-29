@@ -8,6 +8,7 @@ import com.aicode.framework.workflow.domain.model.PatientRiskWorkflowResult;
  */
 public record PatientRiskRunResponse(
         String workflowId,
+        String status,
         String patientId,
         PatientProfileDto patient,
         HealthMetricsDto metrics,
@@ -20,12 +21,11 @@ public record PatientRiskRunResponse(
         FrameworkUsageDto usage
 ) {
 
-    /**
-     * 从用例出参转换。
-     */
+    /** 从用例出参转换。 */
     public static PatientRiskRunResponse from(PatientRiskWorkflowResult result) {
         return new PatientRiskRunResponse(
                 result.workflowId(),
+                result.status().name(),
                 result.patientId(),
                 result.patient() == null ? null : PatientProfileDto.from(result.patient()),
                 result.metrics() == null ? null : HealthMetricsDto.from(result.metrics()),

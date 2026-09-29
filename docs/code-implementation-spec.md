@@ -639,7 +639,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 07 | Agent Memory | docs/specs/week-07.md | notes/impl-logs/week-07.md | 已关闭 |
 | 08 | Spring AI Alibaba | docs/specs/week-08.md | notes/impl-logs/week-08.md | 已关闭 |
 | 09 | Workflow | docs/specs/week-09.md | notes/impl-logs/week-09.md | 已关闭 |
-| 10 | Human in the Loop | | | 未开始 |
+| 10 | Human in the Loop | docs/specs/week-10.md | notes/impl-logs/week-10.md | 已关闭 |
 | 11 | Multi Agent | | | 未开始 |
 | 12 | Agent 平台 V1 | | | 未开始 |
 | 13 | 权限体系 | | | 未开始 |

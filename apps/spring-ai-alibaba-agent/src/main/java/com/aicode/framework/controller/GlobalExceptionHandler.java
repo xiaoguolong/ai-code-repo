@@ -6,6 +6,8 @@ import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.framework.domain.exception.AgentExecutionException;
 import com.aicode.framework.domain.exception.AgentLoopExceededException;
 import com.aicode.framework.dto.ApiResponse;
+import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
+import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -80,6 +82,24 @@ public class GlobalExceptionHandler {
         log.warn("agent execution failed: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("AGENT_EXECUTION_ERROR", "Agent 执行失败"));
+    }
+
+    /**
+     * Workflow 不存在 → 404。
+     */
+    @ExceptionHandler(WorkflowNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleWorkflowNotFound(WorkflowNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("WORKFLOW_NOT_FOUND", ex.getMessage()));
+    }
+
+    /**
+     * Workflow 非待审状态 → 409。
+     */
+    @ExceptionHandler(WorkflowNotPendingException.class)
+    public ResponseEntity<ApiResponse<Void>> handleWorkflowNotPending(WorkflowNotPendingException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("WORKFLOW_NOT_PENDING", ex.getMessage()));
     }
 
     /**
