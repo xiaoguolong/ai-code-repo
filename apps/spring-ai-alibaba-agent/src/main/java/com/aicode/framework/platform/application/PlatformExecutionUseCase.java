@@ -74,6 +74,7 @@ public class PlatformExecutionUseCase {
             log.info("[platform] execution completed executionId={} agentKey={} model={} tokens={}",
                     executionId, agent.agentKey(), output.model(), output.usage().totalTokens());
             return completed;
+
         } catch (RuntimeException ex) {
             ExecutionRecord failed = new ExecutionRecord(
                     executionId, agent.agentKey(), agent.agentType(), ExecutionStatus.FAILED,
