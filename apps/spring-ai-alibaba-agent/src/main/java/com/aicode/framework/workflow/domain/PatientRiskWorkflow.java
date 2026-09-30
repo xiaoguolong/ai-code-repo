@@ -33,6 +33,8 @@ import com.alibaba.cloud.ai.graph.checkpoint.savers.MemorySaver;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.StateSnapshot;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.List;
@@ -47,6 +49,8 @@ import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
  * HIGH 风险在 {@code human_review} 前暂停，经 {@link #resume} 注入人工决策后继续或终止。
  */
 public class PatientRiskWorkflow {
+
+    private static final Logger log = LoggerFactory.getLogger(PatientRiskWorkflow.class);
 
     private static final String NODE_QUERY_PATIENT = "query_patient";
     private static final String NODE_QUERY_METRICS = "query_metrics";
@@ -115,13 +119,18 @@ public class PatientRiskWorkflow {
 
     /** 启动流程；HIGH 风险返回 {@link WorkflowStatus#PENDING_APPROVAL}。 */
     public PatientRiskWorkflowResult start(String workflowId, String patientId) {
+        log.info("[workflow] start workflowId={} patientId={}", workflowId, patientId);
         RunnableConfig runnableConfig = RunnableConfig.builder().threadId(workflowId).build();
         OverAllState state = invokeGraph(buildInput(patientId), runnableConfig);
-        return toResult(workflowId, patientId, state, runnableConfig);
+        PatientRiskWorkflowResult result = toResult(workflowId, patientId, state, runnableConfig);
+        log.info("[workflow] start finished workflowId={} status={} riskLevel={}",
+                workflowId, result.status().name(), result.riskLevel().name());
+        return result;
     }
 
     /** 人工审核后恢复；仅 {@link WorkflowStatus#PENDING_APPROVAL} 可调用。 */
     public PatientRiskWorkflowResult resume(String workflowId, boolean approved) {
+        log.info("[workflow] resume workflowId={} approved={}", workflowId, approved);
         RunnableConfig runnableConfig = RunnableConfig.builder().threadId(workflowId).build();
         requirePendingSnapshot(workflowId, runnableConfig);
         graph.overAllState().updateState(Map.of(KEY_APPROVED, approved));
@@ -129,7 +138,10 @@ public class PatientRiskWorkflow {
                 Map.of(FEEDBACK_APPROVED, approved), "");
         OverAllState state = invokeGraphResume(feedback, runnableConfig);
         String patientId = state.value(KEY_PATIENT_ID, "");
-        return toResult(workflowId, patientId, state, runnableConfig);
+        PatientRiskWorkflowResult result = toResult(workflowId, patientId, state, runnableConfig);
+        log.info("[workflow] resume finished workflowId={} status={} escalated={}",
+                workflowId, result.status().name(), result.escalated());
+        return result;
     }
 
     /** 查询 checkpoint 状态。 */
@@ -277,6 +289,7 @@ public class PatientRiskWorkflow {
 
     private Map<String, Object> runQueryPatient(OverAllState state) {
         String patientId = state.value(KEY_PATIENT_ID, "");
+        log.info("[workflow] node={} patientId={}", NODE_QUERY_PATIENT, patientId);
         ToolResult result = toolPort.execute(
                 new ToolCall("query_patient", TOOL_PATIENT, toolResultMapper.arguments(patientId)));
         return Map.of(KEY_PATIENT, toolResultMapper.parsePatient(result.output()));
@@ -284,6 +297,7 @@ public class PatientRiskWorkflow {
 
     private Map<String, Object> runQueryMetrics(OverAllState state) {
         String patientId = state.value(KEY_PATIENT_ID, "");
+        log.info("[workflow] node={} patientId={}", NODE_QUERY_METRICS, patientId);
         ToolResult result = toolPort.execute(
                 new ToolCall("query_metrics", TOOL_METRICS, toolResultMapper.arguments(patientId)));
         return Map.of(KEY_METRICS, toolResultMapper.parseMetrics(result.output()));
@@ -293,6 +307,9 @@ public class PatientRiskWorkflow {
         HealthMetrics metrics = state.value(KEY_METRICS, HealthMetrics.class).orElse(null);
         RiskAssessment assessment = riskAssessor.assess(metrics);
         boolean highRisk = assessment.riskLevel() == RiskLevel.HIGH;
+        log.info("[workflow] node={} patientId={} riskLevel={} route={}",
+                NODE_JUDGE_RISK, state.value(KEY_PATIENT_ID, ""), assessment.riskLevel().name(),
+                highRisk ? ROUTE_URGENT : ROUTE_ROUTINE);
         return Map.of(
                 KEY_RISK_LEVEL, assessment.riskLevel(),
                 KEY_JUSTIFICATION, assessment.justification(),
@@ -304,6 +321,8 @@ public class PatientRiskWorkflow {
         if (approved == null) {
             throw new IllegalStateException("human_review missing approval decision");
         }
+        log.info("[workflow] node={} patientId={} approved={}",
+                NODE_HUMAN_REVIEW, state.value(KEY_PATIENT_ID, ""), approved);
         if (approved) {
             return Map.of(KEY_HUMAN_APPROVED, true, KEY_APPROVAL_ROUTE, ROUTE_CONTINUE);
         }
@@ -319,6 +338,7 @@ public class PatientRiskWorkflow {
     }
 
     private Map<String, Object> runEscalate(OverAllState state) {
+        log.info("[workflow] node={} patientId={}", NODE_ESCALATE, state.value(KEY_PATIENT_ID, ""));
         return Map.of(KEY_ESCALATED, true, KEY_GUIDANCE, ESCALATION_GUIDANCE);
     }
 
@@ -341,6 +361,8 @@ public class PatientRiskWorkflow {
         TokenUsage usage = state.value(KEY_USAGE, TokenUsage.unknown()).plus(result.usage());
         String model = result.model() == null || result.model().isBlank() ? config.model() : result.model();
         String report = result.content() == null ? "" : result.content().trim();
+        log.info("[workflow] node={} patientId={} reportChars={} model={}",
+                NODE_REPORT, state.value(KEY_PATIENT_ID, ""), report.length(), model);
         return Map.of(KEY_REPORT, report, KEY_USAGE, usage, KEY_MODEL, model);
     }
 

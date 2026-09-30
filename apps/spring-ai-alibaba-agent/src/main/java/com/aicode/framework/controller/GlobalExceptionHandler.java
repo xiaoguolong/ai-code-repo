@@ -6,6 +6,9 @@ import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.framework.domain.exception.AgentExecutionException;
 import com.aicode.framework.domain.exception.AgentLoopExceededException;
 import com.aicode.framework.dto.ApiResponse;
+import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledException;
+import com.aicode.framework.platform.domain.exception.PlatformConflictException;
+import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import org.slf4j.Logger;
@@ -100,6 +103,32 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleWorkflowNotPending(WorkflowNotPendingException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("WORKFLOW_NOT_PENDING", ex.getMessage()));
+    }
+
+    /**
+     * 平台资源不存在 → 404。
+     */
+    @ExceptionHandler(PlatformNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlatformNotFound(PlatformNotFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.error("PLATFORM_NOT_FOUND", ex.getMessage()));
+    }
+
+    /**
+     * 平台资源冲突 → 409。
+     */
+    @ExceptionHandler(PlatformConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlatformConflict(PlatformConflictException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error("PLATFORM_CONFLICT", ex.getMessage()));
+    }
+
+    /**
+     * Agent 已禁用 → 400。
+     */
+    @ExceptionHandler(PlatformAgentDisabledException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlatformAgentDisabled(PlatformAgentDisabledException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("AGENT_DISABLED", ex.getMessage()));
     }
 
     /**

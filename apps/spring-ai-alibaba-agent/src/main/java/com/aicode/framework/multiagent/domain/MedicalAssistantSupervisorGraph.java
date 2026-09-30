@@ -29,6 +29,8 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +44,8 @@ import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
  * 医疗助手 Supervisor 多 Agent Graph：Supervisor 调度数据 / 分析 / 报告 / 随访四个 Worker。
  */
 public class MedicalAssistantSupervisorGraph {
+
+    private static final Logger log = LoggerFactory.getLogger(MedicalAssistantSupervisorGraph.class);
 
     private static final String NODE_SUPERVISOR = "supervisor";
     private static final String NODE_DATA = "data_agent";
@@ -100,15 +104,20 @@ public class MedicalAssistantSupervisorGraph {
      * 执行一次 Supervisor 多 Agent 流程。
      */
     public MedicalAssistantResult run(String runId, String patientId, String task) {
+        log.info("[multi-agent] run started runId={} patientId={} task={}", runId, patientId, task);
         Map<String, Object> input = buildInput(runId, patientId, task);
         OverAllState state;
         try {
             state = graph.invoke(input)
                     .orElseThrow(() -> new IllegalStateException("medical assistant graph produced no state"));
         } catch (RuntimeException ex) {
+            log.warn("[multi-agent] run failed runId={} patientId={} error={}", runId, patientId, ex.getMessage());
             throw unwrap(ex);
         }
-        return toResult(runId, patientId, task, state);
+        MedicalAssistantResult result = toResult(runId, patientId, task, state);
+        log.info("[multi-agent] run completed runId={} patientId={} riskLevel={} steps={} tokens={}",
+                runId, patientId, result.riskLevel().name(), result.steps().size(), result.usage().totalTokens());
+        return result;
     }
 
     private Map<String, Object> buildInput(String runId, String patientId, String task) {
@@ -222,6 +231,9 @@ public class MedicalAssistantSupervisorGraph {
 
         SupervisorRoute route = supervisor.planNext(state);
         StepUpdate stepUpdate = appendStep(state, NODE_SUPERVISOR, "route=" + route.name());
+        log.info("[multi-agent] step={} agent={} runId={} patientId={} route={}",
+                stepUpdate.stepNo(), NODE_SUPERVISOR, state.value(KEY_RUN_ID, ""), state.value(KEY_PATIENT_ID, ""),
+                route.name());
         return Map.of(
                 KEY_ROUTE, route.graphRoute(),
                 KEY_STEPS, stepUpdate.steps(),
@@ -239,6 +251,9 @@ public class MedicalAssistantSupervisorGraph {
         HealthMetrics metrics = toolResultMapper.parseMetrics(metricsResult.output());
 
         StepUpdate stepUpdate = appendStep(state, NODE_DATA, "loaded patient and metrics");
+        log.info("[multi-agent] step={} agent={} runId={} patientId={} patient={} metrics=systolic/{}/diastolic/{}",
+                stepUpdate.stepNo(), NODE_DATA, state.value(KEY_RUN_ID, ""), patientId,
+                patient.name(), metrics.systolic(), metrics.diastolic());
         return Map.of(
                 KEY_PATIENT, patient,
                 KEY_METRICS, metrics,
@@ -252,6 +267,9 @@ public class MedicalAssistantSupervisorGraph {
         RiskAssessment assessment = riskAssessor.assess(metrics);
         StepUpdate stepUpdate = appendStep(state, NODE_ANALYSIS,
                 "risk=" + assessment.riskLevel().name());
+        log.info("[multi-agent] step={} agent={} runId={} patientId={} riskLevel={} justification={}",
+                stepUpdate.stepNo(), NODE_ANALYSIS, state.value(KEY_RUN_ID, ""), state.value(KEY_PATIENT_ID, ""),
+                assessment.riskLevel().name(), assessment.justification());
         return Map.of(
                 KEY_RISK_LEVEL, assessment.riskLevel(),
                 KEY_JUSTIFICATION, assessment.justification(),
@@ -272,6 +290,9 @@ public class MedicalAssistantSupervisorGraph {
         String report = result.content() == null ? "" : result.content().trim();
 
         StepUpdate stepUpdate = appendStep(state, NODE_REPORT, "generated report");
+        log.info("[multi-agent] step={} agent={} runId={} patientId={} reportChars={} model={}",
+                stepUpdate.stepNo(), NODE_REPORT, state.value(KEY_RUN_ID, ""), state.value(KEY_PATIENT_ID, ""),
+                report.length(), model);
         return Map.of(
                 KEY_REPORT, report,
                 KEY_USAGE, usage,
@@ -293,6 +314,9 @@ public class MedicalAssistantSupervisorGraph {
         String followUpPlan = result.content() == null ? "" : result.content().trim();
 
         StepUpdate stepUpdate = appendStep(state, NODE_FOLLOWUP, "generated follow-up plan");
+        log.info("[multi-agent] step={} agent={} runId={} patientId={} followUpChars={} model={}",
+                stepUpdate.stepNo(), NODE_FOLLOWUP, state.value(KEY_RUN_ID, ""), state.value(KEY_PATIENT_ID, ""),
+                followUpPlan.length(), model);
         return Map.of(
                 KEY_FOLLOW_UP_PLAN, followUpPlan,
                 KEY_USAGE, usage,

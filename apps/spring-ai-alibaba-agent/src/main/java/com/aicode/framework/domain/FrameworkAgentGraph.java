@@ -24,6 +24,8 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,6 +44,8 @@ import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
  * 模型给出最终答案时写入 {@code answer} 结束。所有工具执行都走 {@code ToolPort}，是唯一咽喉点。
  */
 public class FrameworkAgentGraph {
+
+    private static final Logger log = LoggerFactory.getLogger(FrameworkAgentGraph.class);
 
     private static final String NODE_AGENT = "agent";
     private static final String NODE_TOOLS = "tools";
@@ -86,6 +90,7 @@ public class FrameworkAgentGraph {
      * @throws AgentExecutionException    模型最终输出空白
      */
     public FrameworkAgentResult run(String taskId, String task) {
+        log.info("[framework-agent] run started taskId={} task={}", taskId, task);
         Map<String, Object> input = new HashMap<>();
         input.put(KEY_TASK, task);
         input.put(KEY_MESSAGES, new ArrayList<ChatMessage>());
@@ -105,13 +110,16 @@ public class FrameworkAgentGraph {
         }
 
         List<FrameworkAgentStep> steps = state.value(KEY_STEPS, List.<FrameworkAgentStep>of());
-        return new FrameworkAgentResult(
+        FrameworkAgentResult result = new FrameworkAgentResult(
                 taskId,
                 state.value(KEY_ANSWER, ""),
                 steps,
                 steps.size(),
                 state.value(KEY_USAGE, TokenUsage.unknown()),
                 state.value(KEY_MODEL, config.model()));
+        log.info("[framework-agent] run completed taskId={} steps={} tokens={} model={}",
+                taskId, steps.size(), result.usage().totalTokens(), result.model());
+        return result;
     }
 
     private RuntimeException unwrap(Throwable throwable) {
@@ -185,6 +193,8 @@ public class FrameworkAgentGraph {
 
         if (result.hasToolCalls()) {
             messages.add(ChatMessage.assistant(result.toolCalls()));
+            log.info("[framework-agent] node={} iteration={} route={} toolCalls={}",
+                    NODE_AGENT, iterations + 1, ROUTE_TOOLS, result.toolCalls().size());
             return Map.of(
                     KEY_MESSAGES, messages,
                     KEY_ROUTE, ROUTE_TOOLS,
@@ -197,6 +207,8 @@ public class FrameworkAgentGraph {
         if (answer.isEmpty()) {
             throw new AgentExecutionException("framework agent produced empty answer");
         }
+        log.info("[framework-agent] node={} iteration={} route={} answerChars={}",
+                NODE_AGENT, iterations + 1, ROUTE_END, answer.length());
         return Map.of(
                 KEY_MESSAGES, messages,
                 KEY_ANSWER, answer,
@@ -214,6 +226,8 @@ public class FrameworkAgentGraph {
             ToolResult toolResult = toolPort.execute(call);
             steps.add(new FrameworkAgentStep(steps.size() + 1, call.name(), call.arguments(), toolResult.output()));
             messages.add(ChatMessage.tool(call.id(), toolResult.output()));
+            log.info("[framework-agent] node={} step={} tool={} observationChars={}",
+                    NODE_TOOLS, steps.size(), call.name(), toolResult.output().length());
         }
 
         return Map.of(

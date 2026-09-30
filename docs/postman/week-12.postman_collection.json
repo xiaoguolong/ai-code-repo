@@ -1,0 +1,102 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第12周 Agent 平台 V1）",
+    "description": "Agent 注册/配置、Tool/Workflow 目录、执行记录与 Platform Run。启动后自动 seed 3 Agent + 2 Tool + 2 Workflow。端口 8084。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "agentKey", "value": "medical-assistant" },
+    { "key": "executionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 列出 Agent（seed）",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "const body = pm.response.json();",
+            "pm.test('200 + 至少 3 个 seed Agent', function () {",
+            "    pm.response.to.have.status(200);",
+            "    pm.expect(body.data.length).to.be.at.least(3);",
+            "});"
+          ]
+        }
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/platform/agents"
+      }
+    },
+    {
+      "name": "2. 列出 Tool（seed）",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/platform/tools"
+      }
+    },
+    {
+      "name": "3. 列出 Workflow（seed）",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/platform/workflows"
+      }
+    },
+    {
+      "name": "4. Platform Run medical-assistant",
+      "event": [{
+        "listen": "test",
+        "script": {
+          "type": "text/javascript",
+          "exec": [
+            "const body = pm.response.json();",
+            "if (body.data && body.data.executionId) {",
+            "    pm.collectionVariables.set('executionId', body.data.executionId);",
+            "}",
+            "pm.test('COMPLETED + 有 outputJson', function () {",
+            "    pm.expect(body.data.status).to.eql('COMPLETED');",
+            "    pm.expect(body.data.outputJson).to.be.a('string').and.not.empty;",
+            "});"
+          ]
+        }
+      }],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"input\": { \"patientId\": \"P001\" }\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/runs"
+      }
+    },
+    {
+      "name": "5. 查询执行记录列表",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/platform/executions"
+      }
+    },
+    {
+      "name": "6. 查询单条执行记录",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/platform/executions/{{executionId}}"
+      }
+    },
+    {
+      "name": "7. 更新 Agent 配置（禁用）",
+      "request": {
+        "method": "PUT",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"enabled\": false,\n    \"maxIterations\": 5,\n    \"temperature\": 0.0,\n    \"model\": \"deepseek-chat\"\n}"
+        },
+        "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/config"
+      }
+    }
+  ]
+}

@@ -41,3 +41,8 @@ llm:
 # Prompt 模板版本（由 ai-core 统一读取）。
 prompt:
   version: ${PROMPT_VERSION:v1}
+
+# Agent / Workflow / Platform 关键步骤日志（控制台可 grep "[platform]" "[multi-agent]" "[workflow]" "[framework-agent]"）
+logging:
+  level:
+    com.aicode.framework: INFO

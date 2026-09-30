@@ -6,6 +6,11 @@ import com.aicode.framework.domain.FrameworkAgentGraph;
 import com.aicode.framework.multiagent.application.MedicalAssistantUseCase;
 import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisor;
 import com.aicode.framework.multiagent.domain.MedicalAssistantSupervisorGraph;
+import com.aicode.framework.platform.application.PlatformAgentUseCase;
+import com.aicode.framework.platform.application.PlatformExecutionUseCase;
+import com.aicode.framework.platform.domain.port.AgentRegistryPort;
+import com.aicode.framework.platform.domain.port.ExecutionRecordPort;
+import com.aicode.framework.platform.domain.service.PlatformAgentRunner;
 import com.aicode.framework.workflow.application.PatientRiskUseCase;
 import com.aicode.framework.workflow.domain.PatientRiskAssessor;
 import com.aicode.framework.workflow.domain.PatientRiskWorkflow;
@@ -46,5 +51,10 @@ class SpringAiAlibabaAgentApplicationTest {
         assertThat(context.getBean(MedicalAssistantSupervisor.class)).isNotNull();
         assertThat(context.getBean(MedicalAssistantSupervisorGraph.class)).isNotNull();
         assertThat(context.getBean(MedicalAssistantUseCase.class)).isNotNull();
+        assertThat(context.getBean(AgentRegistryPort.class)).isNotNull();
+        assertThat(context.getBean(ExecutionRecordPort.class)).isNotNull();
+        assertThat(context.getBean(PlatformAgentRunner.class)).isNotNull();
+        assertThat(context.getBean(PlatformAgentUseCase.class)).isNotNull();
+        assertThat(context.getBean(PlatformExecutionUseCase.class)).isNotNull();
     }
 }
