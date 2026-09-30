@@ -14,6 +14,7 @@ import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.workflow.application.PatientRiskRuntimeConfig;
+import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import com.aicode.framework.workflow.domain.model.HealthMetrics;
@@ -228,6 +229,9 @@ public class PatientRiskWorkflow {
             }
             if (current instanceof ChatModelException chatEx) {
                 return chatEx;
+            }
+            if (current instanceof PlatformAccessDeniedException deniedEx) {
+                return deniedEx;
             }
             current = current.getCause();
         }

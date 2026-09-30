@@ -15,4 +15,6 @@ public interface ExecutionRecordPort {
     Optional<ExecutionRecord> findById(String executionId);
 
     List<ExecutionRecord> listAll();
+
+    List<ExecutionRecord> listByUserId(long userId);
 }

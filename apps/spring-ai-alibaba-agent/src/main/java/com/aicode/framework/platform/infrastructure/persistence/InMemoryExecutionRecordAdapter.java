@@ -33,4 +33,12 @@ public class InMemoryExecutionRecordAdapter implements ExecutionRecordPort {
                 .sorted(Comparator.comparing(ExecutionRecord::startedAt).reversed())
                 .toList();
     }
+
+    @Override
+    public List<ExecutionRecord> listByUserId(long userId) {
+        return store.values().stream()
+                .filter(record -> record.userId() == userId)
+                .sorted(Comparator.comparing(ExecutionRecord::startedAt).reversed())
+                .toList();
+    }
 }

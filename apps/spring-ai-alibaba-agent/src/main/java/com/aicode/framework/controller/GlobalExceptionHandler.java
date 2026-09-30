@@ -1,11 +1,14 @@
 package com.aicode.framework.controller;
 
+import cn.dev33.satoken.exception.NotLoginException;
+import com.aicode.core.domain.exception.AuthenticationException;
 import com.aicode.core.domain.exception.ChatModelException;
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.framework.domain.exception.AgentExecutionException;
 import com.aicode.framework.domain.exception.AgentLoopExceededException;
 import com.aicode.framework.dto.ApiResponse;
+import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledException;
 import com.aicode.framework.platform.domain.exception.PlatformConflictException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
@@ -45,6 +48,33 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidChatRequestException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalid(InvalidChatRequestException ex) {
         return ResponseEntity.badRequest().body(ApiResponse.error("VALIDATION_ERROR", ex.getMessage()));
+    }
+
+    /**
+     * 未登录 → 401。
+     */
+    @ExceptionHandler(NotLoginException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotLogin(NotLoginException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("UNAUTHORIZED", "未登录或登录已过期"));
+    }
+
+    /**
+     * 认证失败 → 401。
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error("UNAUTHORIZED", "用户名或密码错误"));
+    }
+
+    /**
+     * 平台权限不足 → 403。
+     */
+    @ExceptionHandler(PlatformAccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handlePlatformAccessDenied(PlatformAccessDeniedException ex) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(ApiResponse.error("FORBIDDEN", ex.getMessage()));
     }
 
     /**

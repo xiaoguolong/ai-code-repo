@@ -8,6 +8,7 @@ import com.aicode.framework.platform.domain.model.ExecutionRecord;
  */
 public record ExecutionRecordResponse(
         String executionId,
+        long userId,
         String agentKey,
         String agentType,
         String status,
@@ -23,6 +24,7 @@ public record ExecutionRecordResponse(
     public static ExecutionRecordResponse from(ExecutionRecord record) {
         return new ExecutionRecordResponse(
                 record.executionId(),
+                record.userId(),
                 record.agentKey(),
                 record.agentType().name(),
                 record.status().name(),

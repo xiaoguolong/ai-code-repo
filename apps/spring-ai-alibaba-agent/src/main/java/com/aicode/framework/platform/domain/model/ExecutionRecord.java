@@ -9,6 +9,7 @@ import java.time.Instant;
  */
 public record ExecutionRecord(
         String executionId,
+        long userId,
         String agentKey,
         AgentType agentType,
         ExecutionStatus status,

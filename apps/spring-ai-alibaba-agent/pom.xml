@@ -23,6 +23,7 @@
         <jdk.17.home>E:/Program Files/Eclipse Adoptium/jdk-17.0.20.8-hotspot</jdk.17.home>
         <spring-ai.version>1.0.0</spring-ai.version>
         <spring-ai-alibaba.version>1.0.0.2</spring-ai-alibaba.version>
+        <sa-token.version>1.46.0</sa-token.version>
     </properties>
 
     <dependencies>
@@ -38,6 +39,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot3-starter</artifactId>
+            <version>${sa-token.version}</version>
         </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>

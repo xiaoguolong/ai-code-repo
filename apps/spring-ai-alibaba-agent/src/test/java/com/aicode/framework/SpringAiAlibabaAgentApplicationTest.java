@@ -32,7 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         "framework.agent.max-iterations=3",
         "llm.model=deepseek-chat",
         "llm.max-tokens=128",
-        "llm.temperature=0.0"
+        "llm.temperature=0.0",
+        "auth.password-salt=test-salt",
+        "platform.security.enforce-direct-runs=false"
 })
 class SpringAiAlibabaAgentApplicationTest {
 

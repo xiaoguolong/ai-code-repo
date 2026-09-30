@@ -16,6 +16,7 @@ import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.application.FrameworkRuntimeConfig;
 import com.aicode.framework.domain.exception.AgentExecutionException;
+import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.domain.exception.AgentLoopExceededException;
 import com.aicode.framework.domain.model.FrameworkAgentResult;
 import com.aicode.framework.domain.model.FrameworkAgentStep;
@@ -128,7 +129,8 @@ public class FrameworkAgentGraph {
             if (current instanceof AgentLoopExceededException
                     || current instanceof AgentExecutionException
                     || current instanceof ChatModelException
-                    || current instanceof ToolExecutionException) {
+                    || current instanceof ToolExecutionException
+                    || current instanceof PlatformAccessDeniedException) {
                 return (RuntimeException) current;
             }
             current = current.getCause();

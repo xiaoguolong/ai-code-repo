@@ -1,15 +1,21 @@
 package com.aicode.framework.platform.application;
 
 import com.aicode.core.domain.model.TokenUsage;
+import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledException;
 import com.aicode.framework.platform.domain.model.AgentType;
 import com.aicode.framework.platform.domain.model.ExecutionStatus;
 import com.aicode.framework.platform.domain.model.PlatformAgentConfig;
 import com.aicode.framework.platform.domain.model.PlatformAgentDefinition;
+import com.aicode.framework.platform.domain.model.PlatformRole;
 import com.aicode.framework.platform.domain.model.PlatformRunOutput;
+import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.service.PlatformAgentRunner;
+import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryAgentRegistryAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryExecutionRecordAdapter;
+import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformRoleAdapter;
+import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformUserAdapter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,13 +25,14 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-/** 平台执行记录用例测试。 */
+/** 平台执行记录用例测试（含 RBAC）。 */
 @ExtendWith(MockitoExtension.class)
 class PlatformExecutionUseCaseTest {
 
@@ -34,38 +41,73 @@ class PlatformExecutionUseCaseTest {
 
     private InMemoryAgentRegistryAdapter agentRegistry;
     private InMemoryExecutionRecordAdapter executionRecords;
+    private InMemoryPlatformUserAdapter users;
+    private InMemoryPlatformRoleAdapter roles;
     private PlatformExecutionUseCase useCase;
 
     @BeforeEach
     void setUp() {
         agentRegistry = new InMemoryAgentRegistryAdapter();
         executionRecords = new InMemoryExecutionRecordAdapter();
+        users = new InMemoryPlatformUserAdapter();
+        roles = new InMemoryPlatformRoleAdapter();
+        PlatformPermissionChecker checker = new PlatformPermissionChecker(users, roles);
         useCase = new PlatformExecutionUseCase(
-                agentRegistry, executionRecords, platformAgentRunner, new ObjectMapper());
+                agentRegistry, executionRecords, platformAgentRunner, checker, new ObjectMapper());
+
+        roles.save(new PlatformRole("operator", "Operator", false,
+                Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));
+        roles.save(new PlatformRole("viewer", "Viewer", false, Set.of(), Set.of(), Set.of()));
+        users.save(new PlatformUser(2L, "operator", "hash", "operator"));
+        users.save(new PlatformUser(3L, "viewer", "hash", "viewer"));
+
         agentRegistry.save(new PlatformAgentDefinition(
                 "medical-assistant", "Medical", "desc", AgentType.MEDICAL_ASSISTANT,
                 PlatformAgentConfig.defaults(), Instant.now()));
     }
 
     @Test
-    void runAgentPersistsCompletedExecutionRecord() {
+    void runAgentPersistsCompletedExecutionRecordWithUserId() {
         when(platformAgentRunner.run(any(), any())).thenReturn(new PlatformRunOutput(
                 Map.of("report", "分析报告"),
                 new TokenUsage(10, 20, 30),
                 "test-model"));
 
-        var record = useCase.runAgent("medical-assistant", Map.of("patientId", "P001"));
+        var record = useCase.runAgent(2L, "medical-assistant", Map.of("patientId", "P001"));
 
         assertThat(record.status()).isEqualTo(ExecutionStatus.COMPLETED);
+        assertThat(record.userId()).isEqualTo(2L);
         assertThat(record.outputJson()).contains("分析报告");
-        assertThat(useCase.listExecutions()).hasSize(1);
+        assertThat(useCase.listExecutions(2L)).hasSize(1);
+    }
+
+    @Test
+    void rejectsViewerAgentRun() {
+        assertThatThrownBy(() -> useCase.runAgent(3L, "medical-assistant", Map.of("patientId", "P001")))
+                .isInstanceOf(PlatformAccessDeniedException.class);
+    }
+
+    @Test
+    void rejectsOutOfScopePatientId() {
+        assertThatThrownBy(() -> useCase.runAgent(2L, "medical-assistant", Map.of("patientId", "P999")))
+                .isInstanceOf(PlatformAccessDeniedException.class);
     }
 
     @Test
     void rejectsDisabledAgent() {
         agentRegistry.updateConfig("medical-assistant", new PlatformAgentConfig(false, null, null, null));
 
-        assertThatThrownBy(() -> useCase.runAgent("medical-assistant", Map.of("patientId", "P001")))
+        assertThatThrownBy(() -> useCase.runAgent(2L, "medical-assistant", Map.of("patientId", "P001")))
                 .isInstanceOf(PlatformAgentDisabledException.class);
+    }
+
+    @Test
+    void listExecutionsIsolatedByUser() {
+        when(platformAgentRunner.run(any(), any())).thenReturn(new PlatformRunOutput(
+                Map.of("report", "ok"), new TokenUsage(1, 1, 2), "m"));
+        useCase.runAgent(2L, "medical-assistant", Map.of("patientId", "P001"));
+
+        assertThat(useCase.listExecutions(2L)).hasSize(1);
+        assertThat(useCase.listExecutions(3L)).isEmpty();
     }
 }

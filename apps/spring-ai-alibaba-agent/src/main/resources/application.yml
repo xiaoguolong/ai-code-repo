@@ -42,6 +42,20 @@ llm:
 prompt:
   version: ${PROMPT_VERSION:v1}
 
+# 平台 RBAC（Week 13）。密码盐生产环境必须环境变量覆盖。
+auth:
+  password-salt: ${AUTH_PASSWORD_SALT:platform-dev-salt}
+
+sa-token:
+  token-name: satoken
+  timeout: 86400
+
+platform:
+  security:
+    enforce-direct-runs: false
+    web-interceptors:
+      enabled: true
+
 # Agent / Workflow / Platform 关键步骤日志（控制台可 grep "[platform]" "[multi-agent]" "[workflow]" "[framework-agent]"）
 logging:
   level:

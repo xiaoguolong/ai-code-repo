@@ -1,0 +1,535 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第13周 权限体系 RBAC）",
+    "description": "Platform 独立用户 + Sa-Token；Platform Run 强 gate；直连 Run 软 gate（默认公开）。\n\nSeed 账号：\n- admin / admin123\n- operator / operator123（patient-risk + medical-assistant，P001–P010）\n- viewer / viewer123（不可 Run）\n\n端口 8084。Header：`satoken: {{satoken}}`。\n\n建议顺序：先跑「0. 环境准备」登录，再跑各 RBAC 场景文件夹。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "satoken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "operatorToken", "value": "" },
+    { "key": "viewerToken", "value": "" },
+    { "key": "executionId", "value": "" },
+    { "key": "agentKey", "value": "medical-assistant" }
+  ],
+  "item": [
+    {
+      "name": "0. 环境准备（登录）",
+      "item": [
+        {
+          "name": "登录 admin → 保存 adminToken",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + admin 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "    pm.expect(body.data.roleKey).to.eql('admin');",
+                "});",
+                "if (body.data && body.data.token) {",
+                "    pm.collectionVariables.set('adminToken', body.data.token);",
+                "    pm.collectionVariables.set('satoken', body.data.token);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "登录 operator → 保存 operatorToken",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + operator 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.roleKey).to.eql('operator');",
+                "});",
+                "if (body.data && body.data.token) {",
+                "    pm.collectionVariables.set('operatorToken', body.data.token);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"operator\",\n    \"password\": \"operator123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "登录 viewer → 保存 viewerToken",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + viewer 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.roleKey).to.eql('viewer');",
+                "});",
+                "if (body.data && body.data.token) {",
+                "    pm.collectionVariables.set('viewerToken', body.data.token);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"viewer\",\n    \"password\": \"viewer123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "GET /auth/me（operator）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 + 当前用户 operator', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.username).to.eql('operator');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. 角色查询",
+      "item": [
+        {
+          "name": "列出全部角色",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 + 至少 3 个 seed 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.length).to.be.at.least(3);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles"
+          }
+        },
+        {
+          "name": "查询 operator 角色详情",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const role = pm.response.json().data;",
+                "pm.test('operator 含 medical-assistant + PatientLookupTool + P001', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(role.allowedAgentKeys).to.include('medical-assistant');",
+                "    pm.expect(role.allowedToolKeys).to.include('PatientLookupTool');",
+                "    pm.expect(role.allowedPatientIds).to.include('P001');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles/operator"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Platform Run 强 gate",
+      "item": [
+        {
+          "name": "❌ 未登录 Run → 401",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('401 UNAUTHORIZED', function () {",
+                "    pm.response.to.have.status(401);",
+                "    pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"patientId\": \"P001\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/runs"
+          }
+        },
+        {
+          "name": "❌ viewer Run → 403",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('403 FORBIDDEN', function () {",
+                "    pm.response.to.have.status(403);",
+                "    pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "satoken", "value": "{{viewerToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"patientId\": \"P001\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/runs"
+          }
+        },
+        {
+          "name": "❌ operator 越权 Agent（framework-react）→ 403",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('403 agent access denied', function () {",
+                "    pm.response.to.have.status(403);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "satoken", "value": "{{operatorToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"task\": \"查询 P001\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/framework-react/runs"
+          }
+        },
+        {
+          "name": "❌ operator 越权 patientId（P999）→ 403",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('403 data access denied', function () {",
+                "    pm.response.to.have.status(403);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "satoken", "value": "{{operatorToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"patientId\": \"P999\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/runs"
+          }
+        },
+        {
+          "name": "✅ operator 合法 Run（P001）→ 200",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "if (body.data && body.data.executionId) {",
+                "    pm.collectionVariables.set('executionId', body.data.executionId);",
+                "}",
+                "pm.test('200 COMPLETED + userId', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.status).to.eql('COMPLETED');",
+                "    pm.expect(body.data.userId).to.be.a('number');",
+                "    pm.expect(body.data.outputJson).to.be.a('string').and.not.empty;",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "satoken", "value": "{{operatorToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"patientId\": \"P001\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/{{agentKey}}/runs"
+          }
+        },
+        {
+          "name": "✅ admin Run 任意 Agent → 200",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 admin 可 Run framework-react', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.status).to.eql('COMPLETED');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "satoken", "value": "{{adminToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"input\": { \"task\": \"列出可用工具\" }\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/agents/framework-react/runs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 执行记录隔离",
+      "item": [
+        {
+          "name": "operator 列 executions（仅自己的）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const list = pm.response.json().data;",
+                "pm.test('200 + 每条 userId 为 operator(2)', function () {",
+                "    pm.response.to.have.status(200);",
+                "    list.forEach(r => pm.expect(r.userId).to.eql(2));",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/executions"
+          }
+        },
+        {
+          "name": "admin 列 executions（全部）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 + admin 可见多条记录', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.length).to.be.at.least(1);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/executions"
+          }
+        },
+        {
+          "name": "operator 查单条 execution（自己的）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 可查自己的 execution', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.executionId).to.eql(pm.collectionVariables.get('executionId'));",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/executions/{{executionId}}"
+          }
+        },
+        {
+          "name": "❌ 未登录查 executions → 401",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('401', function () { pm.response.to.have.status(401); });"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/platform/executions"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 直连 Run 软 gate（默认公开）",
+      "description": "验证 enforce-direct-runs=false。请勿携带 satoken（Collection 变量/Authorization 需关闭），否则可能走 Tool 权限或返回 502。",
+      "item": [
+        {
+          "name": "✅ 未登录直连 patient-risk Workflow → 200",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 软 gate 关闭时直连仍可用', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().code).to.eql('SUCCESS');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"patientId\": \"P001\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/workflows/patient-risk/runs"
+          }
+        },
+        {
+          "name": "✅ 未登录直连 framework Agent → 200",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 直连 framework 仍可用', function () {",
+                "    pm.response.to.have.status(200);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"task\": \"你好\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/framework/agents/runs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Week 12 目录（仍公开）",
+      "item": [
+        {
+          "name": "GET /platform/agents（无需登录）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 + seed Agent', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(pm.response.json().data.length).to.be.at.least(3);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/platform/agents"
+          }
+        },
+        {
+          "name": "GET /platform/tools（无需登录）",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/platform/tools"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. 注销",
+      "item": [
+        {
+          "name": "POST /auth/logout",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('200 注销成功', function () {",
+                "    pm.response.to.have.status(200);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/auth/logout"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -642,7 +642,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 10 | Human in the Loop | docs/specs/week-10.md | notes/impl-logs/week-10.md | 已关闭 |
 | 11 | Multi Agent | docs/specs/week-11.md | notes/impl-logs/week-11.md | 已关闭 |
 | 12 | Agent 平台 V1 | docs/specs/week-12.md | notes/impl-logs/week-12.md | 已关闭 |
-| 13 | 权限体系 | | | 未开始 |
+| 13 | 权限体系 | docs/specs/week-13.md | notes/impl-logs/week-13.md | 已关闭 |
 | 14 | AI 安全 | | | 未开始 |
 | 15 | Agent Evaluation | | | 未开始 |
 | 16 | 企业规范 | | | 未开始 |
@@ -653,6 +653,17 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 21–24 | 医疗 SaaS 四 Agent | | | 未开始 |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
+
+### 7.4 Week 13 遗留 → 后续周显式补项
+
+| 遗留项 | 补位周次 | 说明 |
+|--------|----------|------|
+| 8084 RBAC + ExecutionRecord PostgreSQL/Flyway | **第 16 周** | 替换内存 User/Role/Execution Port；Flyway 迁移脚本 |
+| Prompt 过滤 / 输入校验 / 输出脱敏 / Tool 内容白名单 | **第 14 周** | `GuardrailPort`；与 RBAC 身份授权正交 |
+| Gateway 层统一鉴权 + 路由 | **第 19 周** | SkyWalking 已提 Gateway；生产隐藏直连 URL |
+| enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周** | 医疗 SaaS 实战启动时整合 |
+| 8082 patient-agent 收敛至 8084 Platform | **第 21 周** | 标注 deprecated；统一 Run 入口 |
+| 长期记忆按用户/租户隔离（pgvector） | **第 21 周** | Week 13 仅 patientId 数据域；记忆落库随 SaaS |
 
 ---
 

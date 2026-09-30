@@ -15,6 +15,7 @@ import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.multiagent.application.MedicalAssistantRuntimeConfig;
 import com.aicode.framework.multiagent.domain.exception.MedicalAssistantLoopExceededException;
+import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.multiagent.domain.model.MedicalAssistantResult;
 import com.aicode.framework.multiagent.domain.model.MedicalAssistantStep;
 import com.aicode.framework.multiagent.domain.model.SupervisorRoute;
@@ -163,6 +164,9 @@ public class MedicalAssistantSupervisorGraph {
             }
             if (current instanceof ChatModelException chatEx) {
                 return chatEx;
+            }
+            if (current instanceof PlatformAccessDeniedException deniedEx) {
+                return deniedEx;
             }
             current = current.getCause();
         }

@@ -5,6 +5,9 @@ import com.aicode.core.domain.ToolRegistry;
 import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
+import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
+import com.aicode.framework.platform.infrastructure.config.PlatformSecurityProperties;
+import com.aicode.framework.platform.infrastructure.security.AuthorizingToolPort;
 import com.aicode.core.infrastructure.config.LlmProperties;
 import com.aicode.core.infrastructure.springai.SpringAiToolCallbackFactory;
 import com.aicode.framework.application.FrameworkRuntimeConfig;
@@ -21,6 +24,7 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
 
 import java.util.List;
 
@@ -48,11 +52,26 @@ public class AppConfiguration {
     }
 
     /**
-     * 工具注册表（ToolPort 通用实现）。Graph 与 MCP 共用同一批领域工具。
+     * 工具注册表委托（ai-core ToolRegistry，不做权限校验）。
      */
     @Bean
-    ToolPort frameworkToolPort(List<Tool> tools, ObjectMapper objectMapper) {
+    ToolPort toolRegistryDelegate(List<Tool> tools, ObjectMapper objectMapper) {
         return new ToolRegistry(tools, objectMapper);
+    }
+
+    /**
+     * 带 RBAC 的工具端口（装饰器）。Graph 与 MCP 共用；有登录态时校验 Tool + 数据域。
+     */
+    @Bean
+    @Primary
+    ToolPort frameworkToolPort(
+            ToolPort toolRegistryDelegate,
+            PlatformPermissionChecker permissionChecker,
+            PlatformSecurityProperties securityProperties,
+            ObjectMapper objectMapper
+    ) {
+        return new AuthorizingToolPort(
+                toolRegistryDelegate, permissionChecker, securityProperties, objectMapper);
     }
 
     /**
