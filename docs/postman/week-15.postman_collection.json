@@ -1,0 +1,488 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第15周 Agent Evaluation）",
+    "description": "Week 15 评估框架：测试问题集、标准答案期望、自动评分报告。\n\n## 预置数据集\n| datasetKey | category | 说明 |\n|------------|----------|------|\n| guardrail-regression | GUARDRAIL | Week 14 注入攻击回归（不调 LLM） |\n| rag-keyword-smoke | RAG | 关键词 fixture 评分 |\n| prompt-format-smoke | PROMPT | JSON 格式 / 禁用词 fixture 评分 |\n\n## Seed 用户\n- admin / admin123 — 全部 Agent + Eval\n- operator / operator123 — 仅 medical-assistant + P001–P010\n\n## 使用顺序\n1. 跑「0. 登录」保存 token\n2. 跑「1. 数据集」确认三套集已加载\n3. 跑「2. 批量评估（admin）」验证 passRate\n4. 跑「3. 权限对照」验证 RBAC\n\n端口 **8084**，Header：`satoken: {{adminToken}}` 或 `{{operatorToken}}`",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "adminToken", "value": "" },
+    { "key": "operatorToken", "value": "" },
+    { "key": "evalRunId", "value": "" },
+    { "key": "datasetKey", "value": "guardrail-regression" }
+  ],
+  "item": [
+    {
+      "name": "0. 登录",
+      "item": [
+        {
+          "name": "登录 admin → 保存 adminToken",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + admin 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "    pm.expect(body.data.roleKey).to.eql('admin');",
+                "});",
+                "if (body.data && body.data.token) {",
+                "    pm.collectionVariables.set('adminToken', body.data.token);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "登录 operator → 保存 operatorToken",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + operator 角色', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "    pm.expect(body.data.roleKey).to.eql('operator');",
+                "});",
+                "if (body.data && body.data.token) {",
+                "    pm.collectionVariables.set('operatorToken', body.data.token);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"username\": \"operator\",\n    \"password\": \"operator123\"\n}"
+            },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. 数据集",
+      "description": "GET /api/v1/platform/eval/datasets 与 /datasets/{key}",
+      "item": [
+        {
+          "name": "列出全部评估数据集",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 SUCCESS', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "});",
+                "pm.test('含三套预置数据集', function () {",
+                "    const keys = body.data.map(d => d.datasetKey);",
+                "    pm.expect(keys).to.include('guardrail-regression');",
+                "    pm.expect(keys).to.include('rag-keyword-smoke');",
+                "    pm.expect(keys).to.include('prompt-format-smoke');",
+                "});",
+                "pm.test('每条含 caseCount', function () {",
+                "    body.data.forEach(d => pm.expect(d.caseCount).to.be.above(0));",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets"
+          }
+        },
+        {
+          "name": "获取 guardrail-regression 详情",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + GUARDRAIL 类别', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "    pm.expect(body.data.datasetKey).to.eql('guardrail-regression');",
+                "    pm.expect(body.data.category).to.eql('GUARDRAIL');",
+                "    pm.expect(body.data.cases.length).to.eql(3);",
+                "});",
+                "pm.test('用例含 GUARDRAIL_BLOCKED 准则', function () {",
+                "    const types = body.data.cases.map(c => c.criterionType);",
+                "    types.forEach(t => pm.expect(t).to.eql('GUARDRAIL_BLOCKED'));",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/guardrail-regression"
+          }
+        },
+        {
+          "name": "获取 rag-keyword-smoke 详情",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + RAG 类别', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.category).to.eql('RAG');",
+                "    pm.expect(body.data.cases.length).to.eql(2);",
+                "});",
+                "pm.test('用例含 CONTAINS_ALL 准则', function () {",
+                "    body.data.cases.forEach(c => pm.expect(c.criterionType).to.eql('CONTAINS_ALL'));",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/rag-keyword-smoke"
+          }
+        },
+        {
+          "name": "获取 prompt-format-smoke 详情",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + PROMPT 类别', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.category).to.eql('PROMPT');",
+                "    pm.expect(body.data.cases.length).to.eql(2);",
+                "});",
+                "pm.test('含 REGEX 与 NOT_CONTAINS 准则', function () {",
+                "    const types = body.data.cases.map(c => c.criterionType).sort();",
+                "    pm.expect(types).to.eql(['NOT_CONTAINS', 'REGEX']);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/prompt-format-smoke"
+          }
+        },
+        {
+          "name": "❌ 不存在的数据集 → 404",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('404 PLATFORM_NOT_FOUND', function () {",
+                "    pm.response.to.have.status(404);",
+                "    pm.expect(pm.response.json().code).to.eql('PLATFORM_NOT_FOUND');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/not-exists"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 批量评估（admin）",
+      "description": "POST /api/v1/platform/eval/datasets/{key}/runs — admin 可跑全部数据集",
+      "item": [
+        {
+          "name": "✅ 运行 guardrail-regression → passRate=1.0",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 SUCCESS', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "});",
+                "pm.test('Guardrail 回归全绿', function () {",
+                "    pm.expect(body.data.datasetKey).to.eql('guardrail-regression');",
+                "    pm.expect(body.data.category).to.eql('GUARDRAIL');",
+                "    pm.expect(body.data.passRate).to.eql(1.0);",
+                "    pm.expect(body.data.passedCount).to.eql(body.data.totalCount);",
+                "    pm.expect(body.data.totalCount).to.eql(3);",
+                "});",
+                "pm.test('每条 case 均 passed', function () {",
+                "    body.data.caseResults.forEach(c => pm.expect(c.passed).to.be.true);",
+                "});",
+                "if (body.data && body.data.runId) {",
+                "    pm.collectionVariables.set('evalRunId', body.data.runId);",
+                "}"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/guardrail-regression/runs"
+          }
+        },
+        {
+          "name": "✅ 运行 rag-keyword-smoke → passRate=1.0",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + RAG fixture 全绿', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.category).to.eql('RAG');",
+                "    pm.expect(body.data.passRate).to.eql(1.0);",
+                "    pm.expect(body.data.totalCount).to.eql(2);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/rag-keyword-smoke/runs"
+          }
+        },
+        {
+          "name": "✅ 运行 prompt-format-smoke → passRate=1.0",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 + PROMPT fixture 全绿', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.category).to.eql('PROMPT');",
+                "    pm.expect(body.data.passRate).to.eql(1.0);",
+                "    pm.expect(body.data.totalCount).to.eql(2);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/prompt-format-smoke/runs"
+          }
+        },
+        {
+          "name": "GET 评估报告（admin 可查）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (!pm.collectionVariables.get('evalRunId')) {",
+                "    pm.test.skip('无 evalRunId，请先跑 guardrail-regression Eval');",
+                "    return;",
+                "}",
+                "const body = pm.response.json();",
+                "pm.test('200 + 报告字段完整', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.code).to.eql('SUCCESS');",
+                "    pm.expect(body.data.runId).to.eql(pm.collectionVariables.get('evalRunId'));",
+                "    pm.expect(body.data.passRate).to.be.a('number');",
+                "    pm.expect(body.data.startedAt).to.be.a('string');",
+                "    pm.expect(body.data.finishedAt).to.be.a('string');",
+                "    pm.expect(body.data.caseResults.length).to.be.above(0);",
+                "});",
+                "pm.test('caseResult 含 score / message', function () {",
+                "    const first = body.data.caseResults[0];",
+                "    pm.expect(first.caseId).to.be.a('string');",
+                "    pm.expect(first.score).to.be.a('number');",
+                "    pm.expect(first.message).to.be.a('string');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/runs/{{evalRunId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 权限对照",
+      "description": "Eval API 与 Week 13 RBAC 一致：401 未登录、403 Agent 越权、报告按用户隔离。\n\n⚠️ 「未登录」请求会在 pre-request 中清除 satoken Cookie（Sa-Token 登录后默认写 Cookie，仅去掉 Header 仍会鉴权通过）。",
+      "item": [
+        {
+          "name": "❌ 未登录列出数据集 → 401",
+          "event": [{
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.request.headers.remove('satoken');",
+                "const baseUrl = pm.collectionVariables.get('baseUrl') || 'http://localhost:8084';",
+                "const host = baseUrl.replace(/^https?:\\/\\//, '').split(':')[0];",
+                "pm.cookies.clear(host, function (err) {",
+                "    if (err) console.warn('clear cookies:', err);",
+                "});"
+              ]
+            }
+          }, {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('401 UNAUTHORIZED', function () {",
+                "    pm.response.to.have.status(401);",
+                "    pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets"
+          }
+        },
+        {
+          "name": "❌ 未登录批量评估 → 401",
+          "event": [{
+            "listen": "prerequest",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.request.headers.remove('satoken');",
+                "const baseUrl = pm.collectionVariables.get('baseUrl') || 'http://localhost:8084';",
+                "const host = baseUrl.replace(/^https?:\\/\\//, '').split(':')[0];",
+                "pm.cookies.clear(host, function (err) {",
+                "    if (err) console.warn('clear cookies:', err);",
+                "});"
+              ]
+            }
+          }, {
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('401 UNAUTHORIZED', function () {",
+                "    pm.response.to.have.status(401);",
+                "    pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/guardrail-regression/runs"
+          }
+        },
+        {
+          "name": "✅ operator 可跑 rag-keyword-smoke（无 Agent 依赖）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "const body = pm.response.json();",
+                "pm.test('200 fixture 评分无需 Agent 权限', function () {",
+                "    pm.response.to.have.status(200);",
+                "    pm.expect(body.data.passRate).to.eql(1.0);",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/rag-keyword-smoke/runs"
+          }
+        },
+        {
+          "name": "❌ operator 跑 guardrail-regression → 403（含 patient-risk）",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "pm.test('403 FORBIDDEN（数据集中含 patient-risk Agent）', function () {",
+                "    pm.response.to.have.status(403);",
+                "    pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/guardrail-regression/runs"
+          }
+        },
+        {
+          "name": "❌ operator 查 admin 的 evalRun → 404",
+          "event": [{
+            "listen": "test",
+            "script": {
+              "type": "text/javascript",
+              "exec": [
+                "if (!pm.collectionVariables.get('evalRunId')) {",
+                "    pm.test.skip('无 evalRunId，请先以 admin 跑 guardrail-regression');",
+                "    return;",
+                "}",
+                "pm.test('404 报告不可跨用户访问', function () {",
+                "    pm.response.to.have.status(404);",
+                "    pm.expect(pm.response.json().code).to.eql('PLATFORM_NOT_FOUND');",
+                "});"
+              ]
+            }
+          }],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/runs/{{evalRunId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 评分准则说明",
+      "description": "规则评分（无 LLM-as-Judge）。完整字段见 docs/api/week-15-api.md",
+      "item": [
+        {
+          "name": "（文档）criterionType 对照",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/eval/datasets/{{datasetKey}}",
+            "description": "| criterionType | 说明 |\n|---------------|------|\n| EXACT_MATCH | 实际输出与 expected 一致 |\n| CONTAINS_ALL | 实际输出包含 keywords 全部项 |\n| REGEX | 实际输出匹配 pattern |\n| NOT_CONTAINS | 实际输出不含 forbidden 任一项 |\n| GUARDRAIL_BLOCKED | 输入应触发 GUARDRAIL_VIOLATION |"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -643,8 +643,8 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 11 | Multi Agent | docs/specs/week-11.md | notes/impl-logs/week-11.md | 已关闭 |
 | 12 | Agent 平台 V1 | docs/specs/week-12.md | notes/impl-logs/week-12.md | 已关闭 |
 | 13 | 权限体系 | docs/specs/week-13.md | notes/impl-logs/week-13.md | 已关闭 |
-| 14 | AI 安全 | docs/specs/week-14.md | notes/impl-logs/week-14.md | 进行中 |
-| 15 | Agent Evaluation | | | 未开始 |
+| 14 | AI 安全 | docs/specs/week-14.md | notes/impl-logs/week-14.md | 已关闭 |
+| 15 | Agent Evaluation | docs/specs/week-15.md | notes/impl-logs/week-15.md | 进行中 |
 | 16 | 企业规范 | | | 未开始 |
 | 17 | OpenTelemetry | | | 未开始 |
 | 18 | Langfuse | | | 未开始 |

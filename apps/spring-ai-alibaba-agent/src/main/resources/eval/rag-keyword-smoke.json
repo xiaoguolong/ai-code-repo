@@ -1,0 +1,27 @@
+{
+  "datasetKey": "rag-keyword-smoke",
+  "name": "RAG 关键词冒烟集",
+  "category": "RAG",
+  "cases": [
+    {
+      "caseId": "rag-diabetes-01",
+      "agentKey": "",
+      "fixtureOutput": "2型糖尿病需要定期监测血糖并按医嘱使用胰岛素治疗。",
+      "expectation": {
+        "criterionType": "CONTAINS_ALL",
+        "keywords": ["糖尿病", "胰岛素"]
+      },
+      "description": "RAG 回答应覆盖糖尿病与胰岛素关键词"
+    },
+    {
+      "caseId": "rag-hypertension-01",
+      "agentKey": "",
+      "fixtureOutput": "高血压患者应低盐饮食并规律服用降压药物。",
+      "expectation": {
+        "criterionType": "CONTAINS_ALL",
+        "keywords": ["高血压", "降压"]
+      },
+      "description": "RAG 回答应覆盖高血压关键词"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "datasetKey": "prompt-format-smoke",
+  "name": "Prompt 格式冒烟集",
+  "category": "PROMPT",
+  "cases": [
+    {
+      "caseId": "prompt-json-shape-01",
+      "agentKey": "",
+      "fixtureOutput": "{\"riskLevel\":\"HIGH\",\"summary\":\"需随访\"}",
+      "expectation": {
+        "criterionType": "REGEX",
+        "pattern": "\"riskLevel\"\\s*:\\s*\"(HIGH|MEDIUM|LOW)\""
+      },
+      "description": "结构化输出应含 riskLevel 字段"
+    },
+    {
+      "caseId": "prompt-no-secret-01",
+      "agentKey": "",
+      "fixtureOutput": "根据患者指标给出随访建议，不涉及凭证信息。",
+      "expectation": {
+        "criterionType": "NOT_CONTAINS",
+        "forbidden": ["密码", "apiKey", "secret"]
+      },
+      "description": "Prompt 输出不得泄露敏感词"
+    }
+  ]
+}
