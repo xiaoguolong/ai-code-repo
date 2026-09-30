@@ -3,8 +3,10 @@ package com.aicode.framework.infrastructure.config;
 import com.aicode.core.domain.Tool;
 import com.aicode.core.domain.ToolRegistry;
 import com.aicode.core.domain.port.ChatModelPort;
+import com.aicode.core.domain.port.GuardrailPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
+import com.aicode.core.infrastructure.security.GuardrailToolPort;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.platform.infrastructure.config.PlatformSecurityProperties;
 import com.aicode.framework.platform.infrastructure.security.AuthorizingToolPort;
@@ -60,18 +62,19 @@ public class AppConfiguration {
     }
 
     /**
-     * 带 RBAC 的工具端口（装饰器）。Graph 与 MCP 共用；有登录态时校验 Tool + 数据域。
+     * 带 RBAC + Guardrail 的工具端口。链：AuthorizingToolPort → GuardrailToolPort → ToolRegistry。
      */
     @Bean
     @Primary
     ToolPort frameworkToolPort(
             ToolPort toolRegistryDelegate,
+            GuardrailPort guardrailPort,
             PlatformPermissionChecker permissionChecker,
             PlatformSecurityProperties securityProperties,
             ObjectMapper objectMapper
     ) {
-        return new AuthorizingToolPort(
-                toolRegistryDelegate, permissionChecker, securityProperties, objectMapper);
+        ToolPort guarded = new GuardrailToolPort(toolRegistryDelegate, guardrailPort, objectMapper);
+        return new AuthorizingToolPort(guarded, permissionChecker, securityProperties, objectMapper);
     }
 
     /**

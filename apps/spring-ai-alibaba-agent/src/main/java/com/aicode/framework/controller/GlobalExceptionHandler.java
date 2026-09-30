@@ -3,6 +3,7 @@ package com.aicode.framework.controller;
 import cn.dev33.satoken.exception.NotLoginException;
 import com.aicode.core.domain.exception.AuthenticationException;
 import com.aicode.core.domain.exception.ChatModelException;
+import com.aicode.core.domain.exception.GuardrailViolationException;
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.framework.domain.exception.AgentExecutionException;
@@ -66,6 +67,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleAuthentication(AuthenticationException ex) {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                 .body(ApiResponse.error("UNAUTHORIZED", "用户名或密码错误"));
+    }
+
+    /**
+     * Guardrail 内容安全违例 → 400。
+     */
+    @ExceptionHandler(GuardrailViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleGuardrailViolation(GuardrailViolationException ex) {
+        return ResponseEntity.badRequest().body(ApiResponse.error("GUARDRAIL_VIOLATION", ex.getMessage()));
     }
 
     /**

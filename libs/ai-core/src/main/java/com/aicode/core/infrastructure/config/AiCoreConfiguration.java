@@ -27,7 +27,8 @@ import java.time.Duration;
         AuthProperties.class,
         FileProperties.class,
         PromptProperties.class,
-        MemoryProperties.class
+        MemoryProperties.class,
+        GuardrailProperties.class
 })
 public class AiCoreConfiguration {
 

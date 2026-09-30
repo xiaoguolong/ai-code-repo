@@ -36,6 +36,7 @@ public class PlatformExecutionUseCase {
     private final ExecutionRecordPort executionRecordPort;
     private final PlatformAgentRunner platformAgentRunner;
     private final PlatformPermissionChecker permissionChecker;
+    private final PlatformGuardrailService platformGuardrailService;
     private final ObjectMapper objectMapper;
 
     public PlatformExecutionUseCase(
@@ -43,12 +44,14 @@ public class PlatformExecutionUseCase {
             ExecutionRecordPort executionRecordPort,
             PlatformAgentRunner platformAgentRunner,
             PlatformPermissionChecker permissionChecker,
+            PlatformGuardrailService platformGuardrailService,
             ObjectMapper objectMapper
     ) {
         this.agentRegistryPort = agentRegistryPort;
         this.executionRecordPort = executionRecordPort;
         this.platformAgentRunner = platformAgentRunner;
         this.permissionChecker = permissionChecker;
+        this.platformGuardrailService = platformGuardrailService;
         this.objectMapper = objectMapper;
     }
 
@@ -56,6 +59,7 @@ public class PlatformExecutionUseCase {
     public ExecutionRecord runAgent(long userId, String agentKey, Map<String, Object> input) {
         permissionChecker.requireAgentRun(userId, agentKey);
         permissionChecker.requireRunInput(userId, input);
+        platformGuardrailService.validateRunInput(userId, agentKey, input);
 
         PlatformAgentDefinition agent = agentRegistryPort.findByKey(requireKey(agentKey))
                 .orElseThrow(() -> new PlatformNotFoundException("agent not found: " + agentKey));
@@ -75,9 +79,11 @@ public class PlatformExecutionUseCase {
         try {
             PlatformSecurityContext.beginPlatformRun(userId);
             PlatformRunOutput output = platformAgentRunner.run(agent, input);
+            Map<String, Object> sanitizedOutput = platformGuardrailService.sanitizeRunOutput(
+                    userId, agent.agentKey(), output.output());
             ExecutionRecord completed = new ExecutionRecord(
                     executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.COMPLETED,
-                    running.inputJson(), toJson(output.output()), output.model(), output.usage(),
+                    running.inputJson(), toJson(sanitizedOutput), output.model(), output.usage(),
                     "", startedAt, Instant.now());
             executionRecordPort.save(completed);
             log.info("[platform] execution completed executionId={} userId={} agentKey={} model={} tokens={}",

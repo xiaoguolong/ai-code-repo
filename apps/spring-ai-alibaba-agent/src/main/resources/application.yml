@@ -56,6 +56,16 @@ platform:
     web-interceptors:
       enabled: true
 
+# Guardrail 内容安全（Week 14）。与 RBAC 正交。
+guardrail:
+  enabled: true
+  max-input-length: 8192
+  block-prompt-injection: true
+  sanitize-output: true
+  allowed-tool-argument-keys:
+    - patientId
+    - task
+
 # Agent / Workflow / Platform 关键步骤日志（控制台可 grep "[platform]" "[multi-agent]" "[workflow]" "[framework-agent]"）
 logging:
   level:
