@@ -4,11 +4,15 @@ server:
 spring:
   application:
     name: patient-agent
+  # 本地连接配置只放模块 .env（不入库，各环境自建）；optional 保证缺失时回退下面默认值。
+  config:
+    import: optional:file:.env[.properties]
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
+      # 显式兼容 Spring 标准名 SPRING_REDIS_HOST/PORT（.env 里用的就是它），同时保留旧变量名
+      host: ${REDIS_HOST:${SPRING_REDIS_HOST:localhost}}
+      port: ${REDIS_PORT:${SPRING_REDIS_PORT:6379}}
+      password: ${REDIS_PASSWORD:${SPRING_REDIS_PASSWORD:}}
       timeout: 3s
 
 # 密钥只从环境变量读取，不要把真实 Key 写进本文件。

@@ -2,15 +2,17 @@ package com.aicode.framework.platform.infrastructure.persistence;
 
 import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.port.PlatformUserPort;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 进程内平台用户存储（Week 13 V1）。
+ * 进程内平台用户存储（Week 13 V1，Week 16 起仅在 {@code platform.persistence.mode=memory} 生效）。
  */
 @Component
+@ConditionalOnProperty(name = "platform.persistence.mode", havingValue = "memory")
 public class InMemoryPlatformUserAdapter implements PlatformUserPort {
 
     private final ConcurrentHashMap<Long, PlatformUser> byId = new ConcurrentHashMap<>();

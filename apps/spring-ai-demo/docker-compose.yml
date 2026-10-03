@@ -1,13 +1,15 @@
 version: "3.8"
 
+# 本地起库用（可选）。这里只定义容器本身，应用连哪个库由各环境的
+# 环境变量或模块 .env 提供，禁止把库名/账号写进 application*.yml。
 services:
   postgres:
     image: postgres:16-alpine
     container_name: ai-demo-postgres
     environment:
-      POSTGRES_USER: aidemo
-      POSTGRES_PASSWORD: aidemo
-      POSTGRES_DB: aidemo
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+      POSTGRES_DB: demo
     ports:
       - "5432:5432"
     volumes:

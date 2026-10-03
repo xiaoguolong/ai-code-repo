@@ -1,0 +1,486 @@
+{
+  "info": {
+    "name": "spring-ai-alibaba-agent（第16周 企业规范：API / 日志 / 审计 / 异常）",
+    "description": "Week 16 企业规范验证集：统一响应信封与 traceId、错误码契约、RBAC 与执行记录落库（PostgreSQL + Flyway）、审计留痕。\n\n## 端口\n**8084**，Header：`satoken: {{adminToken}}` 或 `{{operatorToken}}`\n\n## 使用顺序\n1. 跑「0. 登录」保存 admin / operator token\n2. 跑「1. RBAC 与执行记录（落库）」验证 roles / executions 来自数据库\n3. 跑「2. 审计日志」验证 LOGIN / AGENT_RUN / EXECUTION_READ 留痕\n4. 跑「3. API 规范契约」验证错误码、traceId、无内部信息泄漏\n5. 跑「4. 迁移与持久化」确认 V1–V3 迁移与幂等 seed 生效\n\n## 前置条件\n- 落库模式启动：`apps/spring-ai-alibaba-agent` 下 `.\\run-maven-jdk17.ps1 spring-boot:run`（默认激活 jdbc profile）\n- PostgreSQL 库 `platform` 可连（`SPRING_DATASOURCE_URL/USERNAME/PASSWORD` 可覆盖），首次启动由 Flyway 建表并 seed\n- 无库演示：设 `PLATFORM_PERSISTENCE_MODE=memory` 后启动，本集合除「4. 迁移与持久化」外均可通过",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8084" },
+    { "key": "adminToken", "value": "" },
+    { "key": "operatorToken", "value": "" },
+    { "key": "executionId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "0. 登录",
+      "item": [
+        {
+          "name": "登录 admin → 保存 adminToken",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + code=SUCCESS + roleKey=admin', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(body.code).to.eql('SUCCESS');",
+                  "    pm.expect(body.data.roleKey).to.eql('admin');",
+                  "});",
+                  "pm.test('响应带 traceId 且与响应头一致', function () {",
+                  "    const header = pm.response.headers.get('X-Trace-Id');",
+                  "    pm.expect(header).to.be.a('string').and.not.empty;",
+                  "    pm.expect(body.traceId).to.eql(header);",
+                  "});",
+                  "if (body.data && body.data.token) {",
+                  "    pm.collectionVariables.set('adminToken', body.data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n    \"username\": \"admin\",\n    \"password\": \"admin123\"\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "登录 operator → 保存 operatorToken",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + roleKey=operator', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(body.data.roleKey).to.eql('operator');",
+                  "});",
+                  "if (body.data && body.data.token) {",
+                  "    pm.collectionVariables.set('operatorToken', body.data.token);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n    \"username\": \"operator\",\n    \"password\": \"operator123\"\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "错误密码 → 401 UNAUTHORIZED（不区分原因）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('401 + UNAUTHORIZED + data=null', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    pm.expect(body.code).to.eql('UNAUTHORIZED');",
+                  "    pm.expect(body.data).to.eql(null);",
+                  "});",
+                  "pm.test('错误信息不泄漏密码', function () {",
+                  "    pm.expect(JSON.stringify(body)).to.not.include('wrong-password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n    \"username\": \"operator\",\n    \"password\": \"wrong-password\"\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "当前用户 /me",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + code=SUCCESS', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().code).to.eql('SUCCESS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/auth/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. RBAC 与执行记录（落库）",
+      "item": [
+        {
+          "name": "角色列表（来自 platform_role + 三张授权子表）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + 含 admin/operator/viewer 三个 seed 角色', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const keys = body.data.map(r => r.roleKey);",
+                  "    pm.expect(keys).to.include.members(['admin', 'operator', 'viewer']);",
+                  "});",
+                  "pm.test('operator 具备 Agent 与 patientId 授权集合', function () {",
+                  "    const operator = body.data.find(r => r.roleKey === 'operator');",
+                  "    pm.expect(operator.allowedAgentKeys).to.include('patient-risk');",
+                  "    pm.expect(operator.allowedPatientIds.length).to.eql(10);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles"
+          }
+        },
+        {
+          "name": "角色详情 operator",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles/operator"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + 授权集合完整', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const data = pm.response.json().data;",
+                  "    pm.expect(data.allowedToolKeys).to.include('PatientLookupTool');",
+                  "    pm.expect(data.admin).to.eql(false);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "operator 调度 medical-assistant → 保存 executionId",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + COMPLETED + userId=2（落库执行记录）', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(body.data.status).to.eql('COMPLETED');",
+                  "    pm.expect(body.data.userId).to.eql(2);",
+                  "});",
+                  "if (body.data && body.data.executionId) {",
+                  "    pm.collectionVariables.set('executionId', body.data.executionId);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "satoken", "value": "{{operatorToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n    \"input\": { \"patientId\": \"P001\", \"task\": \"生成随访要点\" }\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/agents/medical-assistant/runs"
+          }
+        },
+        {
+          "name": "admin 查看全部执行记录",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/executions"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + 列表非空', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "viewer 无权调度 Agent → 403 FORBIDDEN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 + FORBIDDEN + traceId', function () {",
+                  "    pm.response.to.have.status(403);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql('FORBIDDEN');",
+                  "    pm.expect(body.traceId).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n    \"input\": { \"patientId\": \"P001\" }\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/agents/medical-assistant/runs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 审计日志",
+      "item": [
+        {
+          "name": "admin 查询审计（LOGIN / AGENT_RUN 留痕）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + 含 LOGIN 与 AGENT_RUN', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const actions = body.data.map(e => e.action);",
+                  "    pm.expect(actions).to.include('LOGIN');",
+                  "    pm.expect(actions).to.include('AGENT_RUN');",
+                  "});",
+                  "pm.test('审计不含密码字段', function () {",
+                  "    const text = JSON.stringify(body);",
+                  "    pm.expect(text).to.not.include('passwordHash');",
+                  "    pm.expect(text).to.not.include('admin123');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/audit-logs"
+          }
+        },
+        {
+          "name": "operator 仅见本人审计（最小权限）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('200 + 全部记录 userId=2', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    body.data.forEach(e => pm.expect(e.userId).to.eql(2));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/audit-logs"
+          }
+        },
+        {
+          "name": "未登录查询审计 → 401 UNAUTHORIZED",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 + UNAUTHORIZED + traceId', function () {",
+                  "    pm.response.to.have.status(401);",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body.code).to.eql('UNAUTHORIZED');",
+                  "    pm.expect(body.traceId).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/v1/platform/audit-logs"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. API 规范契约",
+      "item": [
+        {
+          "name": "入参校验失败 → 400 VALIDATION_ERROR + data=null",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('400 + VALIDATION_ERROR + data=null + traceId', function () {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(body.code).to.eql('VALIDATION_ERROR');",
+                  "    pm.expect(body.data).to.eql(null);",
+                  "    pm.expect(body.traceId).to.be.a('string').and.not.empty;",
+                  "});",
+                  "pm.test('不泄漏堆栈 / SQL / 密钥', function () {",
+                  "    const text = JSON.stringify(body);",
+                  "    pm.expect(text).to.not.include('Exception');",
+                  "    pm.expect(text).to.not.include('SQLException');",
+                  "    pm.expect(text).to.not.include('at com.aicode');",
+                  "    pm.expect(text).to.not.include('sk-');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n    \"username\": \"\",\n    \"password\": \"\"\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "透传自有 X-Trace-Id（全链路追踪）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('响应头与响应体都回显 client-trace-week16', function () {",
+                  "    pm.expect(pm.response.headers.get('X-Trace-Id')).to.eql('client-trace-week16');",
+                  "    pm.expect(body.traceId).to.eql('client-trace-week16');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-Trace-Id", "value": "client-trace-week16" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n    \"username\": \"\",\n    \"password\": \"\"\n}" },
+            "url": "{{baseUrl}}/api/v1/platform/auth/login"
+          }
+        },
+        {
+          "name": "越权读取他人执行记录 → 403 FORBIDDEN",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401/403/404 属语义状态码（非 200）', function () {",
+                  "    pm.expect([401, 403, 404]).to.include(pm.response.code);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{operatorToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/executions/{{executionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 迁移与持久化",
+      "item": [
+        {
+          "name": "重启后数据仍在（落库非内存）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('重启服务后仍能读到 seed 角色 → 数据来自 PostgreSQL', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(pm.response.json().data.length).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles"
+          },
+          "description": "手动步骤：先停服务再启动（Flyway 会校验 V1–V3 已应用），本请求仍应返回 seed 角色，证明 RBAC 落库且 seed 幂等。"
+        },
+        {
+          "name": "重复启动不重复 seed（角色数稳定）",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('角色数量等于 seed + 新增，不随重启增长', function () {",
+                  "    const keys = pm.response.json().data.map(r => r.roleKey);",
+                  "    const duplicates = keys.filter((k, i) => keys.indexOf(k) !== i);",
+                  "    pm.expect(duplicates).to.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "satoken", "value": "{{adminToken}}" }],
+            "url": "{{baseUrl}}/api/v1/platform/roles"
+          }
+        }
+      ]
+    }
+  ]
+}

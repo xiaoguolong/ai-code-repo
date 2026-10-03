@@ -7,6 +7,7 @@ import com.aicode.core.infrastructure.config.AuthProperties;
 import com.aicode.core.infrastructure.security.SaTokenMd5PasswordHasher;
 import com.aicode.framework.platform.domain.model.PlatformRole;
 import com.aicode.framework.platform.domain.model.PlatformUser;
+import com.aicode.framework.platform.infrastructure.persistence.InMemoryAuditLogAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformRoleAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformUserAdapter;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,7 +38,7 @@ class PlatformAuthUseCaseTest {
     void setUp() {
         users = new InMemoryPlatformUserAdapter();
         passwordHasher = new SaTokenMd5PasswordHasher(new AuthProperties("test-salt"));
-        useCase = new PlatformAuthUseCase(users, passwordHasher, authTokenPort);
+        useCase = new PlatformAuthUseCase(users, passwordHasher, authTokenPort, new InMemoryAuditLogAdapter());
 
         InMemoryPlatformRoleAdapter roles = new InMemoryPlatformRoleAdapter();
         roles.save(new PlatformRole("operator", "Operator", false,

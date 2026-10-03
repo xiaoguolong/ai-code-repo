@@ -2,6 +2,7 @@ package com.aicode.framework.platform.infrastructure.persistence;
 
 import com.aicode.framework.platform.domain.model.ExecutionRecord;
 import com.aicode.framework.platform.domain.port.ExecutionRecordPort;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.Comparator;
@@ -10,9 +11,10 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 进程内执行记录存储（Week 12 V1）。
+ * 进程内执行记录存储（Week 12 V1，Week 16 起仅在 {@code platform.persistence.mode=memory} 生效）。
  */
 @Component
+@ConditionalOnProperty(name = "platform.persistence.mode", havingValue = "memory")
 public class InMemoryExecutionRecordAdapter implements ExecutionRecordPort {
 
     private final ConcurrentHashMap<String, ExecutionRecord> store = new ConcurrentHashMap<>();

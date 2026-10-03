@@ -1,8 +1,9 @@
 # Week 02 接口文档 — spring-ai-demo
 
 > Base URL：`http://localhost:8080`  
-> 响应信封：`{ "data": ..., "error": { "code": "...", "message": "..." } }`  
-> 成功时只返回 `data`，失败时只返回 `error`
+> 响应信封（扁平，成功与失败同形状）：`{ "code", "message", "data" }`  
+> 成功 `code=SUCCESS` 且带 `data`；失败 `code` 为错误码且 `data=null`  
+> 本模块为第 1–3 周历史演示，不接入 `ApiErrorCode` 枚举与 `traceId`（那两项从第 16 周的平台模块起生效）
 
 ---
 
@@ -88,10 +89,9 @@ curl -X POST http://localhost:8080/api/v1/chats \
 
 ```json
 {
-  "error": {
-    "code": "validation_error",
-    "message": "message must not be blank"
-  }
+  "code": "VALIDATION_ERROR",
+  "message": "message must not be blank",
+  "data": null
 }
 ```
 
@@ -99,10 +99,9 @@ curl -X POST http://localhost:8080/api/v1/chats \
 
 ```json
 {
-  "error": {
-    "code": "validation_error",
-    "message": "prompt template not found: unknown"
-  }
+  "code": "VALIDATION_ERROR",
+  "message": "prompt template not found: unknown",
+  "data": null
 }
 ```
 
@@ -110,10 +109,9 @@ curl -X POST http://localhost:8080/api/v1/chats \
 
 ```json
 {
-  "error": {
-    "code": "structured_output_error",
-    "message": "model output is not valid JSON object: ..."
-  }
+  "code": "STRUCTURED_OUTPUT_ERROR",
+  "message": "模型未返回合法的 JSON",
+  "data": null
 }
 ```
 
@@ -121,10 +119,9 @@ curl -X POST http://localhost:8080/api/v1/chats \
 
 ```json
 {
-  "error": {
-    "code": "chat_model_error",
-    "message": "LLM call failed"
-  }
+  "code": "CHAT_MODEL_ERROR",
+  "message": "模型调用失败",
+  "data": null
 }
 ```
 

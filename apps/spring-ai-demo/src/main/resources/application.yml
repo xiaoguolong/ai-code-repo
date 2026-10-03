@@ -4,10 +4,15 @@ server:
 spring:
   application:
     name: spring-ai-demo
+  # 数据源不设默认值：各环境的库名/账号不同，必须由环境变量或模块 .env 提供。
+  # .env 不入库（.gitignore 忽略），每套环境自建；IDEA 请用 EnvFile 插件指向本模块 .env。
+  # optional 前缀保证 .env 缺失时不启动失败（缺失时由上面的变量占位报缺失，提示更明确）。
+  config:
+    import: optional:file:.env[.properties]
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/aidemo}
-    username: ${SPRING_DATASOURCE_USERNAME:aidemo}
-    password: ${SPRING_DATASOURCE_PASSWORD:aidemo}
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   flyway:
     enabled: true
     locations:

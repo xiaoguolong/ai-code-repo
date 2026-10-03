@@ -16,6 +16,7 @@ import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.service.PlatformAgentRunner;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryAgentRegistryAdapter;
+import com.aicode.framework.platform.infrastructure.persistence.InMemoryAuditLogAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryExecutionRecordAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformRoleAdapter;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformUserAdapter;
@@ -60,7 +61,8 @@ class PlatformExecutionUseCaseTest {
                 new GuardrailProperties(true, 8192, true, true, List.of("patientId", "task")));
         PlatformGuardrailService guardrailService = new PlatformGuardrailService(guardrail);
         useCase = new PlatformExecutionUseCase(
-                agentRegistry, executionRecords, platformAgentRunner, checker, guardrailService, new ObjectMapper());
+                agentRegistry, executionRecords, platformAgentRunner, checker, guardrailService,
+                new ObjectMapper(), new InMemoryAuditLogAdapter());
 
         roles.save(new PlatformRole("operator", "Operator", false,
                 Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));

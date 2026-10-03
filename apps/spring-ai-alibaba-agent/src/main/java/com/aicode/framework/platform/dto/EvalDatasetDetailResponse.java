@@ -23,6 +23,14 @@ public record EvalDatasetDetailResponse(
                 dataset.datasetKey(), dataset.name(), dataset.category().name(), summaries);
     }
 
+    /**
+     * 数据集内的用例摘要（不含标准答案与 fixture 正文）。
+     *
+     * @param caseId        用例标识
+     * @param agentKey      关联的 Agent 标识
+     * @param criterionType 评分准则类型
+     * @param description   用例说明
+     */
     public record EvalCaseSummary(
             String caseId,
             String agentKey,

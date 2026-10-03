@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: spring-ai-alibaba-agent
+  # 默认激活 jdbc profile（数据源与 Flyway 迁移在其配置文件里）。
+  # 原因：pom 的 spring-boot.run.profiles=jdbc 只对 `mvn spring-boot:run` 生效，
+  # 从 IDE 直接 Run 或 `java -jar` 不会带上它；不设默认则落库模式没有数据源，启动即失败。
+  # 单测用 test profile（含 H2 数据源配置）覆盖，见 src/test/resources/application-test.yml。
+  profiles:
+    default: jdbc
   # Spring AI OpenAI 兼容通道，指向 DeepSeek。密钥只从环境变量读取，不要写真实 Key。
   # 注意：Spring AI 自行拼接 /v1/chat/completions，base-url 只写主机名，切勿带 /v1。
   ai:
@@ -55,6 +61,11 @@ platform:
     enforce-direct-runs: false
     web-interceptors:
       enabled: true
+  # Week 16：RBAC / 执行记录 / 审计的持久化模式。
+  # jdbc   = 落库（需同时激活 jdbc profile 提供数据源，见 application-jdbc.yml）
+  # memory = 进程内（无数据库演示 / 单测）
+  persistence:
+    mode: ${PLATFORM_PERSISTENCE_MODE:jdbc}
 
 # Guardrail 内容安全（Week 14）。与 RBAC 正交。
 guardrail:
@@ -67,6 +78,12 @@ guardrail:
     - task
 
 # Agent / Workflow / Platform 关键步骤日志（控制台可 grep "[platform]" "[multi-agent]" "[workflow]" "[framework-agent]"）
+# 日志格式强制带 traceId（%X{traceId}），与响应头 X-Trace-Id 一致，便于全链路排查。
 logging:
   level:
     com.aicode.framework: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"
+
+# 落库模式的数据源与 Flyway 迁移见 application-jdbc.yml，用 --spring.profiles.active=jdbc 激活
+# （mvn spring-boot:run 已配 spring-boot.run.profiles=jdbc；单测用 test profile 提供 H2）。

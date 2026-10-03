@@ -1,0 +1,37 @@
+# Week 16：平台落库模式（jdbc profile）。
+#
+# 激活方式（三选一）：
+#   IDEA 运行配置（推荐）  ：VM/程序参数加 -Dspring.profiles.active=jdbc，EnvFile 插件加载本模块 .env
+#   mvn spring-boot:run   ：pom 已默认带 spring-boot.run.profiles=jdbc
+#   java -jar app.jar --spring.profiles.active=jdbc
+#
+# 数据源不设默认值：各环境的库名/账号不同，必须由环境变量或模块 .env 提供。
+#   - .env 由本模块目录下的 .env 提供（见下方 spring.config.import），不入库、每套环境自建；
+#   - 环境变量优先级高于 .env，本地临时覆盖直接设环境变量即可。
+#
+# 单测不使用本文件：test profile 提供 H2（MODE=PostgreSQL）并设 platform.persistence.mode=memory，
+# 需要验证落库的测试自行覆盖 platform.persistence.mode=jdbc。
+spring:
+  # .env 不入库（.gitignore 忽略）；optional 保证缺失时不启动失败（此时数据源变量为空，会明确报缺配置）。
+  # 用 [.properties] 扩展名提示按 KEY=VALUE 解析。
+  # 注意：相对路径按「进程工作目录」解析——IDEA 默认工作目录是项目根，那里没有本模块 .env，
+  # 因此 IDEA 场景请用 EnvFile 插件把本模块 .env 直接注入运行配置（环境变量优先级更高，二者不冲突）。
+  config:
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  # V1 RBAC / V2 执行记录 / V3 审计日志，同一套脚本在 PostgreSQL 与 H2 上均可执行。
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # 本模块可能与其它应用共用同一个库（各环境由 .env 指定），各自都有从 V1 开始的迁移：
+    # 1) table 用本模块专属历史表，避免与既有应用的 flyway_schema_history 版本冲突；
+    # 2) 共用库的 public 模式非空（有其它应用的表），不引导会直接报
+    #    "Found non-empty schema(s) but no schema history table"；
+    # 3) baseline-version 必须是 0 而非默认 1：baseline 会写入一条「已应用」记录，
+    #    取 1 会把本模块的 V1 当成已应用而跳过（platform_* 表不会创建，真库曾复现）。
+    table: flyway_schema_history_platform
+    baseline-on-migrate: true
+    baseline-version: 0

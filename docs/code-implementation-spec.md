@@ -250,6 +250,130 @@ D:/soft/maven-3.9.4/conf/settings-ailocal.xml
 
 禁止：改全局 `settings.xml` 去迁就本仓库；把依赖下到 JDK8 项目的仓库。助手跑 Maven 必须带 `-s settings-ailocal.xml`（或依赖 `.mvn/maven.config`）。
 
+### 3.7 数据库与迁移脚本约定（全局强制）
+
+第 16 周真库验证（PostgreSQL 16.15）暴露过「H2 单测全绿、上真库直接失败」的问题，故把数据库脚本与本地配置提升为全局强制约定。后续所有周次新增迁移脚本与 `application*.yml` 一律照此执行。
+
+#### 3.7.1 一处脚本，两种数据库
+
+单测用 H2（`MODE=PostgreSQL`）跑与生产**同一套**迁移脚本，因此脚本必须在 PostgreSQL 与 H2 上都可执行。禁止方言单边特性：
+
+| 禁用 | 原因 | 替代 |
+|------|------|------|
+| `CLOB` / `LONGTEXT` | H2 容忍但 PostgreSQL 无此类型，直接报 `type "clob" does not exist` | 无长度 `VARCHAR`（PostgreSQL 不限长、H2 取最大长度） |
+| `TEXT` | H2 不支持 | 同上 |
+| `JSONB` / `JSON` | H2 与 PostgreSQL 行为不一致 | 无长度 `VARCHAR` 存 JSON 文本 |
+| `CREATE EXTENSION` | H2 无扩展机制 | 需要扩展的脚本单独放 `db/postgresql/` 目录，且只在该库生效 |
+| 部分索引（`WHERE` 子句） | H2 支持有限 | 普通索引 |
+| 方言 upsert（`ON CONFLICT` / `MERGE`） | 两库语法不同 | 适配器层「先查后写」：`UPDATE` 影响 0 行再 `INSERT` |
+| `GENERATED ... AS IDENTITY`（若需兼容旧库） | H2 与 PostgreSQL 语义有差异 | 需要时用 `COALESCE(MAX(id),0)+1` 生成，或明确只支持 PostgreSQL |
+
+可放心使用：`BIGSERIAL` / `VARCHAR(n)` / `INT` / `BIGINT` / `BOOLEAN` / `TIMESTAMP WITH TIME ZONE` / `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS`。
+
+时间列统一 `TIMESTAMP WITH TIME ZONE`，Java 侧统一用 `Instant` 读写（禁止 `LocalDateTime`，避免跨时区歧义）。
+
+#### 3.7.2 Flyway 历史表与引导
+
+同一个数据库可能被多个应用共用（各模块各有从 V1 开始的迁移）。**每个模块必须使用自己的历史表**：
+
+```yaml
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    table: flyway_schema_history_<模块名>   # 禁止默认 flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 0                    # 必须是 0，不能留默认值 1
+```
+
+| 配置 | 错误后果 |
+|------|----------|
+| 用默认历史表 | 两个模块的 V1 相互跳过或版本冲突 |
+| `baseline-on-migrate: false`（共用库） | 启动直接失败：`Found non-empty schema(s) "public" but no schema history table` |
+| `baseline-version` 留默认 1 | Flyway 把本模块 V1 记为「已应用」而**跳过**，表一张都不建 |
+
+单测的 `application-test.yml` 必须与生产同口径（`baseline-version: 0`），否则测试通过而真库失败。
+
+#### 3.7.3 脚本命名与不可变性
+
+- 命名：`V<序号>__<小写下划线描述>.sql`（如 `V2__platform_execution_record.sql`）。
+- **已成功应用的脚本不可再修改**——Flyway 校验 checksum，改动会导致启动报 validation 失败。只有失败回滚过的脚本可以改；改完需清除该库中的失败记录后重跑。
+- 每次迁移必须是可重复执行的（`IF NOT EXISTS`），并考虑「服务重启」场景。
+
+#### 3.7.4 落库验收要求（不可只用 H2）
+
+新增或修改迁移脚本时，交付前必须完成：
+
+1. 根聚合 `test` 全绿（H2 `MODE=PostgreSQL`）；
+2. **在真实 PostgreSQL 上启动一次**，确认日志出现 `Successfully validated N migrations` → `Migrating ... to version vX` → `Successfully applied N migrations, now at version vX`；
+3. 查历史表确认**没有被跳过的版本**：应为 `v0 BASELINE` + `v1` + `v2` + …，若只看到 `v1 BASELINE` 说明 V1 被跳过；
+4. **重启一次**，确认只做校验不重跑迁移，且 seed 幂等（行数不变）；
+5. 确认未污染同库其它应用的对象（它们的历史表行数不变）。
+
+#### 3.7.5 往已有环境的库上叠加新模块（pull 新代码后必查）
+
+各环境库中已有前序周次的对象（例如第 1–3 周的聊天表、第 4 周的知识库表），新模块很可能**同一个库**。此时必须逐项确认：
+
+| 检查项 | 期望 | 不通过说明 |
+|--------|------|------------|
+| 历史表名 | 新模块用 `flyway_schema_history_<模块名>`，与既有应用的 `flyway_schema_history` 并存 | 仍是默认表名 → 版本号冲突，必须先改配置再启动 |
+| 历史表内容 | `v0 BASELINE` + 新模块的 `v1/v2/…` **逐条 SQL** | 只有一条 `v1 BASELINE` → V1 被跳过，表没建 |
+| 表名冲突 | 新模块表名与既有对象无重名（`information_schema.tables` 比对） | 重名 → 改名，禁止 `DROP` 既有表 |
+| 既有应用历史 | 原 `flyway_schema_history` 行数不变 | 行数变化 → 新模块污染了别人的迁移记录 |
+| 密码列 | seed 只写哈希 | 出现明文 → 立即回滚 |
+
+同一模块在**多个环境**的库上首次执行时，上述检查要各做一次；不同环境库内容不同，验证结果不能互相替代。
+
+#### 3.7.6 本地连接配置（.env 与环境变量）
+
+连接串、密钥等环境相关配置**只放环境变量或模块 `.env`**，一律不入库（`.gitignore` 已忽略 `.env`），每套环境自建。
+
+**禁止在 `application*.yml` 里写具体库名/账号作默认值。** 必须写成空占位：
+
+```yaml
+spring:
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:}        # 不要写 jdbc:postgresql://localhost:5432/某个库名
+    username: ${SPRING_DATASOURCE_USERNAME:}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+```
+
+原因：各环境库名/账号都不同，写死在 yml 里的库名会误导其它环境（曾把某个历史库名写进 yml 与文档，造成"这个库是不是要求我建"的困惑）。空占位在缺配置时直接报缺失，比连错库更好定位。
+
+运行方式与配置来源：
+
+| 方式 | 配置来源 | 说明 |
+|------|----------|------|
+| **IDEA（推荐）** | EnvFile 插件指向**本模块** `.env` | 运行配置里 `envFilePaths` = `$PROJECT_DIR$/apps/<模块>/.env`，插件把文件内容作为**环境变量**注入进程，优先级最高。IDEA 运行配置的工作目录通常是项目根，`file:.env` 找不到模块级 `.env`，所以以 EnvFile 注入为准（二者不冲突）。**若未装 EnvFile 插件**，必须在运行配置里手工填数据源环境变量 |
+| 命令行 / 脚本 | shell 环境变量，或模块 `.env` | 模块 `application*.yml` 声明 `config.import: optional:file:.env[.properties]`；`optional:` 保证文件缺失不启动失败，`[.properties]` 提示按 `KEY=VALUE` 解析 |
+
+**IDE 运行不读 Maven 的 profile 参数。** `spring-boot-maven-plugin` 的 `spring-boot.run.profiles` 只对 `mvn spring-boot:run` 生效；IDEA 直接 Run 或 `java -jar` 都要另想办法，二选一：
+
+1. 在 `application.yml` 声明 `spring.profiles.default: <默认 profile>`（推荐，覆盖面最广，IDE 与 jar 都生效）；
+2. 在 IDEA 运行配置的 "Active profiles" 或 `.env` 里设 `SPRING_PROFILES_ACTIVE=<profile>`。
+
+否则落在需要数据源的 profile 上却没有数据源配置，启动会报
+`Failed to configure a DataSource: 'url' attribute is not specified ... you may need to activate it`——报错含糊、容易误判为"库连不上"。
+
+**相对路径按进程工作目录解析**：`file:.env` 只在工作目录 == 模块目录时命中（`mvn spring-boot:run`、在模块目录跑 jar 属于此种）。工作目录是项目根时（IDEA 默认）该 import 空转，不报错。
+
+配置优先级（高 → 低）：命令行参数 / 环境变量 → `application-<profile>.yml` → `.env` → `application.yml` 默认值。
+
+- 因此单测的 `application-test.yml`（H2）**不会被 `.env` 的真库地址覆盖**；
+- 本地临时覆盖用环境变量即可，无需改文件。
+- 文档中引用具体环境一律用占位符（`<db-host>`、`<db-name>`），避免换环境后文档误导。
+
+**每个模块必须维护 `.env.example`（入库，供新环境照抄）**，且遵守：
+
+| 要求 | 说明 |
+|------|------|
+| 只给 key 与**格式占位符** | 如 `SPRING_DATASOURCE_URL=jdbc:postgresql://<db-host>:<db-port>/<db-name>`；**禁止填某个环境的具体库名/账号**（曾把历史库名写进模板，误导其它环境以为必须建该库） |
+| 列全该模块**启动必需**的 key | 尤其数据库、Redis、必填密钥；漏列会导致新环境照抄后启动失败 |
+| 标明哪些可选、默认值是什么 | 用「可选」标注，并给默认值（如 `AUTH_PASSWORD_SALT=change-me-please`） |
+| 值可安全入库 | 模板里不出现任何真实 Key、密码、内网地址 |
+
+`.env`（填了真实值）不入库，`.env.example`（占位符）入库——这是新环境能"照着配自己的库"的唯一途径。
+
 ---
 
 ## 4. 代码设计流程图
@@ -440,16 +564,21 @@ POST /api/v1/chats
 GET  /api/v1/chats/{sessionId}/messages
 ```
 
+**响应信封：扁平结构，成功与失败同一形状，只有 `data` 与错误码不同。**
+
 成功：
 
 ```json
 {
+  "code": "SUCCESS",
+  "message": "OK",
   "data": {
     "sessionId": "...",
     "messageId": "...",
     "content": "...",
     "usage": { "promptTokens": 12, "completionTokens": 34, "totalTokens": 46 }
-  }
+  },
+  "traceId": "..."
 }
 ```
 
@@ -457,14 +586,25 @@ GET  /api/v1/chats/{sessionId}/messages
 
 ```json
 {
-  "error": {
-    "code": "validation_error",
-    "message": "message must not be blank"
-  }
+  "code": "VALIDATION_ERROR",
+  "message": "message must not be blank",
+  "data": null,
+  "traceId": "..."
 }
 ```
 
-HTTP 状态码按语义使用，禁止全部 200。
+约定细则：
+
+| 项 | 规定 |
+|----|------|
+| `code` | 成功固定字符串 `SUCCESS`；失败必须是 `ApiErrorCode` 枚举名（`UPPER_SNAKE_CASE`），**禁止临时字符串** |
+| `message` | 成功后为 `OK`；失败为中文提示，不含堆栈、SQL、厂商原始报文、密钥 |
+| `data` | 失败时恒为 `null`（不是 `{}`、不是省略） |
+| `traceId` | 第 16 周起必带；与响应头 `X-Trace-Id` 一致。第 2–15 周既有接口无此字段，新增接口必须带 |
+| 状态码 | 按语义使用，禁止全部 200；映射由 `ApiErrorCode` 决定 |
+
+> 历史说明：第 2 周起所有模块（`spring-ai-demo`、`enterprise-knowledge-agent`、`patient-agent`、`spring-ai-alibaba-agent`）实际都用扁平信封；
+> 本文早期草案曾写 `{"error":{"code","message"}}`，从未实现，第 16 周已按实现校正，避免后续周次误按草案改造。
 
 ### 5.7 安全底线（从第1周生效）
 
@@ -644,8 +784,8 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 12 | Agent 平台 V1 | docs/specs/week-12.md | notes/impl-logs/week-12.md | 已关闭 |
 | 13 | 权限体系 | docs/specs/week-13.md | notes/impl-logs/week-13.md | 已关闭 |
 | 14 | AI 安全 | docs/specs/week-14.md | notes/impl-logs/week-14.md | 已关闭 |
-| 15 | Agent Evaluation | docs/specs/week-15.md | notes/impl-logs/week-15.md | 进行中 |
-| 16 | 企业规范 | | | 未开始 |
+| 15 | Agent Evaluation | docs/specs/week-15.md | notes/impl-logs/week-15.md | 已关闭 |
+| 16 | 企业规范（API/日志/审计/异常 + RBAC 落库） | docs/specs/week-16.md | notes/impl-logs/week-16.md | 已关闭 |
 | 17 | OpenTelemetry | | | 未开始 |
 | 18 | Langfuse | | | 未开始 |
 | 19 | SkyWalking | | | 未开始 |
@@ -658,7 +798,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 
 | 遗留项 | 补位周次 | 说明 |
 |--------|----------|------|
-| 8084 RBAC + ExecutionRecord PostgreSQL/Flyway | **第 16 周** | 替换内存 User/Role/Execution Port；Flyway 迁移脚本 |
+| 8084 RBAC + ExecutionRecord PostgreSQL/Flyway | **第 16 周（已完成）** | 见 `docs/specs/week-16.md`；Port 契约不变，`platform.persistence.mode=jdbc` 时换 `Jdbc*Adapter`，另增审计表 `audit_log` |
 | Prompt 过滤 / 输入校验 / 输出脱敏 / Tool 内容白名单 | **第 14 周** | `GuardrailPort`；与 RBAC 身份授权正交 |
 | Gateway 层统一鉴权 + 路由 | **第 19 周** | SkyWalking 已提 Gateway；生产隐藏直连 URL |
 | enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周** | 医疗 SaaS 实战启动时整合 |
@@ -680,9 +820,12 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 分层 | Controller 无 SDK / Service 无 SQL | 回滚越层代码 |
 | 安全 | 无密钥、无用户输入拼进系统提示 | 立即改 |
 | YAGNI | 未出现下周才需要的依赖 | 删除依赖后再提交 |
+| 数据库脚本 | 涉及迁移脚本时按 3.7 执行：双库可跑、真库启动一次、历史表无跳过版本、重启幂等、未污染同库其它应用 | 不得宣称完成 |
 | 日志 | `notes/impl-logs/week-XX.md` 已填 RED/GREEN 证据 | 本周未交付 |
 
 覆盖率目标：新增业务代码行覆盖 ≥ 80%（端口适配器的纯 SDK 调用允许用契约测试代替）。
+
+> 说明：**H2 单测全绿不等于迁移可用**。第 16 周真库验证一次性暴露了 `CLOB` 类型、`baseline-version` 跳过 V1、共用库非空 schema 三个只在 PostgreSQL 上才出现的问题，故「数据库脚本」必须是独立门禁项，不能由单测代替。
 
 ---
 

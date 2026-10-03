@@ -5,20 +5,26 @@ import com.aicode.framework.platform.domain.model.PlatformRole;
 import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.port.PlatformRolePort;
 import com.aicode.framework.platform.domain.port.PlatformUserPort;
-import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformRoleAdapter;
-import com.aicode.framework.platform.infrastructure.persistence.InMemoryPlatformUserAdapter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * 启动时预置平台角色与用户（admin / operator / viewer）。
+ *
+ * <p>Week 16：改为按 Port 判空，做到落库与内存两种模式都幂等——已有数据直接跳过，
+ * 重启、单测重复调用都不会重复插入或抛主键冲突。密码只存哈希，明文不落库。</p>
  */
 @Component
 public class PlatformRbacSeedInitializer implements ApplicationRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(PlatformRbacSeedInitializer.class);
 
     private final PlatformRolePort platformRolePort;
     private final PlatformUserPort platformUserPort;
@@ -36,11 +42,19 @@ public class PlatformRbacSeedInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (platformRolePort instanceof InMemoryPlatformRoleAdapter adapter && !adapter.isEmpty()) {
+        if (!platformRolePort.listAll().isEmpty() || !isUserTableEmpty()) {
             return;
         }
         seedRoles();
         seedUsers();
+        log.info("[platform] rbac seed applied roles=3 users=3");
+    }
+
+    private boolean isUserTableEmpty() {
+        // 三个 seed 用户 id 固定为 1/2/3；任一存在即视为已初始化
+        return platformUserPort.findById(1L).isEmpty()
+                && platformUserPort.findById(2L).isEmpty()
+                && platformUserPort.findById(3L).isEmpty();
     }
 
     private void seedRoles() {
@@ -70,6 +84,6 @@ public class PlatformRbacSeedInitializer implements ApplicationRunner {
     private Set<String> operatorPatientIds() {
         return IntStream.rangeClosed(1, 10)
                 .mapToObj(i -> "P" + String.format("%03d", i))
-                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                .collect(Collectors.toUnmodifiableSet());
     }
 }

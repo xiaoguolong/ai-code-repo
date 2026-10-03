@@ -1,0 +1,21 @@
+spring:
+  application:
+    name: spring-ai-alibaba-agent-test
+  # 单测统一用 H2 的 PostgreSQL 兼容模式跑与生产同一套 Flyway 迁移，不依赖真实 PostgreSQL。
+  datasource:
+    url: jdbc:h2:mem:platform_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    # 与生产同口径：baselineVersion=0，避免默认值 1 把 V1 当已应用而跳过
+    baseline-on-migrate: true
+    baseline-version: 0
+
+# 测试默认走进程内适配器，保证既有测试上下文不依赖数据库；
+# 需要验证落库的测试用 platform.persistence.mode=jdbc 覆盖。
+platform:
+  persistence:
+    mode: memory

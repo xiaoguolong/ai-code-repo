@@ -538,10 +538,11 @@ Tool
 
 完成：
 
-- [ ] API规范
-- [ ] 日志规范
-- [ ] 审计规范
-- [ ] 异常处理规范
+- [x] API规范（统一响应信封 + traceId + 错误码枚举 + 契约测试）
+- [x] 日志规范（traceId 全链路、MDC、统一访问日志、脱敏禁令）
+- [x] 审计规范（AuditLogPort + audit_log 落库 + 4 类事件 + 只读查询 API）
+- [x] 异常处理规范（错误码唯一来源、HTTP 语义、不泄漏堆栈/SQL/密钥）
+- [x] 遗留补项：RBAC + ExecutionRecord 由内存改为 PostgreSQL 落库（Flyway V1–V3）
 
 
 ---
@@ -734,10 +735,11 @@ Tool
 
 ## 企业能力
 
-- [ ] 权限
-- [ ] 安全
-- [ ] 审计
-- [ ] 日志
+- [x] 权限（Week 13 RBAC：用户 → 角色 → Agent → Tool → 数据域，Week 16 落库）
+- [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单）
+- [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
+- [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
+- [ ] 规范落地度：响应信封与规范 5.6 草案仍有偏离（见 docs/specs/week-16.md 收尾审计）
 
 
 ## 运维能力
