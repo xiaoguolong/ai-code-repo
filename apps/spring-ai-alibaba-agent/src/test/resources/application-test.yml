@@ -19,3 +19,14 @@ spring:
 platform:
   persistence:
     mode: memory
+
+# Week 17：单测不向真实 collector 打网络，需要断言 span 的测试自行提供真实 OTel Tracer（内存 exporter）。
+# 采样率必须显式设为 1.0：Spring Boot 默认 0.1，会让「断言 span 已导出」的用例随机失败。
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      export:
+        enabled: false

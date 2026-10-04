@@ -786,7 +786,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 14 | AI 安全 | docs/specs/week-14.md | notes/impl-logs/week-14.md | 已关闭 |
 | 15 | Agent Evaluation | docs/specs/week-15.md | notes/impl-logs/week-15.md | 已关闭 |
 | 16 | 企业规范（API/日志/审计/异常 + RBAC 落库） | docs/specs/week-16.md | notes/impl-logs/week-16.md | 已关闭 |
-| 17 | OpenTelemetry | | | 未开始 |
+| 17 | OpenTelemetry（Trace/Span/Metric/Context + 指标出口） | docs/specs/week-17.md | notes/impl-logs/week-17.md | 已关闭 |
 | 18 | Langfuse | | | 未开始 |
 | 19 | SkyWalking | | | 未开始 |
 | 20 | 完整监控体系 | | | 未开始 |

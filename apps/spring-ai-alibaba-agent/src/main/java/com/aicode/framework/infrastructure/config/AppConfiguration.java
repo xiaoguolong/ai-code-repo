@@ -7,6 +7,9 @@ import com.aicode.core.domain.port.GuardrailPort;
 import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.core.infrastructure.security.GuardrailToolPort;
+import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.infrastructure.ObservableChatModelAdapter;
+import com.aicode.framework.observability.infrastructure.ObservableToolPort;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.platform.infrastructure.config.PlatformSecurityProperties;
 import com.aicode.framework.platform.infrastructure.security.AuthorizingToolPort;
@@ -27,6 +30,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import java.util.List;
 
@@ -63,11 +67,14 @@ public class AppConfiguration {
 
     /**
      * 带 RBAC + Guardrail 的工具端口。链：AuthorizingToolPort → GuardrailToolPort → ToolRegistry。
+     *
+     * <p>Week 17 起容器中存在三个 {@link ToolPort} bean（委托 / RBAC 链 / 埋点装饰器），
+     * 因此所有装配点都用 {@link Qualifier} 显式指名，避免依赖 {@code @Primary} 的隐式解析
+     * （多个 {@code @Primary} 会让 Spring 直接报 NoUniqueBeanDefinitionException）。</p>
      */
     @Bean
-    @Primary
     ToolPort frameworkToolPort(
-            ToolPort toolRegistryDelegate,
+            @Qualifier("toolRegistryDelegate") ToolPort toolRegistryDelegate,
             GuardrailPort guardrailPort,
             PlatformPermissionChecker permissionChecker,
             PlatformSecurityProperties securityProperties,
@@ -78,13 +85,45 @@ public class AppConfiguration {
     }
 
     /**
+     * 带 LLM 调用链埋点的模型端口（Week 17）。装饰 ai-core 装配的原始适配器，
+     * 使全部 Agent / Workflow / Multi-Agent 的模型调用都产出 {@code llm.chat} span 与 token 指标。
+     *
+     * <p>标注 {@code @Primary}：所有按类型注入 {@link ChatModelPort} 的编排组件（Graph / Workflow /
+     * Multi-Agent）自动获得带观测的版本，无需逐个改造构造器。</p>
+     */
+    @Bean
+    @Primary
+    ChatModelPort observableChatModelPort(
+            @Qualifier("springAiChatModelAdapter") ChatModelPort springAiChatModelAdapter,
+            AgentObservabilityPort agentObservabilityPort
+    ) {
+        return new ObservableChatModelAdapter(springAiChatModelAdapter, agentObservabilityPort);
+    }
+
+    /**
+     * 带工具调用链埋点的工具端口（Week 17）。链：
+     * ObservableToolPort → AuthorizingToolPort → GuardrailToolPort → ToolRegistry。
+     *
+     * <p>标注 {@code @Primary}：编排组件按类型注入 {@link ToolPort} 时拿到埋点版本（最外层），
+     * 权限与 Guardrail 校验仍在同一条链上，不会被绕过。</p>
+     */
+    @Bean
+    @Primary
+    ToolPort observableToolPort(
+            @Qualifier("frameworkToolPort") ToolPort frameworkToolPort,
+            AgentObservabilityPort agentObservabilityPort
+    ) {
+        return new ObservableToolPort(frameworkToolPort, agentObservabilityPort);
+    }
+
+    /**
      * Spring AI Alibaba Graph 编排的 Agent 领域服务。
      */
     @Bean
     FrameworkAgentGraph frameworkAgentGraph(
             ChatModelPort chatModelPort,
             PromptTemplatePort promptTemplatePort,
-            ToolPort frameworkToolPort,
+            @Qualifier("observableToolPort") ToolPort frameworkToolPort,
             FrameworkRuntimeConfig frameworkRuntimeConfig
     ) {
         return new FrameworkAgentGraph(chatModelPort, promptTemplatePort, frameworkToolPort, frameworkRuntimeConfig);
@@ -131,7 +170,7 @@ public class AppConfiguration {
     PatientRiskWorkflow patientRiskWorkflow(
             ChatModelPort chatModelPort,
             PromptTemplatePort promptTemplatePort,
-            ToolPort frameworkToolPort,
+            @Qualifier("observableToolPort") ToolPort frameworkToolPort,
             PatientRiskAssessor patientRiskAssessor,
             PatientRiskToolResultMapper patientRiskToolResultMapper,
             PatientRiskRuntimeConfig patientRiskRuntimeConfig
@@ -171,7 +210,7 @@ public class AppConfiguration {
     MedicalAssistantSupervisorGraph medicalAssistantSupervisorGraph(
             ChatModelPort chatModelPort,
             PromptTemplatePort promptTemplatePort,
-            ToolPort frameworkToolPort,
+            @Qualifier("observableToolPort") ToolPort frameworkToolPort,
             PatientRiskAssessor patientRiskAssessor,
             PatientRiskToolResultMapper patientRiskToolResultMapper,
             MedicalAssistantSupervisor medicalAssistantSupervisor,

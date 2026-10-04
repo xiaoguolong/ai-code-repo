@@ -66,7 +66,8 @@ class PlatformExecutionAuditTest {
                 new GuardrailProperties(true, 8192, true, true, List.of("patientId", "task")));
         PlatformGuardrailService guardrailService = new PlatformGuardrailService(guardrail);
         useCase = new PlatformExecutionUseCase(agentRegistry, executionRecords, platformAgentRunner,
-                checker, guardrailService, new ObjectMapper(), auditLog);
+                checker, guardrailService, new ObjectMapper(), auditLog,
+                new com.aicode.framework.observability.domain.NoopObservabilityAdapter());
 
         roles.save(new PlatformRole("operator", "Operator", false,
                 Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));

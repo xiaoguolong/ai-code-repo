@@ -18,6 +18,10 @@ import com.aicode.framework.platform.domain.port.ExecutionRecordPort;
 import com.aicode.framework.platform.domain.service.PlatformAgentRunner;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.infrastructure.logging.TraceIds;
+import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.ObservabilityAttributes;
+import com.aicode.framework.observability.domain.SpanKind;
+import com.aicode.framework.observability.domain.SpanScope;
 import com.aicode.framework.platform.infrastructure.security.PlatformSecurityContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,6 +30,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -35,11 +40,21 @@ import java.util.UUID;
  *
  * <p>Week 16：执行终态与越权读取写审计。鉴权在审计之前，越权请求不产生执行记录也不写
  * {@code AGENT_RUN}（避免噪声），只在读他人记录被拒时写 {@code EXECUTION_READ/DENIED}。</p>
+ *
+ * <p>Week 17：整个执行包一个 {@code agent.run} span，并登记 {@code agent.run.count} /
+ * {@code agent.run.duration} 指标（标签含 {@code execution.status}），使「Agent 跑一次多久、
+ * 烧多少 token、成功还是失败」可在链路与指标两处查看。</p>
  */
 @Service
 public class PlatformExecutionUseCase {
 
     private static final Logger log = LoggerFactory.getLogger(PlatformExecutionUseCase.class);
+
+    /** Agent 执行 span 名。 */
+    static final String SPAN_AGENT_RUN = "agent.run";
+
+    private static final String METRIC_RUN_COUNT = "agent.run.count";
+    private static final String METRIC_RUN_DURATION = "agent.run.duration";
 
     private final AgentRegistryPort agentRegistryPort;
     private final ExecutionRecordPort executionRecordPort;
@@ -48,6 +63,7 @@ public class PlatformExecutionUseCase {
     private final PlatformGuardrailService platformGuardrailService;
     private final ObjectMapper objectMapper;
     private final AuditLogPort auditLogPort;
+    private final AgentObservabilityPort observability;
 
     public PlatformExecutionUseCase(
             AgentRegistryPort agentRegistryPort,
@@ -56,7 +72,8 @@ public class PlatformExecutionUseCase {
             PlatformPermissionChecker permissionChecker,
             PlatformGuardrailService platformGuardrailService,
             ObjectMapper objectMapper,
-            AuditLogPort auditLogPort
+            AuditLogPort auditLogPort,
+            AgentObservabilityPort observability
     ) {
         this.agentRegistryPort = agentRegistryPort;
         this.executionRecordPort = executionRecordPort;
@@ -65,6 +82,7 @@ public class PlatformExecutionUseCase {
         this.platformGuardrailService = platformGuardrailService;
         this.objectMapper = objectMapper;
         this.auditLogPort = auditLogPort;
+        this.observability = observability;
     }
 
     /**
@@ -98,35 +116,93 @@ public class PlatformExecutionUseCase {
         log.info("[platform] execution started executionId={} userId={} agentKey={} agentType={} input={}",
                 executionId, userId, agent.agentKey(), agent.agentType(), running.inputJson());
 
-        try {
-            PlatformSecurityContext.beginPlatformRun(userId);
-            PlatformRunOutput output = platformAgentRunner.run(agent, input);
-            Map<String, Object> sanitizedOutput = platformGuardrailService.sanitizeRunOutput(
-                    userId, agent.agentKey(), output.output());
-            ExecutionRecord completed = new ExecutionRecord(
-                    executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.COMPLETED,
-                    running.inputJson(), toJson(sanitizedOutput), output.model(), output.usage(),
-                    "", startedAt, Instant.now());
-            executionRecordPort.save(completed);
-            log.info("[platform] execution completed executionId={} userId={} agentKey={} model={} tokens={}",
-                    executionId, userId, agent.agentKey(), output.model(), output.usage().totalTokens());
-            audit(executionId, userId, agent.agentKey(), AuditResult.SUCCESS, null);
-            return completed;
+        Map<String, String> spanAttributes = new LinkedHashMap<>();
+        spanAttributes.put(ObservabilityAttributes.AGENT_KEY, agent.agentKey());
+        spanAttributes.put(ObservabilityAttributes.AGENT_TYPE, String.valueOf(agent.agentType()));
+        spanAttributes.put(ObservabilityAttributes.USER_ID, String.valueOf(userId));
+        spanAttributes.put(ObservabilityAttributes.EXECUTION_ID, executionId);
 
-        } catch (RuntimeException ex) {
-            ExecutionRecord failed = new ExecutionRecord(
-                    executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.FAILED,
-                    running.inputJson(), "", "", TokenUsage.unknown(), ex.getMessage(),
-                    startedAt, Instant.now());
-            executionRecordPort.save(failed);
-            log.warn("[platform] execution failed executionId={} userId={} agentKey={} error={}",
-                    executionId, userId, agent.agentKey(), ex.getMessage());
-            audit(executionId, userId, agent.agentKey(), AuditResult.FAILURE, ex.getMessage());
-            throw ex;
-        } finally {
-            PlatformSecurityContext.clear();
+        long runStartedAt = System.nanoTime();
+        try (SpanScope span = observability.openSpan(SpanKind.AGENT_RUN, SPAN_AGENT_RUN, spanAttributes)) {
+            try {
+                PlatformSecurityContext.beginPlatformRun(userId);
+                PlatformRunOutput output = platformAgentRunner.run(agent, input);
+                Map<String, Object> sanitizedOutput = platformGuardrailService.sanitizeRunOutput(
+                        userId, agent.agentKey(), output.output());
+                ExecutionRecord completed = new ExecutionRecord(
+                        executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.COMPLETED,
+                        running.inputJson(), toJson(sanitizedOutput), output.model(), output.usage(),
+                        "", startedAt, Instant.now());
+                executionRecordPort.save(completed);
+                log.info("[platform] execution completed executionId={} userId={} agentKey={} model={} tokens={}",
+                        executionId, userId, agent.agentKey(), output.model(), output.usage().totalTokens());
+                audit(executionId, userId, agent.agentKey(), AuditResult.SUCCESS, null);
+                recordRunSuccess(span, agent, output, runStartedAt);
+                return completed;
+
+            } catch (RuntimeException ex) {
+                ExecutionRecord failed = new ExecutionRecord(
+                        executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.FAILED,
+                        running.inputJson(), "", "", TokenUsage.unknown(), ex.getMessage(),
+                        startedAt, Instant.now());
+                executionRecordPort.save(failed);
+                log.warn("[platform] execution failed executionId={} userId={} agentKey={} error={}",
+                        executionId, userId, agent.agentKey(), ex.getMessage());
+                audit(executionId, userId, agent.agentKey(), AuditResult.FAILURE, ex.getMessage());
+                recordRunFailure(span, agent, ex, runStartedAt);
+                throw ex;
+            } finally {
+                PlatformSecurityContext.clear();
+            }
         }
     }
+
+    /**
+     * 成功终态的观测记录：span 属性（模型、token 数）+ 计数与耗时指标（状态标签 COMPLETED）。
+     */
+    private void recordRunSuccess(
+            SpanScope span,
+            PlatformAgentDefinition agent,
+            PlatformRunOutput output,
+            long runStartedAt
+    ) {
+        span.attribute(ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.COMPLETED.name());
+        span.attribute(ObservabilityAttributes.DURATION_MS, String.valueOf(elapsedMs(runStartedAt)));
+        if (output.model() != null && !output.model().isBlank()) {
+            span.attribute(ObservabilityAttributes.GEN_AI_REQUEST_MODEL, output.model());
+        }
+        if (output.usage() != null) {
+            span.attribute(ObservabilityAttributes.GEN_AI_USAGE_TOTAL_TOKENS,
+                    String.valueOf(output.usage().totalTokens()));
+        }
+        long durationMs = elapsedMs(runStartedAt);
+        observability.recordCounter(METRIC_RUN_COUNT, 1.0,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.COMPLETED.name());
+        observability.recordDuration(METRIC_RUN_DURATION, durationMs,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.COMPLETED.name());
+    }
+
+    /**
+     * 失败终态的观测记录：span 标错误 + 计数与耗时指标（状态标签 FAILED）。
+     */
+    private void recordRunFailure(SpanScope span, PlatformAgentDefinition agent, RuntimeException ex, long runStartedAt) {
+        span.recordError(ex);
+        span.attribute(ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
+        span.attribute(ObservabilityAttributes.DURATION_MS, String.valueOf(elapsedMs(runStartedAt)));
+        observability.recordCounter(METRIC_RUN_COUNT, 1.0,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
+        observability.recordDuration(METRIC_RUN_DURATION, elapsedMs(runStartedAt),
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
+    }
+
+    private long elapsedMs(long startedAt) {
+        return (System.nanoTime() - startedAt) / 1_000_000L;
+    }
+
     /**
      * 列出当前用户可见的执行记录。admin 可见全部，其余仅本人。
      *

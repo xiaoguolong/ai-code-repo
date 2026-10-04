@@ -62,7 +62,8 @@ class PlatformExecutionUseCaseTest {
         PlatformGuardrailService guardrailService = new PlatformGuardrailService(guardrail);
         useCase = new PlatformExecutionUseCase(
                 agentRegistry, executionRecords, platformAgentRunner, checker, guardrailService,
-                new ObjectMapper(), new InMemoryAuditLogAdapter());
+                new ObjectMapper(), new InMemoryAuditLogAdapter(),
+                new com.aicode.framework.observability.domain.NoopObservabilityAdapter());
 
         roles.save(new PlatformRole("operator", "Operator", false,
                 Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));

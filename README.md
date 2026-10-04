@@ -562,19 +562,27 @@ Tool
 
 学习：
 
-- [ ] Trace
-- [ ] Span
-- [ ] Metric
-- [ ] Context
+- [x] Trace
+- [x] Span
+- [x] Metric
+- [x] Context
 
 
 实践：
 
 接入：
 
-- [ ] Spring Boot
-- [ ] Agent调用链
-- [ ] LLM调用链
+- [x] Spring Boot
+- [x] Agent调用链
+- [x] LLM调用链
+
+交付：Spec `docs/specs/week-17.md` ｜ 架构 `docs/architecture/week-17-architecture.md` ｜
+接口 `docs/api/week-17-api.md` ｜ 实现日志 `notes/impl-logs/week-17.md` ｜
+阅读提纲 `notes/week-17-opentelemetry.md` ｜ Postman `docs/postman/week-17.postman_collection.json`
+
+实测：真实 OTLP collector 收到 span 树 `http post → agent.run → llm.chat / tool.call`，
+日志 / 审计 / 响应体 / 链路后端四处 traceId 单源一致；`/actuator/prometheus` 暴露
+`agent_run_count_total`、`llm_call_count_total`、`tool_call_count_total`、`llm_tokens_total`。
 
 
 ---
@@ -739,6 +747,7 @@ Tool
 - [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单）
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
+- [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源）
 - [ ] 规范落地度：响应信封与规范 5.6 草案仍有偏离（见 docs/specs/week-16.md 收尾审计）
 
 
@@ -747,7 +756,7 @@ Tool
 - [ ] Docker
 - [ ] Kubernetes
 - [ ] SkyWalking
-- [ ] OpenTelemetry
+- [x] OpenTelemetry（Week 17：Trace/Span/Metric/Context + OTLP 导出 + Prometheus 指标出口）
 - [ ] Langfuse
 - [ ] Prometheus
 - [ ] Grafana

@@ -269,6 +269,10 @@ H. GET  /audit-logs              → LOGIN / LOGIN_FAILED / AGENT_RUN 三类留�
 - **主键生成**：`execution_record.id` 用 `COALESCE(MAX(id),0)+1` 生成（为兼容 H2 与 PostgreSQL 未用 identity），写入量小无并发瓶颈；若后续并发写执行记录增多，应改为 identity/序列。
 - **真库数据现状**：本环境 smoke 库中已存在本周创建的 7 张平台表与 4 条演示数据（3 seed 用户 + 1 条 FAILED 执行记录 + 4 条审计）。如需干净环境，按 `docs/api/week-16-api.md` 第 7 节重建即可（只清本模块对象，不影响同库其它应用）。
 - **下周（Week 17 OpenTelemetry）输入**：`TraceIdFilter` 已建立 traceId 与 MDC 约定（且审计已真正落该 traceId），OTel 接入时应以该 traceId 作为跨系统关联键，避免双份链路 ID。
+  → **第 17 周已落地并修正一处认知**：OTel traceId 由该 traceId 确定性派生（MD5 → 32 hex，
+  合法 W3C hex 则原样复用），并通过**向请求注入标准 `traceparent`** 让框架自动观测采纳同一条 trace-id；
+  因此服务端日志 / 审计 / 响应体 `traceId` / 链路后端四处一致，而响应头 `X-Trace-Id` 仍原样回显客户端值。
+  详见 `notes/impl-logs/week-17.md` 第 10.2 与第 11 节。
 
 ## 12. 决策记录 ADR
 

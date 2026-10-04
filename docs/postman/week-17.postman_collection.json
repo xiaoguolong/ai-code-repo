@@ -1,0 +1,353 @@
+{
+  "info": {
+    "name": "Week 17 — OpenTelemetry 可观测",
+    "description": "第 17 周验收集合：链路上下文自检、W3C traceparent 传递、Prometheus 指标出口、跑完 Agent 后的指标回查。\n\n使用前：\n1. 启动 8084（模块目录下 java -jar target/spring-ai-alibaba-agent-0.1.0-SNAPSHOT.jar，工作目录=模块目录以便读取 .env）；\n2. 按顺序跑：先「1. 登录」拿到 satoken（自动写入集合变量 {{token}}），其余请求自动带上；\n3. 重点观察：响应头 X-Trace-Id（原样回显）/ traceparent（派生链路 ID）与响应体 data.traceId / data.otelTraceId 的对应关系。\n\n执行顺序（Collection Runner 按此顺序即可）：\n- 1 登录 → 2/3/4 链路自检 → 5 健康检查 → 6 指标端点与格式\n- 7 触发真实 Agent Run（会产生 agent.run / llm.call / tool.call / token 指标）\n- 8 执行记录（真实 token 用量）\n- 9 指标回查：验证 7 产生的自定义指标已出现在 /actuator/prometheus\n  （必须放在 7 之后！请求 6 时还没跑过 Agent，自定义指标计数为 0 属正常）\n\n变量说明：\n- protocol / host / port：默认 http / localhost / 8084，换环境只改这三项；\n- token：由「1. 登录」自动写入，无需手填；\n- traceId：自研串联键，可任意改，用来验证「同一个 traceId 得到同一个链路 traceId」。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "protocol", "value": "http" },
+    { "key": "host", "value": "localhost" },
+    { "key": "port", "value": "8084" },
+    { "key": "token", "value": "" },
+    { "key": "traceId", "value": "week17-demo-trace" }
+  ],
+  "item": [
+    {
+      "name": "1. 登录（admin）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('响应信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('拿到 token', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('token', body.data.token);",
+              "pm.test('成功响应带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);",
+              "console.log('X-Trace-Id  =', pm.response.headers.get('X-Trace-Id'));",
+              "console.log('traceparent =', pm.response.headers.get('traceparent'));",
+              "console.log('body.traceId=', body.traceId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/auth/login",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "2. 链路上下文自检（带 X-Trace-Id）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const sentTraceId = pm.collectionVariables.get('traceId');",
+              "pm.test('响应头 X-Trace-Id 原样回显传入值', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.eql(sentTraceId));",
+              "pm.test('body.traceId == data.traceId', () => pm.expect(body.data.traceId).to.eql(body.traceId));",
+              "pm.test('otelTraceId 为 32 位小写 hex', () => pm.expect(body.data.otelTraceId).to.match(/^[0-9a-f]{32}$/));",
+              "pm.test('spanId 为 16 位小写 hex', () => pm.expect(body.data.spanId).to.match(/^[0-9a-f]{16}$/));",
+              "pm.test('traceparent 与 otelTraceId / spanId 一致', () => {",
+              "  const parts = body.data.traceparent.split('-');",
+              "  pm.expect(parts[0]).to.eql('00');",
+              "  pm.expect(parts[1]).to.eql(body.data.otelTraceId);",
+              "  pm.expect(parts[2]).to.eql(body.data.spanId);",
+              "});",
+              "pm.test('observabilityEnabled=true', () => pm.expect(body.data.observabilityEnabled).to.be.true);",
+              "console.log('链路 traceId =', body.data.otelTraceId, '（= MD5(', sentTraceId, ')）');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "satoken", "value": "{{token}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/trace-context",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "trace-context"]
+        }
+      }
+    },
+    {
+      "name": "3. 链路上下文自检（带 W3C traceparent，采纳上游）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const upstreamTraceId = '4bf92f3577b34da6a3ce929d0e0e4736';",
+              "const body = pm.response.json();",
+              "pm.test('采纳上游 trace-id（不另生成）', () => pm.expect(body.data.otelTraceId).to.eql(upstreamTraceId));",
+              "pm.test('响应 traceparent 沿用上游 trace-id', () => pm.expect(pm.response.headers.get('traceparent')).to.startWith('00-' + upstreamTraceId + '-'));",
+              "pm.test('X-Trace-Id 变为上游 trace-id', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.eql(upstreamTraceId));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "satoken", "value": "{{token}}" },
+          { "key": "traceparent", "value": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01" }
+        ],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/trace-context",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "trace-context"]
+        }
+      }
+    },
+    {
+      "name": "4. 未登录访问可观测接口（401 + traceId）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "const body = pm.response.json();",
+              "pm.test('code=UNAUTHORIZED', () => pm.expect(body.code).to.eql('UNAUTHORIZED'));",
+              "pm.test('失败时 data 为 null', () => pm.expect(body.data).to.be.null);",
+              "pm.test('失败响应仍带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/trace-context",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "trace-context"]
+        }
+      }
+    },
+    {
+      "name": "5. Actuator 健康检查",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('status=UP', () => pm.expect(pm.response.json().status).to.eql('UP'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/actuator/health",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["actuator", "health"]
+        }
+      }
+    },
+    {
+      "name": "6. Prometheus 指标出口（端点与格式）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const text = pm.response.text();",
+              "pm.test('Prometheus 文本格式（含 # TYPE）', () => pm.expect(text).to.include('# TYPE'));",
+              "pm.test('含 JVM 指标', () => pm.expect(text).to.include('jvm_memory_used_bytes'));",
+              "pm.test('含 HTTP 服务端指标', () => pm.expect(text).to.include('http_server_requests'));",
+              "// 说明：本请求只验证「端点在、格式对」。自定义业务指标（agent.run / llm.call / tool.call / token）",
+              "// 需要先跑过 Agent，因此其存在性断言放在最后的「9. 指标回查」里。",
+              "const custom = text.match(/^(agent_run_count_total|llm_call_count_total|tool_call_count_total|llm_tokens_total)/gm) || [];",
+              "console.log('此刻自定义指标行数:', custom.length, '（请求 7 跑完 Agent 后会增长，属正常）');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/actuator/prometheus",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["actuator", "prometheus"]
+        }
+      }
+    },
+    {
+      "name": "7. 平台 Agent Run（观测完整 span 链）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// 未配置真实 LLM Key 时会返回 502 CHAT_MODEL_ERROR，属预期；",
+              "// 关键断言：无论成功失败，响应都带 traceId，且响应头 traceparent 合法。",
+              "const body = pm.response.json();",
+              "pm.test('带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);",
+              "pm.test('带 traceparent 响应头且格式合法', () => pm.expect(pm.response.headers.get('traceparent')).to.match(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/));",
+              "if (body.code === 'SUCCESS') {",
+              "  pm.test('执行记录终态为 COMPLETED', () => pm.expect(body.data.status).to.eql('COMPLETED'));",
+              "  pm.test('返回模型名', () => pm.expect(body.data.model).to.be.a('string').and.not.empty);",
+              "} else {",
+              "  pm.test('非成功时给出明确错误码（如 CHAT_MODEL_ERROR）', () => pm.expect(body.code).to.be.a('string').and.not.empty);",
+              "}",
+              "console.log('agent run code =', body.code, ' status =', body.data && body.data.status);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "satoken", "value": "{{token}}" },
+          { "key": "X-Trace-Id", "value": "week17-agent-run" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": {\n    \"patientId\": \"P001\",\n    \"task\": \"follow up advice\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/agents/medical-assistant/runs",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "agents", "medical-assistant", "runs"]
+        }
+      }
+    },
+    {
+      "name": "8. 执行记录（含 token 用量）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('响应信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('data 是数组', () => pm.expect(body.data).to.be.an('array'));",
+              "if (body.data.length > 0) {",
+              "  const first = body.data[0];",
+              "  pm.test('执行记录含 usage 字段', () => pm.expect(first.usage).to.be.an('object'));",
+              "  console.log('最新执行记录:', first.status, first.model, JSON.stringify(first.usage));",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/executions",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "executions"]
+        }
+      }
+    },
+    {
+      "name": "9. 指标回查（跑完 Agent 后验证自定义指标）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// 必须放在「7. Agent Run」之后：自定义指标由 Agent 执行时才产生。",
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const text = pm.response.text();",
+              "const lines = (re) => text.match(re) || [];",
+              "",
+              "pm.test('agent_run_count_total 已产生', () => pm.expect(lines(/^agent_run_count_total\\{/m).length).to.be.above(0));",
+              "pm.test('llm_call_count_total 已产生', () => pm.expect(lines(/^llm_call_count_total\\{/m).length).to.be.above(0));",
+              "pm.test('tool_call_count_total 已产生', () => pm.expect(lines(/^tool_call_count_total\\{/m).length).to.be.above(0));",
+              "pm.test('llm_tokens_total 已产生（按 token_type 分 prompt / completion）', () => {",
+              "  const rows = lines(/^llm_tokens_total\\{[^}]*\\}/gm);",
+              "  pm.expect(rows.length).to.be.above(0);",
+              "  pm.expect(rows.some(r => r.includes('token_type=\"prompt\"'))).to.be.true;",
+              "  pm.expect(rows.some(r => r.includes('token_type=\"completion\"'))).to.be.true;",
+              "});",
+              "",
+              "pm.test('agent.run 计数包含成功终态且值为正', () => {",
+              "  const rows = lines(/^agent_run_count_total\\{.*execution_status=\"(COMPLETED|FAILED)\".*\\} [0-9.]+/gm);",
+              "  pm.expect(rows.length).to.be.above(0);",
+              "  pm.expect(rows.some(r => parseFloat(r.split(' ').pop()) > 0)).to.be.true;",
+              "});",
+              "",
+              "pm.test('token 计数为正（真实 usage，非估算）', () => {",
+              "  const rows = lines(/^llm_tokens_total\\{.*\\} [0-9.]+/gm);",
+              "  pm.expect(rows.length).to.be.above(0);",
+              "  pm.expect(rows.some(r => parseFloat(r.split(' ').pop()) > 0)).to.be.true;",
+              "});",
+              "",
+              "pm.test('llm.chat 耗时已记录（含 _count / _sum / _max）', () => {",
+              "  pm.expect(text).to.include('llm_call_duration_seconds_count');",
+              "  pm.expect(text).to.include('llm_call_duration_seconds_sum');",
+              "  pm.expect(text).to.include('llm_call_duration_seconds_max');",
+              "});",
+              "",
+              "console.log('--- 自定义指标实测片段 ---');",
+              "lines(/^(agent_run_count_total|llm_call_count_total|tool_call_count_total|llm_tokens_total|llm_call_duration_seconds_(count|sum|max))\\{.*/gm)",
+              "  .forEach(l => console.log('  ' + l));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/actuator/prometheus",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["actuator", "prometheus"]
+        }
+      }
+    }
+  ]
+}

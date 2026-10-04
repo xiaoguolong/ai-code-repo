@@ -67,6 +67,38 @@ platform:
   persistence:
     mode: ${PLATFORM_PERSISTENCE_MODE:jdbc}
 
+# Week 17：可观测（OpenTelemetry）。Micrometer Tracing 门面 + OTel bridge，OTLP/HTTP 导出。
+# 优雅降级：collector 未启动时导出失败只打 WARN，业务请求不受影响（与审计同口径：可观测设施不是单点）。
+observability:
+  # Span / 指标埋点总开关。false 时装配空实现，零 span、零指标、零开销。
+  enabled: ${OBSERVABILITY_ENABLED:true}
+
+management:
+  tracing:
+    enabled: true
+    # 采样率：演示/验收取 1.0 保证 span 全落；生产环境按容量用环境变量降到 0.1 量级。
+    sampling:
+      probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+    propagation:
+      type: W3C
+  otlp:
+    tracing:
+      # OTLP/HTTP 端点。Jaeger all-in-one、OTel Collector、Tempo 均可；
+      # 标准环境变量 OTEL_EXPORTER_OTLP_ENDPOINT 只写根地址（如 http://<collector-host>:4318）。
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      # 单测置 false，避免测试期打网络（不改为空串：OTLP 端点不支持 disable 语义）
+      export:
+        enabled: ${OTEL_EXPORT_ENABLED:true}
+  endpoints:
+    web:
+      exposure:
+        # 指标出口：/actuator/prometheus（Prometheus 文本格式）；health/info 供探活与发布信息
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      # 不对外暴露组件细节（数据库地址、磁盘路径等）
+      show-details: never
+
 # Guardrail 内容安全（Week 14）。与 RBAC 正交。
 guardrail:
   enabled: true
