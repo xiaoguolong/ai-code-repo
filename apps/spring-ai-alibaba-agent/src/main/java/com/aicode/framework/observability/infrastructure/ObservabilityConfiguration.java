@@ -33,8 +33,15 @@ public class ObservabilityConfiguration {
      */
     @Bean
     @ConditionalOnProperty(prefix = "observability", name = "enabled", havingValue = "true", matchIfMissing = true)
-    AgentObservabilityPort micrometerObservabilityPort(Tracer tracer, MeterRegistry meterRegistry) {
-        return new MicrometerObservabilityAdapter(tracer, meterRegistry);
+    AgentObservabilityPort micrometerObservabilityPort(
+            Tracer tracer,
+            MeterRegistry meterRegistry,
+            LangfuseContext langfuseContext,
+            LangfuseProperties langfuseProperties
+    ) {
+        // Langfuse 开启时额外写入 langfuse.* 观测类型与 trace 维度；关闭时行为与 Week 17 完全一致
+        return new MicrometerObservabilityAdapter(
+                tracer, meterRegistry, langfuseContext, langfuseProperties.resolvedEnabled());
     }
 
     /**

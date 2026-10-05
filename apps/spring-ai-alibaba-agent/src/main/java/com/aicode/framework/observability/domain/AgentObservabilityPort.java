@@ -31,6 +31,21 @@ public interface AgentObservabilityPort {
     SpanScope openSpan(SpanKind kind, String name, Map<String, String> attributes);
 
     /**
+     * 进入一个 Langfuse trace 维度作用域（Week 18）。
+     *
+     * <p>维度（用户 / 会话 / trace 名 / 标签）在请求处理过程中才可知，而 Langfuse 官方要求它们
+     * 出现在 trace 内<b>每个</b> span 上；实现把维度登记到请求期持有者，由 {@code SpanProcessor}
+     * 在 span 开始时写到 span 属性。调用方必须用 try-with-resources 保证退出作用域，
+     * 否则 Tomcat 线程复用会把上一个请求的维度带到下一个请求。</p>
+     *
+     * <p>观测关闭或传入 null 时返回空操作句柄，调用方无需判空。</p>
+     *
+     * @param dimensions trace 维度，可为 null
+     * @return 作用域句柄，永不为 null
+     */
+    TraceScope beginTrace(TraceDimensions dimensions);
+
+    /**
      * 记录一次大模型调用的真实 token 用量（提示 / 补全两类计数）。
      *
      * <p>上游未返回 usage 时 {@code usage} 全为 0，此时<b>不记录</b>，避免把未知值混入成本统计。</p>

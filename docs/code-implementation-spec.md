@@ -787,7 +787,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 15 | Agent Evaluation | docs/specs/week-15.md | notes/impl-logs/week-15.md | 已关闭 |
 | 16 | 企业规范（API/日志/审计/异常 + RBAC 落库） | docs/specs/week-16.md | notes/impl-logs/week-16.md | 已关闭 |
 | 17 | OpenTelemetry（Trace/Span/Metric/Context + 指标出口） | docs/specs/week-17.md | notes/impl-logs/week-17.md | 已关闭 |
-| 18 | Langfuse | | | 未开始 |
+| 18 | Langfuse（LLM Trace / Prompt 管理 / Token 与成本） | docs/specs/week-18.md | notes/impl-logs/week-18.md | 已关闭（v4.50.0 真机端到端验收通过） |
 | 19 | SkyWalking | | | 未开始 |
 | 20 | 完整监控体系 | | | 未开始 |
 | 21–24 | 医疗 SaaS 四 Agent | | | 未开始 |
@@ -826,6 +826,13 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 覆盖率目标：新增业务代码行覆盖 ≥ 80%（端口适配器的纯 SDK 调用允许用契约测试代替）。
 
 > 说明：**H2 单测全绿不等于迁移可用**。第 16 周真库验证一次性暴露了 `CLOB` 类型、`baseline-version` 跳过 V1、共用库非空 schema 三个只在 PostgreSQL 上才出现的问题，故「数据库脚本」必须是独立门禁项，不能由单测代替。
+
+> 说明：**「测试全绿」本身也需要被验证**。第 18 周发现 `ObservabilityDisabledTest` 用 `static class` 做嵌套测试类，
+> 而 surefire 默认只匹配 `*Test.java` 且**默认 excludes 含内部类**（`Outer$Inner` 被静默跳过），
+> 于是该测试类自第 17 周起**一次都没执行**，日志里却按「已覆盖」统计。
+> 约定：嵌套测试类要么用 JUnit5 `@Nested`（由外层类带入发现），要么模块 `pom.xml` 显式配置
+> `includes`（如 `%regex[.*Test(\$.*)?]`）**并覆盖 `excludes`**；新增测试类后抽查 `target/surefire-reports/`
+> 里确实出现对应报告文件，否则视为「未执行」而非「已通过」。
 
 ---
 

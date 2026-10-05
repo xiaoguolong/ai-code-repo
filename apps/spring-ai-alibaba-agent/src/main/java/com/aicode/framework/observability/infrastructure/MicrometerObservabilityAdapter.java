@@ -3,10 +3,13 @@ package com.aicode.framework.observability.infrastructure;
 import com.aicode.core.domain.model.TokenUsage;
 import com.aicode.framework.infrastructure.logging.TraceIds;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.LangfuseAttributes;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
 import com.aicode.framework.observability.domain.TraceContextView;
+import com.aicode.framework.observability.domain.TraceDimensions;
+import com.aicode.framework.observability.domain.TraceScope;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.tracing.Span;
@@ -37,10 +40,31 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
 
     private final Tracer tracer;
     private final MeterRegistry meterRegistry;
+    private final LangfuseContext langfuseContext;
+    private final boolean langfuseEnabled;
 
+    /**
+     * 仅观测（不含 Langfuse 维度与类型富化）：等价于「Langfuse 关闭」的装配，供既有调用方与测试使用。
+     *
+     * @param tracer        链路门面
+     * @param meterRegistry 指标注册表
+     */
     public MicrometerObservabilityAdapter(Tracer tracer, MeterRegistry meterRegistry) {
+        this(tracer, meterRegistry, new LangfuseContext(), false);
+    }
+
+    /**
+     * @param tracer          链路门面
+     * @param meterRegistry   指标注册表
+     * @param langfuseContext 请求期维度持有者
+     * @param langfuseEnabled 是否写入 Langfuse 专有属性（{@code langfuse.enabled}）
+     */
+    public MicrometerObservabilityAdapter(
+            Tracer tracer, MeterRegistry meterRegistry, LangfuseContext langfuseContext, boolean langfuseEnabled) {
         this.tracer = tracer;
         this.meterRegistry = meterRegistry;
+        this.langfuseContext = langfuseContext == null ? new LangfuseContext() : langfuseContext;
+        this.langfuseEnabled = langfuseEnabled;
     }
 
     @Override
@@ -53,6 +77,10 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
                 }
             }
             applyAttribute(builder, ObservabilityAttributes.SPAN_KIND, kind == null ? "" : kind.name());
+            // Langfuse 观测类型：Agent 执行只有这里知道，显式写死避免 Langfuse 用 model 兜底推断错类型
+            if (langfuseEnabled && kind == SpanKind.AGENT_RUN) {
+                applyAttribute(builder, LangfuseAttributes.OBSERVATION_TYPE, LangfuseAttributes.TYPE_AGENT);
+            }
             // 必须先 start()：span context（traceId / spanId）通常在启动时才确定
             Span span = builder.start();
             // 入栈当前 span：后续子 span 才能通过 currentSpan() 识别父 span，形成正确的 span 树
@@ -61,6 +89,19 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
         } catch (RuntimeException ex) {
             return NoopScope.INSTANCE;
         }
+    }
+
+    /**
+     * 进入 Langfuse trace 维度作用域。
+     *
+     * <p>观测或 Langfuse 关闭时返回空句柄：此时没有维度消费方，登记也没人会读。</p>
+     */
+    @Override
+    public TraceScope beginTrace(TraceDimensions dimensions) {
+        if (!langfuseEnabled || dimensions == null) {
+            return NoopTraceScope.INSTANCE;
+        }
+        return langfuseContext.begin(dimensions);
     }
 
     @Override
@@ -332,7 +373,6 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
 
     /** 建立 span 失败时的兜底句柄：保证调用方 try-with-resources 不 NPE。 */
     private static final class NoopScope implements SpanScope {
-
         private static final NoopScope INSTANCE = new NoopScope();
 
         @Override
@@ -359,6 +399,17 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
         public boolean sampled() {
             return false;
         }
+
+        @Override
+        public void close() {
+            // 无资源可释放
+        }
+    }
+
+    /** Langfuse 关闭时的空 trace 维度句柄。 */
+    private static final class NoopTraceScope implements TraceScope {
+
+        private static final NoopTraceScope INSTANCE = new NoopTraceScope();
 
         @Override
         public void close() {

@@ -32,10 +32,28 @@ public class ObservableChatModelAdapter implements ChatModelPort {
 
     private final ChatModelPort delegate;
     private final AgentObservabilityPort observability;
+    private final LangfuseGenerationSupport langfuse;
 
+    /**
+     * 仅 Week 17 埋点（Langfuse 关闭）：保持既有装配与测试不变。
+     *
+     * @param delegate      被装饰的模型端口
+     * @param observability 观测端口
+     */
     public ObservableChatModelAdapter(ChatModelPort delegate, AgentObservabilityPort observability) {
+        this(delegate, observability, LangfuseGenerationSupport.disabled());
+    }
+
+    /**
+     * @param delegate      被装饰的模型端口
+     * @param observability 观测端口
+     * @param langfuse      Langfuse 生成观测支持（关闭时空转）
+     */
+    public ObservableChatModelAdapter(
+            ChatModelPort delegate, AgentObservabilityPort observability, LangfuseGenerationSupport langfuse) {
         this.delegate = delegate;
         this.observability = observability;
+        this.langfuse = langfuse == null ? LangfuseGenerationSupport.disabled() : langfuse;
     }
 
     /**
@@ -58,6 +76,7 @@ public class ObservableChatModelAdapter implements ChatModelPort {
             try {
                 ChatResult result = delegate.chat(messages, options, tools);
                 recordSuccess(scope, result, model);
+                recordLangfuse(scope, messages, options, result);
                 recordCall(resolvedModel(result, model), ObservabilityAttributes.OUTCOME_SUCCESS, startedAt);
                 return result;
             } catch (RuntimeException ex) {
@@ -66,6 +85,22 @@ public class ObservableChatModelAdapter implements ChatModelPort {
                 throw ex;
             }
         }
+    }
+
+    /**
+     * Langfuse generation 观测（Week 18）：观测类型、模型、真实 token、成本、Prompt 版本与可选正文。
+     *
+     * <p>成本同时进 Prometheus（{@code llm.cost.usd}），这样成本异常不必打开 Langfuse 才能发现。</p>
+     */
+    private void recordLangfuse(SpanScope scope, List<ChatMessage> messages, ChatOptions options, ChatResult result) {
+        if (!langfuse.enabled()) {
+            return;
+        }
+        langfuse.applyGeneration(scope, messages, options, result).ifPresent(cost -> {
+            String model = resolvedModel(result, options == null ? null : options.model());
+            observability.recordCounter(LangfuseGenerationSupport.costMetricName(), cost.total(),
+                    ObservabilityAttributes.GEN_AI_REQUEST_MODEL, MicrometerObservabilityAdapter.modelName(model));
+        });
     }
 
     /** 登记一次模型调用的次数与耗时指标（成功 / 失败共用，避免两处标签写法漂移）。 */

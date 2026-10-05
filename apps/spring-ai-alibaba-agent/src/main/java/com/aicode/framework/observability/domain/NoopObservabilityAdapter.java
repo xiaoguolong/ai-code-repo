@@ -18,6 +18,11 @@ public class NoopObservabilityAdapter implements AgentObservabilityPort {
     }
 
     @Override
+    public TraceScope beginTrace(TraceDimensions dimensions) {
+        return NoopTraceScope.INSTANCE;
+    }
+
+    @Override
     public void recordTokenUsage(String model, TokenUsage usage) {
         // 观测关闭：不记录
     }
@@ -45,6 +50,17 @@ public class NoopObservabilityAdapter implements AgentObservabilityPort {
     @Override
     public String activeSpanId() {
         return "";
+    }
+
+    /** 空 trace 维度句柄：观测关闭时没有维度可言，close 无副作用。 */
+    private static final class NoopTraceScope implements TraceScope {
+
+        private static final NoopTraceScope INSTANCE = new NoopTraceScope();
+
+        @Override
+        public void close() {
+            // 无资源可释放
+        }
     }
 
     /** 空 span 句柄：无状态、可复用、所有操作幂等。 */

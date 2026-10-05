@@ -8,6 +8,7 @@ import com.aicode.core.domain.port.PromptTemplatePort;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.core.infrastructure.security.GuardrailToolPort;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.infrastructure.LangfuseGenerationSupport;
 import com.aicode.framework.observability.infrastructure.ObservableChatModelAdapter;
 import com.aicode.framework.observability.infrastructure.ObservableToolPort;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
@@ -95,9 +96,11 @@ public class AppConfiguration {
     @Primary
     ChatModelPort observableChatModelPort(
             @Qualifier("springAiChatModelAdapter") ChatModelPort springAiChatModelAdapter,
-            AgentObservabilityPort agentObservabilityPort
+            AgentObservabilityPort agentObservabilityPort,
+            LangfuseGenerationSupport langfuseGenerationSupport
     ) {
-        return new ObservableChatModelAdapter(springAiChatModelAdapter, agentObservabilityPort);
+        return new ObservableChatModelAdapter(springAiChatModelAdapter, agentObservabilityPort,
+                langfuseGenerationSupport);
     }
 
     /**
@@ -111,9 +114,10 @@ public class AppConfiguration {
     @Primary
     ToolPort observableToolPort(
             @Qualifier("frameworkToolPort") ToolPort frameworkToolPort,
-            AgentObservabilityPort agentObservabilityPort
+            AgentObservabilityPort agentObservabilityPort,
+            LangfuseGenerationSupport langfuseGenerationSupport
     ) {
-        return new ObservableToolPort(frameworkToolPort, agentObservabilityPort);
+        return new ObservableToolPort(frameworkToolPort, agentObservabilityPort, langfuseGenerationSupport);
     }
 
     /**

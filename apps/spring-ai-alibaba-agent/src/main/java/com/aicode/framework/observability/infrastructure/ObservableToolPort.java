@@ -32,10 +32,28 @@ public class ObservableToolPort implements ToolPort {
 
     private final ToolPort delegate;
     private final AgentObservabilityPort observability;
+    private final LangfuseGenerationSupport langfuse;
 
+    /**
+     * 仅 Week 17 埋点（Langfuse 关闭）：保持既有装配与测试不变。
+     *
+     * @param delegate      被装饰的工具端口
+     * @param observability 观测端口
+     */
     public ObservableToolPort(ToolPort delegate, AgentObservabilityPort observability) {
+        this(delegate, observability, LangfuseGenerationSupport.disabled());
+    }
+
+    /**
+     * @param delegate      被装饰的工具端口
+     * @param observability 观测端口
+     * @param langfuse      Langfuse 观测支持（关闭时空转）
+     */
+    public ObservableToolPort(
+            ToolPort delegate, AgentObservabilityPort observability, LangfuseGenerationSupport langfuse) {
         this.delegate = delegate;
         this.observability = observability;
+        this.langfuse = langfuse == null ? LangfuseGenerationSupport.disabled() : langfuse;
     }
 
     @Override
@@ -66,6 +84,7 @@ public class ObservableToolPort implements ToolPort {
                 ToolResult result = delegate.execute(call);
                 int chars = result == null || result.output() == null ? 0 : result.output().length();
                 scope.attribute(ObservabilityAttributes.TOOL_RESULT_CHARS, String.valueOf(chars));
+                langfuse.applyTool(scope, call, result);
                 observability.recordCounter(COUNTER_CALL, 1.0,
                         ObservabilityAttributes.TOOL_NAME, toolName,
                         ObservabilityAttributes.TOOL_OUTCOME, ObservabilityAttributes.OUTCOME_SUCCESS);

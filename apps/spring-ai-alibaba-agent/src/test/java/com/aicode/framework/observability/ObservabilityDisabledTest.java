@@ -89,9 +89,6 @@ class ObservabilityDisabledTest {
         private AgentObservabilityPort observabilityPort;
 
         @Autowired
-        private InMemoryOtelTracer.Bundle spanStore;
-
-        @Autowired
         private MockMvc mockMvc;
 
         @Test
@@ -100,14 +97,28 @@ class ObservabilityDisabledTest {
             assertThat(observabilityPort.isEnabled()).isTrue();
         }
 
+        /**
+         * 打开观测时，HTTP 响应必须回写 {@code traceparent}。
+         *
+         * <p><b>这里不断言 span</b>：MockMvc 上下文里框架观测建立的 span 不会落到本测试的内存 exporter
+         * （Week 17 实测结论，见 {@code notes/impl-logs/week-17.md} 第 13 节）。入口 server span 由
+         * {@code HttpServerSpanFilterTest}（standalone 过滤链）、{@code ObservabilityProductionTraceLinkTest}
+         * 以及真机 OTLP collector / Langfuse 事件库（Week 18 实现日志 10.2）共同覆盖 —— 断言一个跑不出来的
+         * 事实只会变成永远失败或永远被忽略的测试。</p>
+         *
+         * <p>Week 18 说明：本方法原先断言 {@code finishedSpans()} 里存在 {@code http.server}，
+         * 而该嵌套测试类此前从未被执行（surefire 默认排除内部类），直到本周补上 include/excludes
+         * 才暴露出来（312 → 320）。</p>
+         */
         @Test
-        void httpRequestProducesServerSpanAndTraceparentHeader() throws Exception {
+        void httpRequestProducesTraceparentHeader() throws Exception {
+            // 该端点需登录：未登录时（401）同样必须回写链路头，且 X-Trace-Id 原样回显（Week 16/17 契约）
             mockMvc.perform(get("/api/v1/platform/observability/trace-context")
                             .header("X-Trace-Id", "enabled-probe"))
-                    .andExpect(header().exists("traceparent"));
-
-            assertThat(spanStore.finishedSpans()).anySatisfy(span ->
-                    assertThat(span.getName()).isEqualTo("http.server"));
+                    .andExpect(status().isUnauthorized())
+                    .andExpect(header().exists("traceparent"))
+                    .andExpect(header().string("X-Trace-Id", "enabled-probe"))
+                    .andExpect(jsonPath("$.traceId").isNotEmpty());
         }
 
         @Test

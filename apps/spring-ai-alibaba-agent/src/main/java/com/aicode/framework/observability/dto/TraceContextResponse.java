@@ -3,7 +3,7 @@ package com.aicode.framework.observability.dto;
 import com.aicode.framework.observability.domain.TraceContextView;
 
 /**
- * 链路上下文响应体（Week 17）。
+ * 链路上下文响应体（Week 17，Week 18 增加 Langfuse 深链）。
  *
  * <p>字段全部为链路标识，不含任何业务内容，可安全暴露给已登录用户。</p>
  *
@@ -13,6 +13,7 @@ import com.aicode.framework.observability.domain.TraceContextView;
  * @param traceparent          W3C 头值，可直接用于下游请求
  * @param sampled              当前链路是否被采样
  * @param observabilityEnabled 观测开关是否打开
+ * @param langfuseTraceUrl     Langfuse UI 深链（未开启 / 未配 project ID 时为 null，新增字段）
  */
 public record TraceContextResponse(
         String traceId,
@@ -20,22 +21,35 @@ public record TraceContextResponse(
         String spanId,
         String traceparent,
         boolean sampled,
-        boolean observabilityEnabled
+        boolean observabilityEnabled,
+        String langfuseTraceUrl
 ) {
 
     /**
      * 由领域视图转换（Controller 只做协议转换，不承载判断逻辑）。
      *
      * @param view 领域视图，非 null
-     * @return 响应体
+     * @return 响应体（无 Langfuse 深链）
      */
     public static TraceContextResponse from(TraceContextView view) {
+        return from(view, null);
+    }
+
+    /**
+     * 由领域视图与 Langfuse 深链转换。
+     *
+     * @param view             领域视图，非 null
+     * @param langfuseTraceUrl Langfuse UI 深链，可为 null
+     * @return 响应体
+     */
+    public static TraceContextResponse from(TraceContextView view, String langfuseTraceUrl) {
         return new TraceContextResponse(
                 view.traceId(),
                 view.otelTraceId(),
                 view.spanId(),
                 view.traceparent(),
                 view.sampled(),
-                view.observabilityEnabled());
+                view.observabilityEnabled(),
+                langfuseTraceUrl);
     }
 }

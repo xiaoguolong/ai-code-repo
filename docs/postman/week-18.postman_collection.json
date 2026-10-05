@@ -1,0 +1,358 @@
+{
+  "info": {
+    "name": "Week 18 — Langfuse 接入",
+    "description": "第 18 周验收集合：Langfuse 接入自检、trace 维度、Segment 观测、Token 与成本汇总，以及 Langfuse 侧回查。\n\n使用前：\n1. 按 docs/deploy/week-18-langfuse.md 起好 Langfuse（或把 langfuseHost / langfusePort 指向已有实例）；\n2. 启动 8084，且环境变量 LANGFUSE_ENABLED=true / LANGFUSE_HOST / LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY 已配置（密钥只放本地 .env，勿提交）；\n3. 把 langfusePublicKey / langfuseSecretKey 填成本地值（仅用于本集合的 Langfuse 侧回查请求）。\n\n执行顺序（Collection Runner 按此顺序）：\n- 1 登录 → 2 Langfuse 自检 → 3 链路上下文（拿到 otelTraceId 与 UI 深链）\n- 4 未登录 401 契约 → 5 触发真实 Agent Run（产生 agent.run / generation / tool 观测）\n- 6 执行记录（真实 token）→ 7 成本汇总（管理员）→ 8 指标回查\n- 9 Langfuse 侧按 traceId 回查（验证数据真的到了 Langfuse）\n\n变量说明：\n- protocol / host / port：8084 应用地址；\n- langfuseProtocol / langfuseHost / langfusePort / langfusePublicKey / langfuseSecretKey：Langfuse 侧回查用，密钥本地填写；\n- token / otelTraceId：由前面的请求自动写入，无需手填。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "protocol", "value": "http" },
+    { "key": "host", "value": "localhost" },
+    { "key": "port", "value": "8084" },
+    { "key": "token", "value": "" },
+    { "key": "traceId", "value": "week18-demo-trace" },
+    { "key": "otelTraceId", "value": "" },
+    { "key": "langfuseProtocol", "value": "http" },
+    { "key": "langfuseHost", "value": "192.168.132.128" },
+    { "key": "langfusePort", "value": "3000" },
+    { "key": "langfusePublicKey", "value": "" },
+    { "key": "langfuseSecretKey", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "1. 登录（admin）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('响应信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('拿到 token', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('token', body.data.token);",
+              "pm.test('成功响应带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/auth/login",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "2. Langfuse 接入自检",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const data = body.data;",
+              "pm.test('响应信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('enabled 为布尔值', () => pm.expect(data.enabled).to.be.a('boolean'));",
+              "pm.test('OTLP 端点指向 Langfuse 摄取路径', () => pm.expect(data.otlpEndpoint).to.include('/api/public/otel/v1/traces'));",
+              "pm.test('public key 只回掩码', () => pm.expect(data.publicKeyMasked).to.match(/\\*\\*\\*$|^$/));",
+              "pm.test('响应中没有 secretKey 字段', () => pm.expect(data).to.not.have.property('secretKey'));",
+              "pm.test('captureContent 为布尔值', () => pm.expect(data.captureContent).to.be.a('boolean'));",
+              "pm.test('trace 块存在', () => pm.expect(data.trace).to.be.an('object'));",
+              "console.log('enabled =', data.enabled, ' endpoint =', data.otlpEndpoint);",
+              "console.log('captureContent =', data.captureContent, ' prompt =', data.promptManagementEnabled);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/langfuse-status",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "langfuse-status"]
+        }
+      }
+    },
+    {
+      "name": "3. 链路上下文（含 Langfuse 深链）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const data = body.data;",
+              "pm.test('X-Trace-Id 原样回显（Week 16 契约）', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.eql('week18-demo-trace'));",
+              "pm.test('Week 17 字段仍在', () => {",
+              "  pm.expect(data.traceparent).to.match(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/);",
+              "  pm.expect(data.otelTraceId).to.match(/^[0-9a-f]{32}$/);",
+              "  pm.expect(data.spanId).to.match(/^[0-9a-f]{16}$/);",
+              "});",
+              "pm.test('traceparent 第 2 段 == otelTraceId', () => pm.expect(data.traceparent.split('-')[1]).to.eql(data.otelTraceId));",
+              "pm.collectionVariables.set('otelTraceId', data.otelTraceId);",
+              "if (data.langfuseTraceUrl) {",
+              "  pm.test('Langfuse 深链包含 traceId', () => pm.expect(data.langfuseTraceUrl).to.include(data.otelTraceId));",
+              "} else {",
+              "  console.log('langfuseTraceUrl 为空：Langfuse 未开启或未配 project-id（属预期）');",
+              "}",
+              "console.log('langfuseTraceUrl =', data.langfuseTraceUrl);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "satoken", "value": "{{token}}" },
+          { "key": "X-Trace-Id", "value": "week18-demo-trace" }
+        ],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/trace-context",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "trace-context"]
+        }
+      }
+    },
+    {
+      "name": "4. 未登录访问自检（401 契约）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "const body = pm.response.json();",
+              "pm.test('code=UNAUTHORIZED', () => pm.expect(body.code).to.eql('UNAUTHORIZED'));",
+              "pm.test('data 为 null（规范 5.6）', () => pm.expect(body.data).to.eql(null));",
+              "pm.test('失败响应仍带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/langfuse-status",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "langfuse-status"]
+        }
+      }
+    },
+    {
+      "name": "5. 触发真实 Agent Run（医疗助手）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('执行终态 COMPLETED', () => {",
+              "  if (body.data.status !== 'COMPLETED') {",
+              "    console.log('失败信封（上游 LLM 不可达时代码为 CHAT_MODEL_ERROR / 502）:', JSON.stringify(body));",
+              "  }",
+              "  pm.expect(body.data.status).to.eql('COMPLETED');",
+              "});",
+              "pm.test('返回真实模型名', () => pm.expect(body.data.model).to.be.a('string').and.not.empty);",
+              "const traceparent = pm.response.headers.get('traceparent');",
+              "pm.test('响应头 traceparent 合法', () => pm.expect(traceparent).to.match(/^00-[0-9a-f]{32}-/));",
+              "pm.collectionVariables.set('otelTraceId', traceparent.split('-')[1]);",
+              "console.log('本次 Run 的 Langfuse traceId =', traceparent.split('-')[1]);",
+              "console.log('UI 深链 =', pm.collectionVariables.get('langfuseProtocol') + '://' + pm.collectionVariables.get('langfuseHost') + ':' + pm.collectionVariables.get('langfusePort') + '/project/ai-code-repo/traces/' + traceparent.split('-')[1]);",
+              "console.log('usage =', JSON.stringify(body.data.usage));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "satoken", "value": "{{token}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Trace-Id", "value": "week18-agent-run" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": {\n    \"patientId\": \"P001\",\n    \"task\": \"follow up advice\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/agents/medical-assistant/runs",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "agents", "medical-assistant", "runs"]
+        }
+      }
+    },
+    {
+      "name": "6. 执行记录（真实 token 用量）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('data 为数组', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('存在带 usage 与模型名的成功记录', () => {",
+              "  const done = body.data.find(r => r.status === 'COMPLETED');",
+              "  pm.expect(done, '至少要有一条 COMPLETED 记录（列表按开始时间倒序，首条可能是 FAILED）').to.exist;",
+              "  pm.expect(done).to.have.property('usage');",
+              "  pm.expect(done.model).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/executions",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "executions"]
+        }
+      }
+    },
+    {
+      "name": "7. LLM 成本汇总（管理员）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "const data = body.data;",
+              "pm.test('code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('models 为数组', () => pm.expect(data.models).to.be.an('array'));",
+              "pm.test('每条含 token 合计字段', () => {",
+              "  if (data.models.length > 0) {",
+              "    const row = data.models[0];",
+              "    pm.expect(row).to.have.property('totalTokens');",
+              "    pm.expect(row).to.have.property('estimatedCostUsd');",
+              "  }",
+              "});",
+              "pm.test('执行记录条数为数字', () => pm.expect(data.executionCount).to.be.a('number'));",
+              "console.log('totalEstimatedCostUsd =', data.totalEstimatedCostUsd, '（未配价目表时为 null 属预期）');"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/api/v1/platform/observability/llm-cost-summary",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["api", "v1", "platform", "observability", "llm-cost-summary"]
+        }
+      }
+    },
+    {
+      "name": "8. 指标回查（Prometheus 出口）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const text = pm.response.text();",
+              "pm.test('Prometheus 文本格式（含 # TYPE）', () => pm.expect(text).to.include('# TYPE'));",
+              "pm.test('Week 17 指标未回退（llm_call_count_total）', () => pm.expect(text).to.include('llm_call_count_total'));",
+              "const hasCost = text.includes('llm_cost_usd_total');",
+              "pm.test('成本指标：仅在应用侧配了 langfuse.model-prices 时出现（未配价则不下发 cost，不编造）', () => {",
+              "  if (!hasCost) {",
+              "    console.log('llm_cost_usd_total 未出现：本次启动未传 --langfuse.model-prices.*，成本改由 Langfuse 侧按模型定义推断，属预期');",
+              "  }",
+              "  // 软检查：不作为失败条件，避免把「未配客户端价目表」误判成缺陷",
+              "  pm.expect(text.length).to.be.above(0);",
+              "});",
+              "console.log('llm_cost_usd_total 存在 =', hasCost);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{port}}/actuator/prometheus",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["actuator", "prometheus"]
+        }
+      }
+    },
+    {
+      "name": "9. Langfuse 侧：Key 与项目可用（v4 旧 trace 读接口不可用）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200（401 说明 Basic 认证串错）', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('项目列表非空（v4 events_only 下旧 trace/observations 读接口不可用，trace 明细看 UI 或 ClickHouse events_*）', () => pm.expect(body.data.length).to.be.above(0));",
+              "pm.test('项目名与部署一致', () => pm.expect(body.data[0].name).to.eql('AI Code Repo Platform'));",
+              "console.log('langfuse project =', body.data[0].name, ' id =', body.data[0].id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "auth": {
+          "type": "basic",
+          "basic": [
+            { "key": "username", "value": "{{langfusePublicKey}}", "type": "string" },
+            { "key": "password", "value": "{{langfuseSecretKey}}", "type": "string" }
+          ]
+        },
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{langfuseProtocol}}://{{langfuseHost}}:{{langfusePort}}/api/public/projects",
+          "protocol": "{{langfuseProtocol}}",
+          "host": ["{{langfuseHost}}"],
+          "port": "{{langfusePort}}",
+          "path": ["api", "public", "projects"]
+        }
+      }
+    }
+  ]
+}

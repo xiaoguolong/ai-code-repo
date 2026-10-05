@@ -30,3 +30,10 @@ management:
     tracing:
       export:
         enabled: false
+
+# Week 18：单测不连 Langfuse，显式关闭（默认值也是 false，这里写明以防未来改默认值）。
+# Prompt 管理同样关闭：单测走 classpath 模板，避免测试期间打网络。
+langfuse:
+  enabled: false
+  prompt:
+    enabled: false

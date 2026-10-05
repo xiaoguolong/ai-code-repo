@@ -73,6 +73,43 @@ observability:
   # Span / 指标埋点总开关。false 时装配空实现，零 span、零指标、零开销。
   enabled: ${OBSERVABILITY_ENABLED:true}
 
+# Week 18：Langfuse（LLM Trace / Prompt 管理 / Token 与成本分析）。
+# 默认全关：既不打网络也不产生 langfuse.* 属性；密钥只从环境变量或模块 .env 读取，禁止写进本文件。
+# 追踪（enabled）与 Prompt 管理（prompt.enabled）是两个独立能力：Prompt 管理只需要 host + 密钥。
+langfuse:
+  enabled: ${LANGFUSE_ENABLED:false}
+  # Langfuse Web 根地址（不要带 /api 路径）；OTLP 摄取端点是 <host>/api/public/otel/v1/traces
+  host: ${LANGFUSE_HOST:http://localhost:3000}
+  public-key: ${LANGFUSE_PUBLIC_KEY:}
+  secret-key: ${LANGFUSE_SECRET_KEY:}
+  # 项目 ID 仅用于拼 UI 深链（langfuse-status / trace-context 里的 langfuseTraceUrl）
+  project-id: ${LANGFUSE_PROJECT_ID:}
+  environment: ${LANGFUSE_ENVIRONMENT:local}
+  release: ${LANGFUSE_RELEASE:}
+  # Prompt / 输出正文采集：默认关闭。开启时必须同时启用 guardrail 脱敏，否则采集自动失效（不发未脱敏数据）。
+  capture-content: ${LANGFUSE_CAPTURE_CONTENT:false}
+  max-content-chars: ${LANGFUSE_MAX_CONTENT_CHARS:2000}
+  timeout-ms: ${LANGFUSE_TIMEOUT_MS:10000}
+  prompt:
+    enabled: ${LANGFUSE_PROMPT_ENABLED:false}
+    label: ${LANGFUSE_PROMPT_LABEL:production}
+    cache-ttl-seconds: ${LANGFUSE_PROMPT_CACHE_TTL_SECONDS:60}
+  # 模型价目表（应用侧，单位：USD / 百万 token）。作用：
+  #   1) generation 观测上下发 langfuse.observation.cost_details（客户端上报，优先于服务端推断）；
+  #   2) 记 Prometheus 指标 llm_cost_usd_total；
+  #   3) 供 GET /api/v1/platform/observability/llm-cost-summary 汇总。
+  # 单价全为 0（或整行留空）视为未配置：此时不下发 cost、不记成本指标，成本改由 Langfuse 侧按模型定义推断。
+  # 键名不能改（要与模型返回的 model 名一致）；数值可用环境变量覆盖，换环境不必改文件。
+  # 注意：这里的值是占位示例，请按你的实际账单单价填写。
+  model-prices:
+    deepseek-v4-pro:
+      input-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_V4_PRO_INPUT:0.27}
+      output-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_V4_PRO_OUTPUT:1.10}
+    # .env.example 里的默认模型是 deepseek-chat，一并给出（未用到时可删）
+    deepseek-chat:
+      input-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_CHAT_INPUT:0.27}
+      output-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_CHAT_OUTPUT:1.10}
+
 management:
   tracing:
     enabled: true

@@ -592,26 +592,45 @@ Tool
 
 学习：
 
-- [ ] LLM Trace
-- [ ] Prompt管理
-- [ ] Token统计
-- [ ] 成本分析
+- [x] LLM Trace
+- [x] Prompt管理
+- [x] Token统计
+- [x] 成本分析
 
 
 实践：
 
 部署：
 
-- [ ] Langfuse
-- [ ] PostgreSQL
-- [ ] ClickHouse
+- [x] Langfuse（v4 六服务：web / worker / ClickHouse / PostgreSQL / Redis / MinIO，headless 初始化免手工建 Key）
+- [x] PostgreSQL
+- [x] ClickHouse
 
 
 接入：
 
-- [ ] Prompt记录
-- [ ] Token记录
-- [ ] Agent执行链
+- [x] Prompt记录（generation 上关联 `prompt.name` + `prompt.version`）
+- [x] Token记录（真实 usage → `usage_details` JSON + `llm.tokens.total` 指标）
+- [x] Agent执行链（trace → agent / generation / tool 观测树，traceId 与 `traceparent` 同源）
+
+交付：Spec `docs/specs/week-18.md` ｜ 架构 `docs/architecture/week-18-architecture.md` ｜
+接口 `docs/api/week-18-api.md` ｜ 部署 `docs/deploy/week-18-langfuse.md` ｜
+部署物 `deploy/langfuse/`（compose + .env.example）｜ 实现日志 `notes/impl-logs/week-18.md` ｜
+Postman `docs/postman/week-18.postman_collection.json`
+
+实测：**在 192.168.132.128 上自部署 Langfuse v4.50.0 真机验收通过**（六容器 healthy，headless 初始化自动建好项目与 API Key）。
+`langfuse.enabled=true` 时容器内**同时**存在 Boot 的 collector 导出器与自定义 Langfuse 导出器
+（`SpanExporters` 收集到 2 个，一次埋点两路导出）；真实 LLM Agent Run 的 span 全部落进 v4 事件库：
+`agent.run`(AGENT) / `llm.chat`(GENERATION)×2 / `tool.call`(TOOL)×2 + 框架自动埋点 span，
+且每个业务与框架 span 都带 `trace_name=agent:medical-assistant` / `user_id=1` / `session_id=P001` /
+`tags=[MEDICAL_ASSISTANT,medical-assistant]` / `environment` / `release`，traceId 与响应头 `traceparent` 一致；
+generation 带真实 usage（如 `{'input':261,'output':2048,'total':2309}`）与成本（客户端上报与服务端推断口径一致），
+并关联到 Langfuse 托管 Prompt（`medical-report@1` / `medical-followup@1`）；
+正文默认不上报（`capture-content=false` 时正文长度全为 0），开启后经 Guardrail 脱敏 + 截断；
+**Langfuse 停机时业务仍 200 COMPLETED**（只有 OTel SDK 自己记录导出 timeout）。
+根聚合 **450** 用例全绿（8084 由 251 → 320，Langfuse 新增 63）。
+真机验收还抓出并修复了 3 个只在真实环境暴露的缺陷（Node 堆上限、Langfuse 单价单位是「每 token」、
+JDK HttpClient 明文 HTTP 的 h2c 升级），详见 `notes/impl-logs/week-18.md` 第 10.2 节。
 
 
 ---
@@ -747,7 +766,8 @@ Tool
 - [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单）
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
-- [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源）
+- [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源；
+      Week 18：Langfuse LLM 观测树 + 真实 token/成本 + Prompt 版本关联与托管，正文默认不出站）
 - [ ] 规范落地度：响应信封与规范 5.6 草案仍有偏离（见 docs/specs/week-16.md 收尾审计）
 
 
@@ -757,7 +777,8 @@ Tool
 - [ ] Kubernetes
 - [ ] SkyWalking
 - [x] OpenTelemetry（Week 17：Trace/Span/Metric/Context + OTLP 导出 + Prometheus 指标出口）
-- [ ] Langfuse
+- [x] Langfuse（Week 18：v4 自部署 + OTLP 双导出 + trace 维度传播 + generation/tool/agent 观测 +
+      Token/成本上报与成本查询；正文可选、脱敏后出站）
 - [ ] Prometheus
 - [ ] Grafana
 

@@ -1,0 +1,191 @@
+# Langfuse v4 自托管（Week 18）——六服务单机部署
+#
+# 与官方 docker-compose.yml 的关系：结构一致（web / worker / clickhouse / minio / redis / postgres），
+# 版本水位按官方 v4 requirements 固定，改动点在注释标了 [改]，都是为了适配「与业务服务共用宿主机」：
+#   [改1] Web 端口监听 0.0.0.0:3000（应用与浏览器在另一台机器上，必须可被局域网访问）
+#   [改2] 其余组件只绑 127.0.0.1 或完全不发布端口（禁止改绑 0.0.0.0）
+#   [改3] **Redis 不发布宿主端口**：宿主机已有业务 Redis 占用 0.0.0.0:6379，
+#         发布 127.0.0.1:6379 会 bind 冲突；Langfuse 内部走 compose 网络即可，无需宿主端口
+#   [改4] PostgreSQL 宿主端口改 15432：宿主机已有业务 PostgreSQL 占用 5432
+#   [改5] 每个服务加 mem_limit + NODE_OPTIONS：目标机内存小（3.8G，另有 3.8G swap）。
+#         实测：web/worker 用 700m/500m 时 V8 直接 heap OOM 崩溃，故放宽到 1500m/1000m 并显式设 --max-old-space-size
+#   [改6] 全部敏感值来自同目录 .env（.env 不入库，模板见 .env.example）
+#   [改7] 镜像写成 Docker Hub 引用（docker.io/...）：官方 compose 用 docker.langfuse.com 这个非 Hub 域名，
+#         它会绕过本机配置的 registry mirror 直连 registry-1.docker.io（在受限网络下被拒）；改成 Hub 引用后由 mirror 正常拉取
+#
+# 启动：cp .env.example .env && 填好密钥 && docker compose up -d
+# 升级：docker compose pull && docker compose up -d   （ENCRYPTION_KEY / SALT 不得变更，见文档第 6 节）
+# 兼容版本：Langfuse v4 要求 ClickHouse >= 25.12、PostgreSQL >= 15、Redis >= 7.0
+
+services:
+  langfuse-worker:
+    image: docker.io/langfuse/langfuse-worker:4
+    restart: always
+    mem_limit: 1000m
+    depends_on: &langfuse-depends-on
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      clickhouse:
+        condition: service_healthy
+    ports:
+      - 127.0.0.1:3030:3030
+    environment: &langfuse-worker-env
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/postgres}
+      SALT: ${SALT} # 必填；设定后不得修改
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY} # 必填；openssl rand -hex 32；设定后不得修改
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-true}
+      # Node 堆上限要显式给：容器 mem_limit 太低时 V8 会先于 cgroup 触发 heap OOM（实测踩过）
+      NODE_OPTIONS: ${LANGFUSE_WORKER_NODE_OPTIONS:---max-old-space-size=768}
+      CLICKHOUSE_MIGRATION_URL: ${CLICKHOUSE_MIGRATION_URL:-clickhouse://clickhouse:9000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://clickhouse:8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_CLUSTER_ENABLED: "false"
+      LANGFUSE_USE_AZURE_BLOB: "false"
+      LANGFUSE_S3_EVENT_UPLOAD_BUCKET: ${LANGFUSE_S3_EVENT_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_EVENT_UPLOAD_REGION: ${LANGFUSE_S3_EVENT_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: ${LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_EVENT_UPLOAD_PREFIX: ${LANGFUSE_S3_EVENT_UPLOAD_PREFIX:-events/}
+      LANGFUSE_S3_MEDIA_UPLOAD_BUCKET: ${LANGFUSE_S3_MEDIA_UPLOAD_BUCKET:-langfuse}
+      LANGFUSE_S3_MEDIA_UPLOAD_REGION: ${LANGFUSE_S3_MEDIA_UPLOAD_REGION:-auto}
+      LANGFUSE_S3_MEDIA_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER}
+      LANGFUSE_S3_MEDIA_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://minio:9000}
+      LANGFUSE_S3_MEDIA_UPLOAD_FORCE_PATH_STYLE: "true"
+      LANGFUSE_S3_MEDIA_UPLOAD_PREFIX: ${LANGFUSE_S3_MEDIA_UPLOAD_PREFIX:-media/}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_AUTH: ${REDIS_AUTH}
+      REDIS_TLS_ENABLED: "false"
+
+  langfuse-web:
+    image: docker.io/langfuse/langfuse:4
+    restart: always
+    mem_limit: 1500m
+    depends_on: *langfuse-depends-on
+    ports:
+      # [改] 唯一对外开放的端口：应用（8084）在另一台机器上通过它推送 OTLP
+      - 3000:3000
+    environment:
+      <<: *langfuse-worker-env
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET} # 必填；openssl rand -hex 32
+      NODE_OPTIONS: ${LANGFUSE_WEB_NODE_OPTIONS:---max-old-space-size=1024}
+      LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT_EXTERNAL:-http://localhost:9090}
+      LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: ${LANGFUSE_S3_MEDIA_UPLOAD_ENDPOINT:-http://minio:9000}
+      # —— Headless 初始化：首次启动即建好组织/项目/API Key，验收无需点 UI ——
+      # 注意：值不要加引号（官方已知问题 #3398）
+      LANGFUSE_INIT_ORG_ID: ${LANGFUSE_INIT_ORG_ID}
+      LANGFUSE_INIT_ORG_NAME: ${LANGFUSE_INIT_ORG_NAME}
+      LANGFUSE_INIT_PROJECT_ID: ${LANGFUSE_INIT_PROJECT_ID}
+      LANGFUSE_INIT_PROJECT_NAME: ${LANGFUSE_INIT_PROJECT_NAME}
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_INIT_PROJECT_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_INIT_PROJECT_SECRET_KEY}
+      LANGFUSE_INIT_USER_EMAIL: ${LANGFUSE_INIT_USER_EMAIL}
+      LANGFUSE_INIT_USER_NAME: ${LANGFUSE_INIT_USER_NAME}
+      LANGFUSE_INIT_USER_PASSWORD: ${LANGFUSE_INIT_USER_PASSWORD}
+
+  clickhouse:
+    image: docker.io/clickhouse/clickhouse-server:25.12
+    restart: always
+    mem_limit: 800m
+    user: "101:101"
+    environment:
+      CLICKHOUSE_DB: default
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-clickhouse}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+    volumes:
+      - langfuse_clickhouse_data:/var/lib/clickhouse
+      - langfuse_clickhouse_logs:/var/log/clickhouse-server
+    ports:
+      - 127.0.0.1:8123:8123
+      - 127.0.0.1:9000:9000
+    healthcheck:
+      test: wget --no-verbose --tries=1 --spider http://localhost:8123/ping || exit 1
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 1s
+
+  minio:
+    image: cgr.dev/chainguard/minio
+    restart: always
+    mem_limit: 200m
+    entrypoint: sh
+    # 启动前建好 langfuse bucket
+    command: -c 'mkdir -p /data/langfuse && minio server --address ":9000" --console-address ":9001" /data'
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      # 媒体上传（本项目不使用）：只绑本机，保持「仅 3000 对外」的安全基线
+      - 127.0.0.1:9090:9000
+      - 127.0.0.1:9091:9001
+    volumes:
+      - langfuse_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 1s
+      timeout: 5s
+      retries: 5
+      start_period: 1s
+
+  redis:
+    image: docker.io/redis:7
+    restart: always
+    mem_limit: 160m
+    command: >
+      --requirepass ${REDIS_AUTH}
+      --maxmemory 128mb
+      --maxmemory-policy noeviction
+    # [改3] 不发布宿主端口：宿主机 6379 已被业务 Redis 占用，绑 127.0.0.1:6379 会冲突。
+    # 需要本地排查时用：docker compose exec redis redis-cli -a "$REDIS_AUTH" ping
+    expose:
+      - "6379"
+    volumes:
+      - langfuse_redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_AUTH}", "ping"]
+      interval: 3s
+      timeout: 10s
+      retries: 10
+
+  postgres:
+    image: docker.io/postgres:${POSTGRES_VERSION:-17}
+    restart: always
+    mem_limit: 300m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      TZ: UTC
+      PGTZ: UTC
+    ports:
+      # 若目标机已有 PostgreSQL 占用 5432，改用其他宿主端口（如 15432:5432）
+      - 127.0.0.1:15432:5432
+    volumes:
+      - langfuse_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  langfuse_postgres_data:
+    driver: local
+  langfuse_clickhouse_data:
+    driver: local
+  langfuse_clickhouse_logs:
+    driver: local
+  langfuse_minio_data:
+    driver: local
+  langfuse_redis_data:
+    driver: local

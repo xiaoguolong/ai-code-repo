@@ -22,6 +22,8 @@ import com.aicode.framework.observability.domain.AgentObservabilityPort;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
+import com.aicode.framework.observability.domain.TraceDimensions;
+import com.aicode.framework.observability.domain.TraceScope;
 import com.aicode.framework.platform.infrastructure.security.PlatformSecurityContext;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -123,7 +125,8 @@ public class PlatformExecutionUseCase {
         spanAttributes.put(ObservabilityAttributes.EXECUTION_ID, executionId);
 
         long runStartedAt = System.nanoTime();
-        try (SpanScope span = observability.openSpan(SpanKind.AGENT_RUN, SPAN_AGENT_RUN, spanAttributes)) {
+        try (TraceScope trace = observability.beginTrace(traceDimensions(userId, agent, input));
+             SpanScope span = observability.openSpan(SpanKind.AGENT_RUN, SPAN_AGENT_RUN, spanAttributes)) {
             try {
                 PlatformSecurityContext.beginPlatformRun(userId);
                 PlatformRunOutput output = platformAgentRunner.run(agent, input);
@@ -155,6 +158,19 @@ public class PlatformExecutionUseCase {
                 PlatformSecurityContext.clear();
             }
         }
+    }
+
+    /**
+     * 构造本次执行的 Langfuse trace 维度（Week 18）。
+     *
+     * <p>会话语义：用 Run 入参里的 {@code patientId} 而不是 executionId —— 同一患者的多次分析归为一个会话，
+     * 在 Langfuse 上按会话回看随访全流程才有意义；缺 patientId 时不写会话维度。</p>
+     */
+    private TraceDimensions traceDimensions(long userId, PlatformAgentDefinition agent, Map<String, Object> input) {
+        Object patientId = input == null ? null : input.get("patientId");
+        String sessionId = patientId == null ? null : String.valueOf(patientId);
+        return TraceDimensions.agentRun(
+                userId, agent.agentKey(), String.valueOf(agent.agentType()), sessionId);
     }
 
     /**

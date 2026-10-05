@@ -155,6 +155,20 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <configuration>
                     <jvm>${jdk.17.home}/bin/java</jvm>
+                    <!-- Week 18 修复：surefire 默认只匹配 *Test.java，**静态嵌套测试类**（Outer$Inner.class）
+                         不会被发现 —— 结果是 Week 17 的 ObservabilityDisabledTest 一次都没跑过。
+                         这里显式把「外层类名以 Test 结尾的嵌套类」纳入匹配，避免测试静默不执行。 -->
+                    <includes>
+                        <include>**/*Test.java</include>
+                        <include>**/*Tests.java</include>
+                        <!-- 嵌套测试类（Outer$Inner.class）：通配符里的 $ 会被当成正则锚点，必须用 %regex -->
+                        <include>%regex[.*Test(\$.*)?]</include>
+                    </includes>
+                    <!-- surefire 默认 excludes 含 **/*$*（跳过内部类）；不显式覆盖的话上面的 include 等于白写。
+                         这里只保留与测试无关的排除项，让静态嵌套测试类真正被执行。 -->
+                    <excludes>
+                        <exclude>**/package-info.java</exclude>
+                    </excludes>
                 </configuration>
             </plugin>
             <plugin>
