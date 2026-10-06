@@ -642,18 +642,38 @@ JDK HttpClient 明文 HTTP 的 h2c 升级），详见 `notes/impl-logs/week-18.m
 
 接入：
 
-- [ ] Gateway
-- [ ] Agent服务
-- [ ] Spring Cloud服务
-
+- [x] Gateway（新增 `apps/agent-gateway`：Spring Cloud Gateway 统一入口 + 统一鉴权 + Feign 出站）
+- [x] Agent服务（8084 挂 Java Agent + Toolkit 手动埋点）
+- [x] Spring Cloud服务（Spring Cloud 2024.0.2 / OpenFeign，网关进程内承载 Feign 调用）
 
 监控：
 
-- [ ] HTTP
-- [ ] Feign
-- [ ] MySQL
-- [ ] Redis
-- [ ] JVM
+- [x] HTTP（网关与平台端点指标、服务拓扑）
+- [x] Feign（网关 → 平台调用链，组件 ID 11 = Spring Cloud Feign）
+- [x] MySQL（平台 JDBC 语句耗时，复用既有业务库查询）
+- [x] Redis（网关会话/缓存 Lettuce 调用命令与耗时）
+- [x] JVM（实例堆/GC/线程/类加载 + 实例元数据）
+
+交付：Spec `docs/specs/week-19.md` ｜ 架构 `docs/architecture/week-19-architecture.md` ｜
+接口 `docs/api/week-19-api.md` ｜ 部署 `docs/deploy/week-19-skywalking.md` ｜
+部署物 `deploy/skywalking/`（compose + .env.example）｜ 实现日志 `notes/impl-logs/week-19.md` ｜
+Postman `docs/postman/week-19.postman_collection.json`
+
+实测：**在 192.168.132.128 上自部署 SkyWalking 10.2.0（OAP + UI，存储用既有 PostgreSQL 独立库 `skywalking`）
+真机验收通过**，网关（8080 / `gateway-1`）与平台（8084 / `platform-1`）各挂 Java Agent 9.7.0；
+一次真实 Agent 执行（真实 DeepSeek 模型、真实 token 3473）在 OAP 侧可查到：
+
+- **服务拓扑**：`ai-code-gateway → ai-code-platform`（服务端调用关系 15 次）；
+- **中间件**：平台 → PostgreSQL(JDBC) 43 次、网关 → Redis 30 次、网关 → 平台 Feign 14 次、
+  平台 → `api.deepseek.com` 13 次、平台 → Langfuse OTLP 39 次；
+- **HTTP 端点清单**：网关 `Lettuce/Reactive/*`、平台各业务端点与 `Async/execute`；
+- **实例元数据**：两实例的 JVM 参数 / OS / 主机 / 进程号 / jar 依赖清单齐全（UI 的 JVM 面板同源）；
+- **三后端关联**：`bridgeAvailable=true`、`correlated=true`，span tag `aicode.trace_id` = 响应头 `X-Trace-Id`
+  （SkyWalking 的 traceId 是 Base64 segmentId，与 W3C traceId 不可比，故用业务 tag 关联，不假装打通父子关系）；
+- 根聚合 **569** 用例全绿（8084 由 320 → 354，新增网关模块 85）。
+- 真机验收抓出并修复了 6 个只在真实环境暴露的缺陷（PowerShell 解析 `-D`、Agent 目录 `scp -r` 损坏、
+  **WebFlux 下 Feign 缺 `HttpMessageConverters`**、**sa-token 头与前缀语义**、代理路由响应二次写出、
+  多构造器缺 `@Autowired` 导致上下文起不来），详见 `notes/impl-logs/week-19.md` 第 10.2 节。
 
 
 ---
@@ -779,6 +799,8 @@ JDK HttpClient 明文 HTTP 的 h2c 升级），详见 `notes/impl-logs/week-18.m
 - [x] OpenTelemetry（Week 17：Trace/Span/Metric/Context + OTLP 导出 + Prometheus 指标出口）
 - [x] Langfuse（Week 18：v4 自部署 + OTLP 双导出 + trace 维度传播 + generation/tool/agent 观测 +
       Token/成本上报与成本查询；正文可选、脱敏后出站）
+- [x] SkyWalking（Week 19：10.2.0 自部署（OAP+UI，PostgreSQL 独立库）+ Java Agent 自动埋点
+      （HTTP/Feign/JDBC/Redis/JVM）+ Toolkit 业务 span + 服务拓扑；未挂 Agent 时业务不受影响）
 - [ ] Prometheus
 - [ ] Grafana
 

@@ -6,17 +6,19 @@ import com.aicode.framework.observability.application.PlatformLlmCostUseCase;
 import com.aicode.framework.observability.application.PlatformObservabilityUseCase;
 import com.aicode.framework.observability.dto.LangfuseStatusResponse;
 import com.aicode.framework.observability.dto.LlmCostSummaryResponse;
+import com.aicode.framework.observability.dto.SkyWalkingStatusResponse;
 import com.aicode.framework.observability.dto.TraceContextResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 平台可观测自检 API（Week 17 新增，Week 18 扩展）。
+ * 平台可观测自检 API（Week 17 新增，Week 18/19 扩展）。
  *
  * <ul>
  *   <li>{@code GET /observability/trace-context}：链路上下文（Week 17），Week 18 增加 Langfuse 深链字段；</li>
  *   <li>{@code GET /observability/langfuse-status}：Langfuse 接入自检（不回显密钥）；</li>
+ *   <li>{@code GET /observability/skywalking-status}：SkyWalking 接入自检（Week 19，不回显密钥）；</li>
  *   <li>{@code GET /observability/llm-cost-summary}：按模型的 Token 与成本汇总（仅管理员）。</li>
  * </ul>
  *
@@ -71,5 +73,17 @@ public class PlatformObservabilityController {
         StpUtil.checkLogin();
         return ApiResponse.success(LlmCostSummaryResponse.from(
                 platformLlmCostUseCase.summarize(StpUtil.getLoginIdAsLong())));
+    }
+
+    /**
+     * SkyWalking 接入自检（Week 19）。
+     *
+     * @return 开关、Agent 是否挂载、OAP 地址与本次请求的两套链路 ID（不含密钥）
+     */
+    @GetMapping("/skywalking-status")
+    public ApiResponse<SkyWalkingStatusResponse> skywalkingStatus() {
+        StpUtil.checkLogin();
+        return ApiResponse.success(SkyWalkingStatusResponse.from(
+                platformObservabilityUseCase.skywalkingStatus()));
     }
 }

@@ -1,0 +1,30 @@
+﻿=== Week 19 鐪熸満楠屾敹锛?(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')锛?==
+
+--- 鈶?鐧诲綍 POST /api/v1/gateway/sessions ---
+status=200 code=SUCCESS traceId=week19-e2e-login
+userId=1 username=admin roleKey=admin tokenName=Authorization ttl=1800s
+sessionToken(鍓?8 浣?=ef204668***
+鍝嶅簲閲屾槸鍚﹀嚭鐜?platform token: False
+
+--- 鈶?缃戝叧鑷 GET /api/v1/gateway/status ---
+code=SUCCESS platformUri=http://localhost:8084 sessions=0 skywalkingAgent=False
+traceId=week19-e2e traceparent=00-b983da1ead5ec3d9b3c9a7f1bc4115a1-253c31a3c4b24684-01
+
+--- 鈶?Agent 鐩綍锛團eign + 缂撳瓨锛塆ET /api/v1/gateway/agents ---
+code=SUCCESS count=3 棣栦釜=framework-react type=FRAMEWORK_REACT model=
+
+--- 鈶?缁忕綉鍏虫墽琛?Agent锛堢湡瀹炴ā鍨嬶級POST /api/v1/gateway/agents/{key}/runs ---
+code=SUCCESS traceId=week19-e2e 鑰楁椂=44371ms
+executionId=7f5f49f1-150f-4029-a811-14ad75e006b4 status=COMPLETED model=deepseek-v4-pro
+usage={"promptTokens":798,"completionTokens":2675,"totalTokens":3473}
+
+--- 鈶?骞冲彴 SkyWalking 鑷锛堢洿杩?8084锛?--
+enabled=True bridgeAvailable=True
+serviceName=ai-code-platform backend=192.168.132.128:11800
+skywalkingTraceId=117d9ce3d0344ac893889e2f2cc9e9c4.77.17912615625790001 skywalkingSpanId=0
+businessTraceId=aa8df2254f3b3af5d7ed05c1bb7146d1 otelTraceId=aa8df2254f3b3af5d7ed05c1bb7146d1 correlationTag=aicode.trace_id correlated=True
+
+--- 鈶?骞冲彴鎵ц璁板綍鏍稿锛堢洿杩?8084锛岀‘璁よ惤搴撲笌 traceId 涓€鑷达級---
+鎵ц璁板綍鎬绘暟=34 鏈€鏂颁竴鏉?status=COMPLETED agentKey=medical-assistant model=deepseek-v4-pro
+
+鎶ュ憡锛?Report

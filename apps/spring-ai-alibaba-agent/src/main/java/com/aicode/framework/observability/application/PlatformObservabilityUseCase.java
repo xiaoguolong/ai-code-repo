@@ -3,11 +3,16 @@ package com.aicode.framework.observability.application;
 import com.aicode.framework.infrastructure.logging.TraceIds;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
 import com.aicode.framework.observability.domain.LangfuseStatusView;
+import com.aicode.framework.observability.domain.SkyWalkingStatusView;
 import com.aicode.framework.observability.domain.TraceContextView;
 import com.aicode.framework.observability.domain.TraceDimensions;
 import com.aicode.framework.observability.infrastructure.LangfuseContentPolicy;
 import com.aicode.framework.observability.infrastructure.LangfuseContext;
 import com.aicode.framework.observability.infrastructure.LangfuseProperties;
+import com.aicode.framework.observability.infrastructure.NoopSpanBridge;
+import com.aicode.framework.observability.infrastructure.SkyWalkingProperties;
+import com.aicode.framework.observability.infrastructure.SkyWalkingStatusProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,17 +29,61 @@ public class PlatformObservabilityUseCase {
     private final LangfuseProperties langfuseProperties;
     private final LangfuseContext langfuseContext;
     private final LangfuseContentPolicy contentPolicy;
+    private final SkyWalkingStatusProvider skyWalkingStatusProvider;
 
+    /**
+     * Week 17/18 既有构造器（SkyWalking 关闭）。
+     *
+     * <p>保留它而不是改签名：既有单测一行未改即通过，是「零回退」最直接的证据
+     * （与 Week 18 装饰器保留旧构造器同口径）。</p>
+     *
+     * @param observability     观测端口
+     * @param langfuseProperties Langfuse 配置
+     * @param langfuseContext    请求期 trace 维度
+     * @param contentPolicy      正文采集策略
+     */
     public PlatformObservabilityUseCase(
             AgentObservabilityPort observability,
             LangfuseProperties langfuseProperties,
             LangfuseContext langfuseContext,
             LangfuseContentPolicy contentPolicy
     ) {
+        this(observability, langfuseProperties, langfuseContext, contentPolicy,
+                new SkyWalkingStatusProvider(
+                        observability,
+                        new SkyWalkingProperties(false, "", "", ""),
+                        NoopSpanBridge.INSTANCE));
+    }
+
+    /**
+     * @param observability            观测端口
+     * @param langfuseProperties       Langfuse 配置
+     * @param langfuseContext          请求期 trace 维度
+     * @param contentPolicy            正文采集策略
+     * @param skyWalkingStatusProvider SkyWalking 自检装配（Week 19）
+     */
+    @Autowired
+    public PlatformObservabilityUseCase(
+            AgentObservabilityPort observability,
+            LangfuseProperties langfuseProperties,
+            LangfuseContext langfuseContext,
+            LangfuseContentPolicy contentPolicy,
+            SkyWalkingStatusProvider skyWalkingStatusProvider
+    ) {
         this.observability = observability;
         this.langfuseProperties = langfuseProperties;
         this.langfuseContext = langfuseContext;
         this.contentPolicy = contentPolicy;
+        this.skyWalkingStatusProvider = skyWalkingStatusProvider;
+    }
+
+    /**
+     * SkyWalking 接入自检（Week 19）：开关、Agent 是否挂载、OAP 地址、本请求两套链路 ID。
+     *
+     * @return 自检视图；不含任何密钥
+     */
+    public SkyWalkingStatusView skywalkingStatus() {
+        return skyWalkingStatusProvider.status();
     }
 
     /**

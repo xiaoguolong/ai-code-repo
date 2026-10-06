@@ -1,0 +1,87 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: agent-gateway
+  # 可选加载本模块 .env（KEY=VALUE）。
+  # - 与平台 8084 同口径（那边写在 application-jdbc.yml 里，因为它的数据源只在 jdbc profile 下需要）；
+  #   网关没有 profile 差异，故直接写在主配置里，**不设默认 profile 也能读到**。
+  # - 相对路径按「进程工作目录」解析：IDEA 里请把 Run Configuration 的
+  #   Working directory 设为 $ProjectFileDir$/apps/agent-gateway（或仍用 EnvFile 插件注入）；
+  #   工作目录是仓库根时此 import 空转、不报错（optional 保证缺文件不启动失败）。
+  # - 进程环境变量优先级高于 .env，本地临时覆盖直接设环境变量即可。
+  config:
+    import: optional:file:.env[.properties]
+  # 响应式 Redis（会话与缓存）。主机/端口只从环境变量或 .env 读，禁止在文件里写具体环境地址。
+  data:
+    redis:
+      host: ${SPRING_REDIS_HOST:}
+      port: ${SPRING_REDIS_PORT:6379}
+      password: ${SPRING_REDIS_PASSWORD:}
+      timeout: 3s
+  cloud:
+    gateway:
+      # 路由表说明（Week 19 定稿）
+      # ---------------------------
+      # 本网关**只承载自己的用例**（/api/v1/gateway/**，由 *Controller 处理），不配置
+      # 「整段透传到平台」的代理路由。取舍记录（实测）：
+      #   最初按 Week 13 遗留项加了 `Path=/api/v1/platform/**` 的透传路由，结果代理响应写出时
+      #   抛 UnsupportedOperationException（setContentLength 打到只读响应头），
+      #   现象是「平台侧已 200、客户端连接被关闭」。根因是同一请求上出现了两次响应写出
+      #   （网关过滤器链 + 错误处理再次编码响应体）。
+      #   规范 3.4 要求「本周用不到的复杂度不加」：Week 19 的交付目标是**网关入口 + 可观测接入**，
+      #   透传代理不是必需能力；平台侧接口仍可直接访问，网关侧用例已覆盖登录/目录/执行。
+      #   第 20 周做完整监控体系时若仍需网关隐藏直连 URL，再单独实现并补齐回归测试。
+      httpclient:
+        connect-timeout: 3000
+        response-timeout: 120s
+  codec:
+    max-in-memory-size: 4MB
+
+# 网关配置（Week 19）：路由目标用配置化 URL，不引注册中心（见 docs/specs/week-19.md ADR）
+gateway:
+  routes:
+    # 平台服务基础地址：Feign 出口（平台登录 / 目录 / 执行）
+    platform-uri: ${GATEWAY_ROUTE_PLATFORM_URI:http://localhost:8084}
+    # 平台路径前缀：只作**声明与自检展示**（本周不启用整段透传代理，见上方路由表说明）
+    platform-proxy-path: ${GATEWAY_ROUTE_PLATFORM_PROXY_PATH:/api/v1/platform}
+    # 网关自有用例前缀
+    gateway-api-path: ${GATEWAY_ROUTE_API_PATH:/api/v1/gateway}
+  session:
+    # 会话头名：与平台 sa-token 的 token-name 保持一致（Authorization），
+    # 客户端既可用 `Authorization: Bearer <网关联会话 token>`，也可用 `Authorization: <token>`。
+    token-name: ${GATEWAY_SESSION_TOKEN_NAME:Authorization}
+    ttl-seconds: ${GATEWAY_TOKEN_TTL_SECONDS:1800}
+    storage: redis
+  catalog:
+    cache-ttl-seconds: ${GATEWAY_CATALOG_CACHE_TTL_SECONDS:30}
+    key-prefix: ${GATEWAY_CATALOG_KEY_PREFIX:gw:catalog:agents}
+    idempotency-ttl-seconds: ${GATEWAY_IDEMPOTENCY_TTL_SECONDS:300}
+
+# Feign：只记方法/URL/状态/耗时（BASIC）。禁用 FULL/HEADERS —— 那会把 Authorization 写进日志。
+feign:
+  client:
+    config:
+      default:
+        loggerLevel: basic
+        connectTimeout: 3000
+        readTimeout: 30000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 网关只需要探活与基本信息；指标出口留给平台（Week 17/20）
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    com.aicode.gateway: INFO
+    feign: WARN
+  pattern:
+    # 与平台同口径：日志强制带 traceId（%X{traceId}），便于跨进程 grep
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%X{traceId:-}] %logger{36} - %msg%n"

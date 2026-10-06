@@ -169,8 +169,7 @@ flowchart TB
 | P2 Agent | 5–8 | Tool Calling、Memory、Spring AI Alibaba | K8s、Langfuse |
 | P3 Workflow | 9–12 | Graph / State、HITL、Multi-Agent | 生产级网关可先简化 |
 | P4 治理 | 13–16 | RBAC、Guardrails、Eval | 新业务 Agent |
-| P5 可观测 | 17–20 | OTel、Langfuse、SkyWalking、Prom/Grafana | 新功能 |
-| P6 实战 | 21–24 | 既有能力组合为医疗 SaaS | 换框架 |
+| P5 可观测 | 17–20 | OTel、Langfuse、SkyWalking、Prom/Grafana | 新功能 || P6 实战 | 21–24 | 既有能力组合为医疗 SaaS | 换框架 |
 
 ### 3.5 JDK 运行约定（全局强制，后续所有项目照此）
 
@@ -504,7 +503,17 @@ ai-code-repo/
             │   ├── domain/
             │   └── infrastructure/
             └── test/java/.../
+    └── agent-gateway/                 ← 第19周（Spring Cloud Gateway 统一入口，**响应式 WebFlux**）
+        ├── pom.xml                    # 排除 ai-core 的 spring-boot-starter-web；引 gateway/openfeign/redis-reactive
+        └── src/main/java/com/aicode/gateway/
+            ├── controller/  dto/  application/  domain/{model,port,exception}/
+            └── infrastructure/{config,security,feign,redis,logging,observability}/
 ```
+
+> **`apps/agent-gateway` 的三条硬约束**（违反任一条都会在真机暴露，详见 `notes/impl-logs/week-19.md` 10.2）：
+> 1. 它是**响应式**应用，classpath 里不能出现 Servlet 容器（引 `ai-core` 时必须排除 `spring-boot-starter-web`）；
+> 2. 鉴权只改**请求**、绝不改**响应**（`exchange.mutate()` 派生对象的响应在真实 Netty 下只读）；
+> 3. 依赖 `HttpMessageConverters` 的 Feign 编码器在 WebFlux 下不会自动装配，必须显式提供兜底 bean。
 
 各 app 模块在 `apps/` 下独立存在，共享规范，不共享错误的上帝类。**新应用在旧模块基础上改造，不再复制代码**（第 6 周起，横切能力一律进 `libs/ai-core`）。
 
@@ -788,6 +797,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 16 | 企业规范（API/日志/审计/异常 + RBAC 落库） | docs/specs/week-16.md | notes/impl-logs/week-16.md | 已关闭 |
 | 17 | OpenTelemetry（Trace/Span/Metric/Context + 指标出口） | docs/specs/week-17.md | notes/impl-logs/week-17.md | 已关闭 |
 | 18 | Langfuse（LLM Trace / Prompt 管理 / Token 与成本） | docs/specs/week-18.md | notes/impl-logs/week-18.md | 已关闭（v4.50.0 真机端到端验收通过） |
+| 19 | SkyWalking（网关接入 + HTTP/Feign/JDBC/Redis/JVM + 服务拓扑） | docs/specs/week-19.md | notes/impl-logs/week-19.md | 已关闭（10.2.0 真机端到端验收通过） |
 | 19 | SkyWalking | | | 未开始 |
 | 20 | 完整监控体系 | | | 未开始 |
 | 21–24 | 医疗 SaaS 四 Agent | | | 未开始 |
@@ -800,7 +810,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 |--------|----------|------|
 | 8084 RBAC + ExecutionRecord PostgreSQL/Flyway | **第 16 周（已完成）** | 见 `docs/specs/week-16.md`；Port 契约不变，`platform.persistence.mode=jdbc` 时换 `Jdbc*Adapter`，另增审计表 `audit_log` |
 | Prompt 过滤 / 输入校验 / 输出脱敏 / Tool 内容白名单 | **第 14 周** | `GuardrailPort`；与 RBAC 身份授权正交 |
-| Gateway 层统一鉴权 + 路由 | **第 19 周** | SkyWalking 已提 Gateway；生产隐藏直连 URL |
+| Gateway 层统一鉴权 + 路由 | **第 19 周（已完成：统一入口与统一鉴权）** | 见 `docs/specs/week-19.md`；新增 `apps/agent-gateway`（Spring Cloud Gateway + 会话鉴权 + Feign 出站）。**「整段透传代理」留到第 20 周**：真机暴露它与鉴权链的响应二次写出冲突，取舍与依据见 `notes/impl-logs/week-19.md` 10.2 |
 | enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周** | 医疗 SaaS 实战启动时整合 |
 | 8082 patient-agent 收敛至 8084 Platform | **第 21 周** | 标注 deprecated；统一 Run 入口 |
 | 长期记忆按用户/租户隔离（pgvector） | **第 21 周** | Week 13 仅 patientId 数据域；记忆落库随 SaaS |

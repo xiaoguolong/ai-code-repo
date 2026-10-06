@@ -1,0 +1,385 @@
+{
+  "info": {
+    "name": "Week 19 — SkyWalking 网关接入",
+    "description": "第 19 周验收集合：网关登录/鉴权/目录/执行/自检，以及平台侧 SkyWalking 自检与监控证据回查。\n\n使用前：\n1. 按 docs/deploy/week-19-skywalking.md 在 192.168.132.128 起好 OAP（11800/12800）+ UI（8088）；\n2. 本机启动网关 8080（apps/agent-gateway）与平台 8084（apps/spring-ai-alibaba-agent）；\n   - 两者都用 -javaagent:<skywalking-agent.jar> 启动，平台额外设 SKYWALKING_ENABLED=true；\n   - 网关环境变量：SPRING_REDIS_HOST/PORT/PASSWORD、GATEWAY_ROUTE_PLATFORM_URI。\n3. 平台 sa-token 已配 token-name=Authorization + token-prefix=Bearer（见平台 application.yml），\n   因此所有请求用 `Authorization: Bearer <token>`；\n4. 变量 swHost 指向 OAP 所在主机（本集合用它做 SkyWalking UI 深链提示）。\n\n执行顺序（Collection Runner 按此顺序）：\n- 1 网关登录（拿到 sessionToken，写入 token 变量）\n- 2 网关自检（路由/会话/链路上下文）\n- 3 未带会话访问 → 401 契约\n- 4 Agent 目录（Feign + Redis 缓存；首访回源、二访命中）\n- 5 目录 refresh=true（强制回源）\n- 6 经网关执行 Agent（真实模型，产生 HTTP + Feign + JDBC + Redis + agent.run/llm.chat/tool.call span）\n- 7 平台 SkyWalking 自检（bridgeAvailable / skywalkingTraceId / correlated）\n- 8 平台执行记录（确认落库）\n- 9 网关登出 → 之后访问应 401\n\n变量说明：\n- gatewayPort=8080、platformPort=8084；\n- token：由 1 自动写入（网关会话 token，即平台 token）；\n- platformToken：由 7 自动写入（直连平台自检用）；\n- traceId：客户端指定的业务链路 ID，会作为 span tag aicode.trace_id 出现在 SkyWalking 上；\n- swHost / swUiPort：SkyWalking UI 地址，用于人工核对拓扑与链路。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "protocol", "value": "http" },
+    { "key": "host", "value": "localhost" },
+    { "key": "gatewayPort", "value": "8080" },
+    { "key": "platformPort", "value": "8084" },
+    { "key": "token", "value": "" },
+    { "key": "platformToken", "value": "" },
+    { "key": "traceId", "value": "week19-demo-trace" },
+    { "key": "agentKey", "value": "medical-assistant" },
+    { "key": "swHost", "value": "192.168.132.128" },
+    { "key": "swUiPort", "value": "8088" }
+  ],
+  "item": [
+    {
+      "name": "1. 网关登录（建立网关联会话）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('返回会话 token（即平台 token）', () => pm.expect(body.data.sessionToken).to.be.a('string').and.not.empty);",
+              "pm.test('会话头名是 Authorization', () => pm.expect(body.data.tokenName).to.eql('Authorization'));",
+              "pm.test('响应体不含 platformToken 字段', () => pm.expect(JSON.stringify(body)).to.not.include('platformToken'));",
+              "pm.test('回显 X-Trace-Id', () => pm.expect(pm.response.headers.get('X-Trace-Id')).to.be.a('string').and.not.empty);",
+              "pm.test('回写 traceparent（W3C）', () => pm.expect(pm.response.headers.get('traceparent')).to.match(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/));",
+              "pm.collectionVariables.set('token', body.data.sessionToken);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}-login" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/sessions",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "sessions"]
+        }
+      }
+    },
+    {
+      "name": "2. 网关接入自检",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('application=agent-gateway', () => pm.expect(body.data.application).to.eql('agent-gateway'));",
+              "pm.test('平台地址已配置', () => pm.expect(body.data.routes.platformUri).to.be.a('string').and.not.empty);",
+              "pm.test('会话存储标识存在', () => pm.expect(body.data.sessions.store).to.be.a('string').and.not.empty);",
+              "pm.test('链路头名是 X-Trace-Id', () => pm.expect(body.data.tracing.headerName).to.eql('X-Trace-Id'));",
+              "pm.test('traceparent 形态正确', () => pm.expect(body.data.tracing.traceparent).to.match(/^00-[0-9a-f]{32}-[0-9a-f]{16}-0[01]$/));",
+              "pm.test('自检不含任何 token 字段', () => pm.expect(JSON.stringify(body)).to.not.include('platformToken'));",
+              "console.log('SkyWalking Agent 挂载: ' + body.data.skywalkingAgent);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/status",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "status"]
+        }
+      }
+    },
+    {
+      "name": "3. 未带会话访问业务端点（401 契约）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "const body = pm.response.json();",
+              "pm.test('code=UNAUTHORIZED', () => pm.expect(body.code).to.eql('UNAUTHORIZED'));",
+              "pm.test('data 为 null', () => pm.expect(body.data).to.eql(null));",
+              "pm.test('带 traceId', () => pm.expect(body.traceId).to.be.a('string').and.not.empty);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Trace-Id", "value": "{{traceId}}-noauth" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/agents",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "agents"]
+        }
+      }
+    },
+    {
+      "name": "4. Agent 目录（Feign + Redis 缓存，首访回源）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('目录非空', () => pm.expect(body.data).to.be.an('array').and.not.empty);",
+              "pm.test('条目含 agentKey/agentType', () => {",
+              "  const first = body.data[0];",
+              "  pm.expect(first.agentKey).to.be.a('string').and.not.empty;",
+              "  pm.expect(first.agentType).to.be.a('string').and.not.empty;",
+              "});",
+              "console.log('目录条目数: ' + body.data.length);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/agents",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "agents"]
+        }
+      }
+    },
+    {
+      "name": "5. Agent 目录（refresh=true 强制回源）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(pm.response.json().code).to.eql('SUCCESS'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/agents?refresh=true",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "agents"],
+          "query": [{ "key": "refresh", "value": "true" }]
+        }
+      }
+    },
+    {
+      "name": "6. 经网关执行 Agent（真实模型）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "pm.test('traceId 透传一致', () => pm.expect(body.traceId).to.eql(pm.collectionVariables.get('traceId')));",
+              "const execution = body.data.execution;",
+              "pm.test('执行完成', () => pm.expect(execution.status).to.eql('COMPLETED'));",
+              "pm.test('真实 usage', () => pm.expect(execution.usage.totalTokens).to.be.above(0));",
+              "console.log('executionId=' + execution.executionId + ' model=' + execution.model);",
+              "console.log('usage=' + JSON.stringify(execution.usage));",
+              "console.log('SkyWalking UI: http://' + pm.collectionVariables.get('swHost') + ':' + pm.collectionVariables.get('swUiPort'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": {\n    \"patientId\": \"P001\",\n    \"task\": \"请生成一份简短的健康评估报告\"\n  }\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/agents/{{agentKey}}/runs",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "agents", "{{agentKey}}", "runs"]
+        }
+      }
+    },
+    {
+      "name": "7. 平台 SkyWalking 自检（先登录拿平台 token）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(body.code).to.eql('SUCCESS'));",
+              "const d = body.data;",
+              "pm.test('手动埋点已启用', () => pm.expect(d.enabled).to.eql(true));",
+              "pm.test('Agent 已挂载（Toolkit 可用）', () => pm.expect(d.bridgeAvailable).to.eql(true));",
+              "pm.test('服务名已配置', () => pm.expect(d.serviceName).to.be.a('string').and.not.empty);",
+              "pm.test('OAP 地址已配置', () => pm.expect(d.backendService).to.be.a('string').and.not.empty);",
+              "pm.test('关联标签名为 aicode.trace_id', () => pm.expect(d.correlationTag).to.eql('aicode.trace_id'));",
+              "pm.test('两个 traceId 都非空（correlated）', () => pm.expect(d.correlated).to.eql(true));",
+              "pm.test('自检不含任何密钥字段', () => pm.expect(JSON.stringify(body)).to.not.include('secret'));",
+              "console.log('skywalkingTraceId=' + d.skywalkingTraceId);",
+              "console.log('businessTraceId=' + d.traceId + ' otelTraceId=' + d.otelTraceId);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}-sw" }
+        ],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{platformPort}}/api/v1/platform/observability/skywalking-status",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{platformPort}}",
+          "path": ["api", "v1", "platform", "observability", "skywalking-status"]
+        }
+      }
+    },
+    {
+      "name": "7a. 平台登录（为 7/8 提供 platformToken）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('拿到平台 token', () => pm.expect(body.data.token).to.be.a('string').and.not.empty);",
+              "pm.collectionVariables.set('platformToken', body.data.token);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        },
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{platformPort}}/api/v1/platform/auth/login",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{platformPort}}",
+          "path": ["api", "v1", "platform", "auth", "login"]
+        }
+      }
+    },
+    {
+      "name": "8. 平台执行记录（确认 MySQL 落库）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('执行记录非空（JDBC 查询成功）', () => pm.expect(body.data).to.be.an('array').and.not.empty);",
+              "pm.test('最新一条含 executionId/status', () => {",
+              "  pm.expect(body.data[0].executionId).to.be.a('string').and.not.empty;",
+              "  pm.expect(body.data[0].status).to.be.a('string').and.not.empty;",
+              "});",
+              "console.log('执行记录总数: ' + body.data.length);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{platformPort}}/api/v1/platform/executions",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{platformPort}}",
+          "path": ["api", "v1", "platform", "executions"]
+        }
+      }
+    },
+    {
+      "name": "9. 网关登出（之后业务端点应 401）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('信封 code=SUCCESS', () => pm.expect(pm.response.json().code).to.eql('SUCCESS'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/sessions/current",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "sessions", "current"]
+        }
+      }
+    },
+    {
+      "name": "10. 登出后访问（应 401）",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+              "pm.test('code=UNAUTHORIZED', () => pm.expect(pm.response.json().code).to.eql('UNAUTHORIZED'));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+        "url": {
+          "raw": "{{protocol}}://{{host}}:{{gatewayPort}}/api/v1/gateway/agents",
+          "protocol": "{{protocol}}",
+          "host": ["{{host}}"],
+          "port": "{{gatewayPort}}",
+          "path": ["api", "v1", "gateway", "agents"]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+# 网关单测配置（Week 19）
+#
+# 目的：让 @SpringBootTest 起来时不依赖 Redis、不连平台。
+# 端口（GatewaySessionPort / GatewayCachePort / PlatformClientPort）在测试里用假实现替换，
+# Redis 客户端只是「存在但不使用」，因此这里只给一个不可达的本地地址与短超时，
+# 避免测试期间误打网络、也避免连接不上时长时间等待。
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6399
+      timeout: 200ms
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
+
+# Feign 客户端在单测里不发起真实调用（用 StubFeignClient 替代），这里把超时压到最短
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 200
+        readTimeout: 200
+        loggerLevel: basic
+
+gateway:
+  routes:
+    platform-uri: http://platform-under-test:8084
+  session:
+    token-name: satoken
+    ttl-seconds: 600
+    storage: redis
+  catalog:
+    cache-ttl-seconds: 30
+    key-prefix: gw:catalog:agents
+    idempotency-ttl-seconds: 300
+
+logging:
+  level:
+    com.aicode.gateway: WARN
+    org.springframework.cloud.gateway: WARN

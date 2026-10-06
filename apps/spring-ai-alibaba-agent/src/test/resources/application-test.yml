@@ -37,3 +37,9 @@ langfuse:
   enabled: false
   prompt:
     enabled: false
+
+# Week 19：单测不挂 SkyWalking Java Agent，手动埋点显式关闭（默认值也是 false）。
+# 需要断言装饰器行为的测试自行 new SkyWalkingObservabilityAdapter + 假桥，不依赖 Agent。
+observability:
+  skywalking:
+    enabled: false

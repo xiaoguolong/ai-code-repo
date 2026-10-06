@@ -24,6 +24,9 @@
         <spring-ai.version>1.0.0</spring-ai.version>
         <spring-ai-alibaba.version>1.0.0.2</spring-ai-alibaba.version>
         <sa-token.version>1.46.0</sa-token.version>
+        <!-- SkyWalking Toolkit 在 Maven Central 的最新可发布版本为 9.7.0（10.x 只随发行包提供）。
+             该 artifact 只声明静态方法签名，与 10.x Agent 的 apm-toolkit-activation 运行时兼容。 -->
+        <skywalking.toolkit.version>9.7.0</skywalking.toolkit.version>
     </properties>
 
     <dependencies>
@@ -97,6 +100,20 @@
         <dependency>
             <groupId>io.micrometer</groupId>
             <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!--
+          Week 19：SkyWalking 手动埋点 Toolkit。
+          作用域 provided：只提供编译期符号（TraceContext / ActiveSpan / Tracer 的静态方法签名），
+          运行期由 Java Agent 的 apm-toolkit-activation 提供实现。
+          为什么仍需反射调用（见 ToolkitSpanBridge）：Agent 未挂载时这些类不在 classpath，
+          直接引用会 NoClassDefFoundError；反射 + 降级可保证「没挂 Agent 也能正常启动」。
+        -->
+        <dependency>
+            <groupId>org.apache.skywalking</groupId>
+            <artifactId>apm-toolkit-trace</artifactId>
+            <version>${skywalking.toolkit.version}</version>
+            <scope>provided</scope>
         </dependency>
 
         <dependency>

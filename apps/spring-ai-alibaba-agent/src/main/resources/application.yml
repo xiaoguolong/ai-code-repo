@@ -53,7 +53,15 @@ auth:
   password-salt: ${AUTH_PASSWORD_SALT:platform-dev-salt}
 
 sa-token:
-  token-name: satoken
+  # 会话头名与前缀（Week 19 定稿，已真机验证）。
+  # 依据（读 sa-token-core 1.46.0 源码 StpLogic#getTokenValueNotCut 确认）：
+  #   1) Sa-Token 只从「token-name 指定的头」取原始值，**不会**回退读其他头；
+  #   2) 原始值必须以 `tokenPrefix + 空格` 开头，否则 getTokenValue() 直接返回 null（不抛异常），
+  #      表现为「token 明明在，checkLogin 一律 401」。
+  # 取 Authorization + Bearer 的原因：HTTP 标准头，网关/客户端/第三方工具都天然支持，
+  # 不需要为「内部调用」发明第二套头。**注意 tokenPrefix 非空时不能只传裸 token**。
+  token-name: Authorization
+  token-prefix: Bearer
   timeout: 86400
 
 platform:
@@ -72,6 +80,15 @@ platform:
 observability:
   # Span / 指标埋点总开关。false 时装配空实现，零 span、零指标、零开销。
   enabled: ${OBSERVABILITY_ENABLED:true}
+  # Week 19：SkyWalking 手动埋点（服务拓扑与 HTTP/JDBC/Redis/JVM 由 Java Agent 自动获取，
+  # 本开关只控制我们自己的 agent.run / llm.chat / tool.call 业务 span 是否叠加）。
+  # 注意：Java Agent 由启动参数 -javaagent 决定，无法用本文件控制（见 docs/deploy/week-19-skywalking.md）。
+  skywalking:
+    enabled: ${SKYWALKING_ENABLED:false}
+    # 下面两项只用于自检展示；真实生效值是启动参数 SW_AGENT_NAME / SW_AGENT_COLLECTOR_BACKEND_SERVICES
+    service-name: ${SW_AGENT_NAME:}
+    backend-service: ${SW_AGENT_COLLECTOR_BACKEND_SERVICES:}
+    tag-prefix: aicode
 
 # Week 18：Langfuse（LLM Trace / Prompt 管理 / Token 与成本分析）。
 # 默认全关：既不打网络也不产生 langfuse.* 属性；密钥只从环境变量或模块 .env 读取，禁止写进本文件。

@@ -1,0 +1,66 @@
+# Week 19 — Apache SkyWalking 10.2.0 自托管（OAP + UI）
+#
+# 用途：为 ai-code-repo 提供「服务拓扑 + HTTP/Feign/JDBC/Redis/JVM」监控后端。
+# 与 Week 18 的 Langfuse 并存但**存储隔离**：
+#   - Langfuse 用自带 postgres 容器（宿主 127.0.0.1:15432）
+#   - SkyWalking 用**本机既有** PostgreSQL 16 容器（pg16，宿主 5432）里的独立库 `skywalking`
+# 这样两套观测后端互不污染，也不与业务库 `aidemo` 混用。
+#
+# 为什么不用 BanyanDB（10.x 默认存储）：本机只剩 ~1.2 GB 可用内存，
+# 再常驻一个存储引擎会直接压垮节点；SkyWalking 10.2.0 已**移除 H2 存储**，
+# 因此「复用已有 PostgreSQL + 独立库」是资源占用与官方支持之间的最优解（见部署文档 2.1）。
+#
+# 启动：先按 .env.example 生成 .env，然后
+#   docker compose up -d
+#   docker compose ps
+#   docker compose logs -f oap | head -50
+
+services:
+  oap:
+    image: apache/skywalking-oap-server:10.2.0
+    container_name: skywalking-oap
+    restart: unless-stopped
+    environment:
+      # 存储：复用宿主既有 PostgreSQL 16（容器网络经 host.docker.internal 或宿主 IP 访问）
+      SW_STORAGE: postgresql
+      SW_JDBC_URL: ${SW_JDBC_URL}
+      SW_DATA_SOURCE_USER: ${SW_DATA_SOURCE_USER}
+      SW_DATA_SOURCE_PASSWORD: ${SW_DATA_SOURCE_PASSWORD}
+      # 单机模式；内存上限显式给死，避免 JVM 默认按宿主内存的四分之一吃满节点
+      SW_CLUSTER: standalone
+      JAVA_OPTS: ${OAP_JAVA_OPTS:--Xms256M -Xmx768M}
+    ports:
+      # 11800：Agent 上报（gRPC）；12800：UI 查询（HTTP）
+      - "11800:11800"
+      - "12800:12800"
+    networks:
+      - skywalking
+
+  ui:
+    image: apache/skywalking-ui:10.2.0
+    container_name: skywalking-ui
+    restart: unless-stopped
+    environment:
+      SW_OAP_ADDRESS: http://oap:12800
+      # UI 容器内是 Node 服务（默认 8080）；内存同样显式限制
+      JAVA_OPTS: ${UI_JAVA_OPTS:--Xms64M -Xmx256M}
+    ports:
+      # 宿主 8088 → 容器 8080，避免与网关（8080）冲突
+      - "${SW_UI_PORT:-8088}:8080"
+    depends_on:
+      - oap
+    networks:
+      - skywalking
+
+networks:
+  skywalking:
+    driver: bridge
+
+# 说明：
+# 1) OAP 需要访问宿主 5432 上的 pg16 容器。若 pg16 与本 compose 不在同一 docker 网络，
+#    请把 SW_JDBC_URL 指向宿主可达地址（例如 jdbc:postgresql://192.168.132.128:5432/skywalking）
+#    或把 pg16 加入本网络；文档给出的命令使用宿主 IP，最省事也最不易错。
+# 2) 数据库需**预先创建**（OAP 只建表，不建库）：
+#      docker exec pg16 psql -U postgres -d postgres -c 'CREATE DATABASE skywalking OWNER aidemo'
+#    本机 aidemo 用户无 CREATEDB 权限，故建库用超级用户 postgres（实测踩过）。
+# 3) 只暴露 11800/12800/8088：不要给 OAP/UI 开放更多端口。
