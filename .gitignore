@@ -45,6 +45,9 @@ ehthumbs.db
 
 # Secrets — never commit
 .env
+# .env 的本地备份（含真实密钥，例如 .env.bak-vm）—— 永不入库
+.env.bak*
+.env.*.bak*
 *.pem
 *.p12
 *.jks
@@ -52,6 +55,18 @@ application-local.yml
 application-local.yaml
 application-secret.yml
 **/secrets/
+
+# 远程服务器连接配置（含凭据）——server.conf 留本地不入库；
+# server.conf.example（模板）与 remote.ps1 / provision.sh（无凭据）可以提交
+server.conf
+.ssh-local/
+.ssh-tencent/
+id_ed25519*
+id_rsa*
+*.ppk
+
+# 云上中间件账号汇总（含明文密码，仅本机使用）
+.env.middleware
 
 # Logs
 *.log

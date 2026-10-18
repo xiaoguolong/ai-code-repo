@@ -1,0 +1,76 @@
+# Week 20 — 云上数据层（PostgreSQL 16 + Redis 7.2）
+#
+# 与 deploy/langfuse、deploy/skywalking 的分工：
+#   - 本文件：**业务库**（aidemo）+ **SkyWalking 存储库**（skywalking）共用一个 PG；
+#     Redis 供业务缓存/会话/记忆使用。
+#   - Langfuse 完全自带 PG/Redis/ClickHouse/MinIO（见 deploy/langfuse），与本文件隔离，
+#     避免升级 Langfuse 时动到业务数据。
+#
+# 端口只绑 127.0.0.1：
+#   - 应用（8084/8080）与应用同机运行时走回环即可；
+#   - 外部一律不暴露，安全组也不开放 5432/6379。
+#
+# 密码来自同目录 .env（不入库），模板见 .env.example：
+#   cp .env.example .env && 填好密码 && docker compose up -d
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aidemo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-aidemo}
+      TZ: Asia/Shanghai
+      PGTZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aidemo} -d ${POSTGRES_DB:-aidemo}"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    networks:
+      - ai-net
+
+  redis:
+    image: redis:7.2
+    container_name: redis72
+    restart: unless-stopped
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    networks:
+      - ai-net
+
+volumes:
+  pg_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  # 固定名字，供 deploy/skywalking 以 external 方式加入（OAP 直连 postgres:5432）
+  ai-net:
+    name: ai-net
+    driver: bridge

@@ -1,0 +1,54 @@
+# ============================================================================
+# server.conf 的模板副本（**这个文件可以提交**，里面没有任何真实凭据）
+# ----------------------------------------------------------------------------
+# 用法：
+#   Windows:  Copy-Item server.conf.example server.conf
+#   Bash   :  cp server.conf.example server.conf
+#   然后把 server.conf 里的 <必填> 项填成自己的值。
+#
+# server.conf 已被 .gitignore 忽略，**永远不会被提交**；
+# 本文件（*.example）是大写模板，用于让新环境知道该配哪些项。
+#
+# 安全约定（务必遵守）：
+#   1) 真实密码只写进 server.conf，不要写进本文件、不要贴到聊天/工单/截图；
+#   2) 首次连接成功后立刻执行 `remote.ps1 -BootstrapKey`，
+#      脚本会把 AUTH_MODE 切成 key，并把 server.conf 里的 PASSWORD 就地清成占位符；
+#   3) 私钥默认落在仓库根的 .ssh-local/（已 gitignore），不要挪到会被打包分享的位置。
+# ============================================================================
+
+# ── 必填 ────────────────────────────────────────────────────────────────────
+# 公网 IP（腾讯云控制台 → 云服务器 → 实例列表 → 公网 IP）
+HOST=<填公网IP>
+
+# SSH 端口，默认 22
+PORT=22
+
+# 登录用户：
+#   - 腾讯云 Linux 镜像一般给 root 密码 → 填 root
+#   - 若 root 登录被拒，改成 ubuntu（Ubuntu 镜像默认用户，用 sudo 提权）
+USER=root
+
+# ── 认证方式（二选一）────────────────────────────────────────────────────────
+# AUTH_MODE=password：首次用密码登录（之后建议切 key）
+# AUTH_MODE=key     ：只用密钥登录
+AUTH_MODE=password
+
+# 控制台「自动生成密码」或你自设的密码（仅 password 模式需要）
+PASSWORD=<填密码>
+
+# 私钥路径（key 模式用；-BootstrapKey 会自动生成到该路径）
+KEY_PATH=.ssh-local\id_ed25519
+
+# ── 可选：环境参数（不填用默认值）────────────────────────────────────────────
+# 交换分区（GB）。4G 内存必配，建议 4；8G 内存配 2
+SWAP_GB=4
+
+# 时区
+TIMEZONE=Asia/Shanghai
+
+# 服务器上放部署物的目录
+DEPLOY_DIR=/opt/ai-code
+
+# Docker 镜像加速器（国内拉镜像慢时填；留空用默认）
+# 常用：https://docker.1panel.live  https://docker.m.daocloud.io
+DOCKER_MIRROR=

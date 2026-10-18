@@ -35,6 +35,9 @@ services:
       - "12800:12800"
     networks:
       - skywalking
+      # 云上用 service 名直连 PG（deploy/data 里的 postgres 容器），
+      # 因此 JDBC URL 写 jdbc:postgresql://postgres:5432/skywalking 即可，不需要宿主 IP
+      - ai-net
 
   ui:
     image: apache/skywalking-ui:10.2.0
@@ -55,6 +58,9 @@ services:
 networks:
   skywalking:
     driver: bridge
+  # 由 deploy/data 创建（name: ai-net），此处以 external 方式加入，实现「一个 PG 两个库」
+  ai-net:
+    external: true
 
 # 说明：
 # 1) OAP 需要访问宿主 5432 上的 pg16 容器。若 pg16 与本 compose 不在同一 docker 网络，

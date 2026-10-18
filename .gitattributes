@@ -1,0 +1,30 @@
+# 行尾策略
+# ----------------------------------------------------------------------------
+# 背景：本仓库在 Windows 上开发（core.autocrlf=true 会把检出内容转成 CRLF），
+# 但 tools/ 与 deploy/ 下的脚本要传到 Linux 服务器执行 —— 带 CRLF 的 .sh 会直接
+# 报 "bash^M: bad interpreter" 或 "syntax error near unexpected token $'\r'"
+# （本次搭建确实踩过 CRLF 污染 .env 的坑）。因此按类型锁死行尾。
+
+* text=auto
+
+# 必须在 Linux 上执行的文件：强制 LF，即使 Windows 检出也不转换
+*.sh   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.lua  text eol=lf
+*.conf text eol=lf
+*.env  text eol=lf
+.env.* text eol=lf
+
+# Windows 专用脚本：保持 CRLF，避免某些老工具对 LF 处理异常
+*.ps1  text eol=crlf
+*.cmd  text eol=crlf
+*.bat  text eol=crlf
+
+# 二进制
+*.jar  binary
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.zip  binary
+*.gz   binary
