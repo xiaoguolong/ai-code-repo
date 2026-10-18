@@ -655,8 +655,11 @@ JDK HttpClient 明文 HTTP 的 h2c 升级），详见 `notes/impl-logs/week-18.m
 - [x] JVM（实例堆/GC/线程/类加载 + 实例元数据）
 
 交付：Spec `docs/specs/week-19.md` ｜ 架构 `docs/architecture/week-19-architecture.md` ｜
-接口 `docs/api/week-19-api.md` ｜ 部署 `docs/deploy/week-19-skywalking.md` ｜
-部署物 `deploy/skywalking/`（compose + .env.example）｜ 实现日志 `notes/impl-logs/week-19.md` ｜
+接口 `docs/api/week-19-api.md` ｜ 部署 `docs/deploy/week-19-skywalking.md` +
+`docs/deploy/week-19-cloud-env.md` ｜
+部署物 `deploy/skywalking/`、`deploy/data/`（compose + .env.example）｜
+实现日志 `notes/impl-logs/week-19.md` + `notes/impl-logs/week-19-cloud.md` ｜
+运维工具 `remote.ps1`、`provision.sh`、`tools/`（隧道/计划任务/镜像拉取/验收） ｜
 Postman `docs/postman/week-19.postman_collection.json`
 
 实测：**在 192.168.132.128 上自部署 SkyWalking 10.2.0（OAP + UI，存储用既有 PostgreSQL 独立库 `skywalking`）
@@ -674,6 +677,36 @@ Postman `docs/postman/week-19.postman_collection.json`
 - 真机验收抓出并修复了 6 个只在真实环境暴露的缺陷（PowerShell 解析 `-D`、Agent 目录 `scp -r` 损坏、
   **WebFlux 下 Feign 缺 `HttpMessageConverters`**、**sa-token 头与前缀语义**、代理路由响应二次写出、
   多构造器缺 `@Autowired` 导致上下文起不来），详见 `notes/impl-logs/week-19.md` 第 10.2 节。
+
+### 第 19 周 · 环境批次（2026-10-18）：搬到云上并解除「二选一」
+
+原 VMware 节点只有 3.8 G，Langfuse（1.75 G）与 SkyWalking（1.03 G）**无法同时在线**。
+本批次把两套观测后端 + PG16 + Redis7.2 迁到**腾讯云 4C8G / Ubuntu 22.04.5**，共 **10 个容器**并存：
+
+| 组件 | 版本 | 入口 |
+|------|------|------|
+| PostgreSQL 16（`aidemo` + `skywalking` 两库） | 16.15 | `127.0.0.1:5432` |
+| Redis | 7.2.16 | `127.0.0.1:6379` |
+| SkyWalking OAP / UI | 10.2.0 | `:11800` / `:8088` |
+| Langfuse | 4.63.0 | `:3000` |
+
+应用仍跑在**本地 IDEA**，通过 **SSH 隧道**（`tools/tunnel.ps1`，已注册 Windows 计划任务登录自启）
+访问云端中间件 —— 数据库与 Redis 只绑回环，公网零暴露。实测结果：
+
+- 本地应用 **7/7** 全链路通过（health / 登录 / trace-context / skywalking-status /
+  agent 目录 / 执行记录 / auth-me）；
+- 数据确实落云：OAP `listServices` 出现 `ai-code-platform`、今日 **72** 个 segment、
+  实例名 **`platform-local`**；业务库 8 表 / 3 个种子用户 / Flyway V1–V3 全 OK；
+- 网络实测：Docker Hub 不可达；**显式 mirror 主机名拉取 3 s，走 `docker.io` 名字 121 s**（差 40 倍），
+  故采用「预拉 + retag」策略；
+- 抓出并修复 **15 个真实缺陷**，其中三条的共性是「**报错信息指向的位置是错的**」：
+  用户名拼错会同时伪装成「密码错误」与「密钥未注册」、配置读取的编码问题伪装成「未填」、
+  `git check-ignore` 判错（看输出而非退出码）导致含密钥的备份差点入库；
+- 迁移成本已压到 **改 4 处**（`server.conf` 的 HOST/私钥、安全组、镜像源、Docker apt 源），
+  详见 `docs/deploy/week-19-cloud-env.md` 第 8 节。
+
+> 详细过程：`docs/deploy/week-19-cloud-env.md`（部署与迁移手册）、
+> `notes/impl-logs/week-19-cloud.md`（探针式 RED、15 条缺陷表、10 条 ADR）。
 
 
 ---
