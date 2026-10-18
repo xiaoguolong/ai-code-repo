@@ -1,5 +1,12 @@
 # 部署：Week 19 — Apache SkyWalking 10.2.0 自托管（OAP + UI + Java Agent）
 
+> ⚠️ **环境已迁移（2026-10-18）**：本文的 `192.168.132.128`（VMware，3.8 G）是当时的验证环境，
+> 现已迁至**腾讯云 4C8G**，且 Langfuse 与 SkyWalking **可同时在线**（原先受 3.8 G 内存限制只能二选一）。
+> 现网拓扑、迁移步骤与踩坑记录见 [`week-19-cloud-env.md`](./week-19-cloud-env.md)；
+> 本地应用通过 SSH 隧道连云端 OAP（`-Dskywalking.collector.backend_service=127.0.0.1:11800`）。
+> 本文保留为「单机部署 SkyWalking + Agent 接入」的原始操作手册。
+
+
 > 目标：在一台 Linux 主机上用 Docker Compose 起一套 **SkyWalking OAP + UI**，
 > 让**应用侧零代码改动**获得 HTTP / Feign / JDBC / Redis / JVM 五类监控与**服务拓扑**；
 > 业务语义（`agent.run` / `llm.chat` / `tool.call`）由 `apm-toolkit-trace` 手动埋点补上。

@@ -360,8 +360,8 @@ docker run --rm -v langfuse_clickhouse_data:/data -v $(pwd):/backup alpine \
 
 | 项 | 状态 | 说明 |
 |----|------|------|
-| Langfuse trace 验证 | ⏳ | 需跑一次真实模型调用（约 3.5k tokens）才会产生 trace 与 `execution_record` |
-| `execution_record` 落库验证 | ⏳ | 同上 |
+| Langfuse trace 验证 | ✅ 已完成（2026-10-18） | 跑了一次真实执行（46 s）：`execution_record` 0→1；Langfuse v4 的 `events_full` 收到该 trace 的 **10 条 event**（SPAN/GENERATION/TOOL/AGENT）。注意 v4 的 `traces` 表已废弃，必须查 `events_*` |
+| `execution_record` 落库验证 | ✅ 已完成 | 同一次执行写入成功（云端 PG 从 0 变 1） |
 | 应用上云 | ❌ 不需要 | 暂无前端，本地开发更方便 |
 | SkyWalking 自检 `backend` 字段为空 | 小瑕疵 | 只读环境变量 `SW_AGENT_COLLECTOR_BACKEND_SERVICES`，不影响实际上报；可在 `.env` 补一行 |
 | Prometheus / Grafana | 未开始 | 后续周次 |

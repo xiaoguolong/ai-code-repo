@@ -1,5 +1,12 @@
 # 部署：Week 18 — Langfuse v4 自托管（Docker Compose）
 
+> ⚠️ **环境已迁移（2026-10-18）**：本文的 `192.168.132.128`（VMware，3.8 G）是当时的验证环境，
+> 现已迁至**腾讯云 4C8G**。当前现网拓扑、迁移步骤与踩坑记录见
+> [`week-19-cloud-env.md`](./week-19-cloud-env.md)。
+> 本文保留为「单机部署 Langfuse」的原始操作手册 —— Compose 与 `.env` 设计仍然有效，
+> 只是主机地址变了；新环境里 Langfuse 与 SkyWalking 可以**同时在线**（8 G 足够）。
+
+
 > 目标：在 **192.168.132.128**（可换任意 Linux 主机）用 Docker Compose 起一套 **Langfuse v4**，
 > 让 8084 平台把 `agent.run / llm.chat / tool.call` 的 span 经 OTLP 推送到 Langfuse，
 > 在 UI 上看到 **trace / generation / token / cost**，并把 Prompt 交给 Langfuse 管理。

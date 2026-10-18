@@ -213,10 +213,10 @@
 
 | 项 | 状态 | 影响 |
 |----|------|------|
-| Langfuse trace 未验证 | ⏳ 待跑一次真实模型调用（约 3.5k tokens） | OTLP 上报与 `execution_record` 落库两条链路仍未点亮 |
+| ~~Langfuse trace 未验证~~ | ✅ 已补验 | 真实执行 46 s：`execution_record` 0→1、Langfuse `events_full` 收到该 trace 10 条 event。**教训：v4 的 `traces` 表已废弃，查 `events_*`** |
 | 隧道依赖本机开机 | 已知 | 云端无法独立提供服务；应用上云后解除 |
 | 单机无高可用 | 已知 | 所有中间件都在一台 4C8G 上，机器故障即全停 |
-| 数据无备份策略 | ⚠️ 未做 | 建议加 cron `pg_dump` + 对象存储 |
+| ~~数据无备份策略~~ | ✅ 已做 | `deploy/backup/backup.sh` + cron 03:30、保留 7 份、恢复演练通过；**仍未做异地备份** |
 | Langfuse 无 TTL | ⚠️ 未配 | ClickHouse 会持续增长，50G 盘需关注 |
 | 口令登录仍开启 | 已知 | 安全组已限源 IP；稳定后可关 |
 | SkyWalking 自检 `backend` 为空 | 小瑕疵 | 仅影响展示，可在 `.env` 补 `SW_AGENT_COLLECTOR_BACKEND_SERVICES` |

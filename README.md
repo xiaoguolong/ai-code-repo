@@ -619,6 +619,9 @@ Tool
 Postman `docs/postman/week-18.postman_collection.json`
 
 实测：**在 192.168.132.128 上自部署 Langfuse v4.50.0 真机验收通过**（六容器 healthy，headless 初始化自动建好项目与 API Key）。
+
+> 📌 **环境已迁移（2026-10-18）**：现网为腾讯云 4C8G 上的 **Langfuse 4.63.0**，与 SkyWalking 同时在线，
+> 详见 [`docs/deploy/week-19-cloud-env.md`](docs/deploy/week-19-cloud-env.md)。下文 `192.168.132.128` 的数值为当时记录。
 `langfuse.enabled=true` 时容器内**同时**存在 Boot 的 collector 导出器与自定义 Langfuse 导出器
 （`SpanExporters` 收集到 2 个，一次埋点两路导出）；真实 LLM Agent Run 的 span 全部落进 v4 事件库：
 `agent.run`(AGENT) / `llm.chat`(GENERATION)×2 / `tool.call`(TOOL)×2 + 框架自动埋点 span，
