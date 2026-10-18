@@ -40,12 +40,43 @@ if (-not $k) { $k = ".ssh-local\xshell_rsa" }
 if (-not [System.IO.Path]::IsPathRooted($k)) { $k = Join-Path $Repo $k }
 if (-not $h -or -not (Test-Path $k)) { Log "ERROR: HOST 为空或私钥不存在 ($k)"; exit 1 }
 
-# 已有存活进程则直接返回
+# 探活：PG 端口能握手 + Langfuse 能返回 200
+function Test-TunnelHealthy {
+    $pgOk = $false
+    try {
+        $c = New-Object System.Net.Sockets.TcpClient
+        if ($c.ConnectAsync("127.0.0.1", 5432).Wait(1500)) {
+            $c.ReceiveTimeout = 2000
+            $s = $c.GetStream()
+            $req = [byte[]](0,0,0,8,4,210,22,47)   # PostgreSQL SSLRequest
+            $s.Write($req, 0, $req.Length); $s.Flush()
+            $buf = New-Object byte[] 1
+            $n = $s.Read($buf, 0, 1)
+            $pgOk = ($n -eq 1 -and ($buf[0] -eq 83 -or $buf[0] -eq 78))
+        }
+        $c.Close()
+    } catch { }
+    $lfOk = $false
+    try {
+        $r = Invoke-WebRequest -Uri "http://127.0.0.1:3000/api/public/health" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
+        $lfOk = ($r.StatusCode -eq 200)
+    } catch { }
+    return @{ Pg = $pgOk; Langfuse = $lfOk; Healthy = ($pgOk -and $lfOk) }
+}
+
+# 已有进程时不能只看存活 —— IP 变更会让 ssh 进程"活着但转发全死"（实测踩过），
+# 必须探活，不健康就杀掉重来。
 if ((-not $Force) -and (Test-Path $PidFile)) {
-    $old = (Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
-    if ($old -and (Get-Process -Id $old -ErrorAction SilentlyContinue)) {
-        Log "already running (pid=$old), nothing to do"
-        exit 0
+    $oldPid = (Get-Content $PidFile -ErrorAction SilentlyContinue | Select-Object -First 1)
+    if ($oldPid -and (Get-Process -Id $oldPid -ErrorAction SilentlyContinue)) {
+        $h = Test-TunnelHealthy
+        if ($h.Healthy) {
+            Log "already running and healthy (pid=$oldPid), nothing to do"
+            exit 0
+        }
+        Log "pid=$oldPid alive but UNHEALTHY (pg=$($h.Pg) langfuse=$($h.Langfuse)), restarting"
+        Stop-Process -Id $oldPid -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 2
     }
 }
 
@@ -58,7 +89,7 @@ $forwards = @(
 )
 
 for ($attempt = 1; $attempt -le 3; $attempt++) {
-    $args = @("-N", "-T", "-i", "`"$k`"", "-p", $p,
+    $args = @("-N", "-T", "-i", $k, "-p", $p,
         "-o", "BatchMode=yes",
         "-o", "ExitOnForwardFailure=yes",
         "-o", "ServerAliveInterval=30",

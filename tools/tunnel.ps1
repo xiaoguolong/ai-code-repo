@@ -147,7 +147,7 @@ if ($busy) {
 }
 
 $args = @("-N", "-T",
-    "-i", "`"$KeyPath`"",
+    "-i", $KeyPath,
     "-p", $Port,
     "-o", "BatchMode=yes",
     "-o", "ExitOnForwardFailure=yes",
