@@ -6,6 +6,7 @@ import com.aicode.core.domain.model.ChatResult;
 import com.aicode.core.domain.model.ToolDefinition;
 import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.MonitoringMetricNames;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
@@ -106,10 +107,10 @@ public class ObservableChatModelAdapter implements ChatModelPort {
     /** 登记一次模型调用的次数与耗时指标（成功 / 失败共用，避免两处标签写法漂移）。 */
     private void recordCall(String model, String outcome, long startedAt) {
         String tag = MicrometerObservabilityAdapter.modelName(model);
-        observability.recordCounter("llm.call.count", 1.0,
+        observability.recordCounter(MonitoringMetricNames.LLM_CALL_COUNT, 1.0,
                 ObservabilityAttributes.GEN_AI_REQUEST_MODEL, tag,
                 ObservabilityAttributes.LLM_OUTCOME, outcome);
-        observability.recordDuration("llm.call.duration", elapsedMs(startedAt),
+        observability.recordDuration(MonitoringMetricNames.LLM_CALL_DURATION, elapsedMs(startedAt),
                 ObservabilityAttributes.GEN_AI_REQUEST_MODEL, tag,
                 ObservabilityAttributes.LLM_OUTCOME, outcome);
     }

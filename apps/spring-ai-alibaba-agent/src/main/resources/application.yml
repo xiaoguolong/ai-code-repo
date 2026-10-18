@@ -127,7 +127,54 @@ langfuse:
       input-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_CHAT_INPUT:0.27}
       output-per-1m: ${LANGFUSE_PRICE_DEEPSEEK_CHAT_OUTPUT:1.10}
 
+# Week 20：完整监控体系（Prometheus + Grafana 统一纳管）。
+# 本段只服务「自检接口 GET /api/v1/platform/observability/monitoring-overview」与深链展示，
+# 不参与数据上报（上报路径仍是 /actuator/prometheus 与 OTLP）。地址默认走本机回环，
+# 本地应用 + 云端中间件场景由 tools\tunnel.ps1 的 19090/3001 本地转发打通。
+monitoring:
+  enabled: ${MONITORING_ENABLED:true}
+  probe:
+    # 单个探针超时：三个探针串行最坏 2.4s；配合 30s 缓存，自检接口不会被打爆。
+    timeout-ms: ${MONITORING_PROBE_TIMEOUT_MS:800}
+    cache-ttl-seconds: ${MONITORING_PROBE_CACHE_TTL_SECONDS:30}
+  prometheus:
+    base-url: ${PROMETHEUS_BASE_URL:http://127.0.0.1:19090}
+    # 平台自己的指标路径（展示用，实际抓取由 Prometheus 配置决定）
+    self-metrics-path: ${PROMETHEUS_SELF_METRICS_PATH:/actuator/prometheus}
+    ready-path: ${PROMETHEUS_READY_PATH:/-/ready}
+  grafana:
+    base-url: ${GRAFANA_BASE_URL:http://127.0.0.1:3001}
+    # 必须与 deploy/grafana/dashboards 里 JSON 的 uid 一致
+    dashboard-uid: ${GRAFANA_DASHBOARD_UID:aicode-platform-overview}
+  otel:
+    # 与 management.otlp.tracing.* 使用同一组环境变量，避免两处配置漂移
+    trace-endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+    sampling-probability: ${OTEL_TRACES_SAMPLER_PROBABILITY:1.0}
+    export-enabled: ${OTEL_EXPORT_ENABLED:true}
+  links:
+    skywalking-ui-url: ${SKYWALKING_UI_URL:http://127.0.0.1:8088}
+  targets:
+    # Prometheus 的第二个抓取目标：网关 8080 的指标出口（Week 20 新开）
+    gateway-metrics-url: ${GATEWAY_METRICS_URL:http://127.0.0.1:8080/actuator/prometheus}
+
 management:
+  metrics:
+    tags:
+      # 公共标签：两个应用抓进同一个 Prometheus 后，Grafana 用 application 区分曲线
+      application: ${APP_METRICS_TAG:ai-code-platform}
+    distribution:
+      # Week 20：为 Timer 生成直方图桶。否则 Prometheus 只有 _count/_sum，
+      # Grafana 的 P95 面板与 alerts.yml 的 histogram_quantile 会永远为空（实测踩过）。
+      percentiles-histogram:
+        agent.run.duration: true
+        llm.call.duration: true
+        http.server.requests: true
+      # 默认桶上界是 30s，而一次 Agent 执行 / 一次 LLM 调用经常 30–60s：
+      # 超过上界的观测只会落进 +Inf，histogram_quantile 直接返回 NaN（Grafana P95 空白）。
+      maximum-expected-value:
+        agent.run.duration: 120s
+        llm.call.duration: 120s
+        http.server.requests: 30s
   tracing:
     enabled: true
     # 采样率：演示/验收取 1.0 保证 span 全落；生产环境按容量用环境变量降到 0.1 量级。

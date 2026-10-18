@@ -4,6 +4,7 @@ import com.aicode.core.domain.model.TokenUsage;
 import com.aicode.framework.infrastructure.logging.TraceIds;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
 import com.aicode.framework.observability.domain.LangfuseAttributes;
+import com.aicode.framework.observability.domain.MonitoringMetricNames;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
@@ -111,12 +112,12 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
         }
         String tag = modelName(model);
         if (usage.promptTokens() > 0) {
-            recordCounter("llm.tokens.total", usage.promptTokens(),
+            recordCounter(MonitoringMetricNames.LLM_TOKENS, usage.promptTokens(),
                     ObservabilityAttributes.GEN_AI_REQUEST_MODEL, tag,
                     ObservabilityAttributes.TOKEN_TYPE, ObservabilityAttributes.TOKEN_TYPE_PROMPT);
         }
         if (usage.completionTokens() > 0) {
-            recordCounter("llm.tokens.total", usage.completionTokens(),
+            recordCounter(MonitoringMetricNames.LLM_TOKENS, usage.completionTokens(),
                     ObservabilityAttributes.GEN_AI_REQUEST_MODEL, tag,
                     ObservabilityAttributes.TOKEN_TYPE, ObservabilityAttributes.TOKEN_TYPE_COMPLETION);
         }

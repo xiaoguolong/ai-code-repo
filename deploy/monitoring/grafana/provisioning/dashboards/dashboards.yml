@@ -1,0 +1,17 @@
+# Grafana 仪表盘自动装配（Week 20）
+# JSON 文件放在 /var/lib/grafana/dashboards（compose 已挂载 ./grafana/dashboards）。
+# disableDeletion=false：允许在 UI 里改，但重启后以文件为准（updateIntervalSeconds 生效）。
+apiVersion: 1
+
+providers:
+  - name: ai-code
+    orgId: 1
+    folder: AI Code
+    folderUid: ai-code
+    type: file
+    disableDeletion: false
+    allowUiUpdates: true
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

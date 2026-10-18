@@ -798,8 +798,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 17 | OpenTelemetry（Trace/Span/Metric/Context + 指标出口） | docs/specs/week-17.md | notes/impl-logs/week-17.md | 已关闭 |
 | 18 | Langfuse（LLM Trace / Prompt 管理 / Token 与成本） | docs/specs/week-18.md | notes/impl-logs/week-18.md | 已关闭（v4.50.0 真机端到端验收通过） |
 | 19 | SkyWalking（网关接入 + HTTP/Feign/JDBC/Redis/JVM + 服务拓扑） | docs/specs/week-19.md | notes/impl-logs/week-19.md | 已关闭（10.2.0 真机端到端验收通过） |
-| 19 | SkyWalking | | | 未开始 |
-| 20 | 完整监控体系 | | | 未开始 |
+| 20 | 完整监控体系（Prometheus + Grafana + 四后端统一自检 + 网关指标出口） | docs/specs/week-20.md | notes/impl-logs/week-20.md | 已关闭（Prometheus 2.55.1 / Grafana 11.3.1 真机端到端验收通过） |
 | 21–24 | 医疗 SaaS 四 Agent | | | 未开始 |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。

@@ -10,6 +10,7 @@ import com.aicode.framework.observability.domain.AgentObservabilityPort;
 import com.aicode.framework.observability.domain.LangfuseAttributes;
 import com.aicode.framework.observability.domain.LlmCost;
 import com.aicode.framework.observability.domain.LlmGenerationRecord;
+import com.aicode.framework.observability.domain.MonitoringMetricNames;
 import com.aicode.framework.observability.domain.PromptReference;
 import com.aicode.framework.observability.domain.SpanScope;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,7 +33,7 @@ import java.util.Optional;
  */
 public final class LangfuseGenerationSupport {
 
-    private static final String METRIC_COST = "llm.cost.usd";
+    private static final String METRIC_COST = MonitoringMetricNames.LLM_COST_USD;
 
     private final boolean enabled;
     private final LlmCostCalculator costCalculator;

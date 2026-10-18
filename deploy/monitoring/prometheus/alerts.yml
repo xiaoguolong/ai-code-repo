@@ -1,0 +1,153 @@
+# ============================================================================
+# 告警规则（Week 20）
+# ----------------------------------------------------------------------------
+# 口径说明：
+#   - 指标名是 Prometheus 导出名（agent_run_count_total / llm_tokens_total / ...），
+#     与 Java 常量 MonitoringMetricNames 的映射由 MonitoringMetricsContractTest 锁死；
+#   - 标签名里的点被替换成下划线：execution.status -> execution_status、
+#     gen_ai.request.model -> gen_ai_request_model、cache.hit -> cache_hit；
+#   - 所有 rate 窗口都 >= 2 个抓取间隔（15s * 2 = 30s），避免单点抖动误报。
+# ============================================================================
+
+groups:
+  - name: ai-code-availability
+    rules:
+      - alert: AiCodePlatformTargetDown
+        expr: up{job="ai-code-platform"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          component: platform
+        annotations:
+          summary: "平台 8084 指标抓取失败（反向隧道或应用未启动）"
+          description: "先确认本地应用已启动、tools\\metrics-tunnel.ps1 仍在运行；再看云端 127.0.0.1:18084 是否监听。"
+
+      - alert: AiCodeGatewayTargetDown
+        expr: up{job="ai-code-gateway"} == 0
+        for: 3m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "网关 8080 指标抓取失败（反向隧道或应用未启动）"
+          description: "网关不可用时平台仍可直连，故定为 warning；检查 127.0.0.1:18080 隧道端。"
+
+  - name: ai-code-slo
+    rules:
+      - alert: AiCodeHighHttp5xxRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="ai-code-platform",status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count{job="ai-code-platform"}[5m])), 0.001)
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          component: platform
+        annotations:
+          summary: "平台 5xx 比例 > 5%（5 分钟）"
+          description: "当前 {{ $value | humanizePercentage }}。先看 SkyWalking 端点错误率，再按业务 traceId 查日志与审计。"
+
+      - alert: AiCodeHighLatencyP95
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(http_server_requests_seconds_bucket{job="ai-code-platform"}[5m]))
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          component: platform
+        annotations:
+          summary: "平台 HTTP P95 > 5s"
+          description: "P95 = {{ $value | humanizeDuration }}。大模型调用本身耗时长，先区分 uri 再判断是 LLM 还是数据库。"
+
+      - alert: AiCodeAgentFailureRate
+        expr: |
+          sum(rate(agent_run_count_total{job="ai-code-platform",execution_status="FAILED"}[10m]))
+            / clamp_min(sum(rate(agent_run_count_total{job="ai-code-platform"}[10m])), 0.001)
+            > 0.2
+        for: 10m
+        labels:
+          severity: critical
+          component: agent
+        annotations:
+          summary: "Agent 执行失败率 > 20%（10 分钟）"
+          description: "失败率 {{ $value | humanizePercentage }}。用 execution_status=FAILED 的 agent_key 定位到具体 Agent，再看 llm_outcome。"
+
+      - alert: AiCodeLlmErrorRate
+        expr: |
+          sum(rate(llm_call_count_total{job="ai-code-platform",llm_outcome="FAILURE"}[10m]))
+            / clamp_min(sum(rate(llm_call_count_total{job="ai-code-platform"}[10m])), 0.001)
+            > 0.1
+        for: 10m
+        labels:
+          severity: critical
+          component: llm
+        annotations:
+          summary: "LLM 调用失败率 > 10%（10 分钟）"
+          description: "失败率 {{ $value | humanizePercentage }}。检查模型厂商可用性、Key 额度与超时配置；Langfuse 里看具体 generation 的错误。"
+
+      - alert: AiCodeTokenBurnSpike
+        expr: sum(rate(llm_tokens_total{job="ai-code-platform"}[10m])) > 5000
+        for: 10m
+        labels:
+          severity: warning
+          component: cost
+        annotations:
+          summary: "Token 消耗 > 5000 tokens/秒（10 分钟）"
+          description: "当前 {{ $value | humanize }} tokens/s。可能是死循环 Agent（max-iterations）或异常重试，核对 langfuse 的 trace 数与 llm_call_count_total。"
+
+      - alert: AiCodeToolFailureRate
+        expr: |
+          sum(rate(tool_call_count_total{job="ai-code-platform",tool_outcome="FAILURE"}[10m]))
+            / clamp_min(sum(rate(tool_call_count_total{job="ai-code-platform"}[10m])), 0.001)
+            > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: tool
+        annotations:
+          summary: "Tool 调用失败率 > 20%（10 分钟）"
+          description: "失败率 {{ $value | humanizePercentage }}。按 tool_name 看是哪个工具；参数白名单/患者数据域越权也会表现为 Tool 失败。"
+
+      - alert: AiCodeGatewayHigh5xxRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job="ai-code-gateway",status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count{job="ai-code-gateway"}[5m])), 0.001)
+            > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "网关 5xx 比例 > 5%（5 分钟）"
+          description: "网关 5xx 多为上游失败收敛（GATEWAY_UPSTREAM_ERROR / UPSTREAM_SERVER_ERROR），先看 gateway_upstream_error_count_total。"
+
+      - alert: AiCodeGatewayUpstreamErrors
+        expr: sum(rate(gateway_upstream_error_count_total{job="ai-code-gateway"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: gateway
+        annotations:
+          summary: "网关上游失败持续出现（> 0.1 次/秒）"
+          description: "当前 {{ $value | humanize }} 次/秒。按 error_code 标签区分：UPSTREAM_SERVER_ERROR 是平台 5xx，GATEWAY_UPSTREAM_ERROR 是网络/报文问题。"
+
+      - alert: AiCodeGatewayLoginFailureSpike
+        expr: sum(rate(gateway_session_login_count_total{job="ai-code-gateway",outcome="FAILURE"}[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: info
+          component: gateway
+        annotations:
+          summary: "网关登录失败率异常升高"
+          description: "可能是凭据错误攻击或平台登录接口故障；结合网关日志 traceId 与平台 auth 审计查看。"
+
+      - alert: AiCodePrometheusRuleEvaluationFailing
+        expr: increase(prometheus_rule_evaluation_failures_total[10m]) > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: monitoring
+        annotations:
+          summary: "Prometheus 规则评估失败"
+          description: "检查 /etc/prometheus/alerts.yml 语法与指标名是否存在（改名会让 PromQL 静默返回空，不会报错）。"

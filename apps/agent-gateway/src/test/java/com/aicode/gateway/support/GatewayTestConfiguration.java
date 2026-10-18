@@ -4,6 +4,7 @@ import com.aicode.gateway.application.GatewayAgentUseCase;
 import com.aicode.gateway.application.GatewaySessionUseCase;
 import com.aicode.gateway.application.GatewayStatusUseCase;
 import com.aicode.gateway.domain.port.GatewayCachePort;
+import com.aicode.gateway.domain.port.GatewayMetricsPort;
 import com.aicode.gateway.domain.port.GatewaySessionPort;
 import com.aicode.gateway.domain.port.PlatformClientPort;
 import com.aicode.gateway.infrastructure.config.GatewayCatalogProperties;
@@ -98,9 +99,10 @@ public class GatewayTestConfiguration {
     public GatewaySessionUseCase gatewaySessionUseCase(
             PlatformClientPort platformClientPort,
             GatewaySessionPort gatewaySessionPort,
-            GatewaySessionProperties testGatewaySessionProperties) {
+            GatewaySessionProperties testGatewaySessionProperties,
+            GatewayMetricsPort gatewayMetricsPort) {
         return new GatewaySessionUseCase(
-                platformClientPort, gatewaySessionPort, testGatewaySessionProperties);
+                platformClientPort, gatewaySessionPort, testGatewaySessionProperties, gatewayMetricsPort);
     }
 
     /** 目录与执行用例。 */
@@ -109,9 +111,10 @@ public class GatewayTestConfiguration {
             PlatformClientPort platformClientPort,
             GatewayCachePort gatewayCachePort,
             GatewayCatalogProperties testGatewayCatalogProperties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            GatewayMetricsPort gatewayMetricsPort) {
         return new GatewayAgentUseCase(
-                platformClientPort, gatewayCachePort, testGatewayCatalogProperties, objectMapper);
+                platformClientPort, gatewayCachePort, testGatewayCatalogProperties, objectMapper, gatewayMetricsPort);
     }
 
     /** 自检用例。 */

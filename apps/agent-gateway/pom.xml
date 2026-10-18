@@ -67,6 +67,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Week 20：网关指标出口 /actuator/prometheus（第 19 周只暴露 health,info，
+             网关 HTTP/Feign/JVM 指标仅存在于 SkyWalking，Prometheus 侧不可见） -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
 
         <!-- Week 19：统一入口网关（路由 / 谓词 / 过滤器） -->
         <dependency>

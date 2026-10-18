@@ -19,6 +19,7 @@ import com.aicode.framework.platform.domain.service.PlatformAgentRunner;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
 import com.aicode.framework.infrastructure.logging.TraceIds;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.MonitoringMetricNames;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
@@ -54,9 +55,6 @@ public class PlatformExecutionUseCase {
 
     /** Agent 执行 span 名。 */
     static final String SPAN_AGENT_RUN = "agent.run";
-
-    private static final String METRIC_RUN_COUNT = "agent.run.count";
-    private static final String METRIC_RUN_DURATION = "agent.run.duration";
 
     private final AgentRegistryPort agentRegistryPort;
     private final ExecutionRecordPort executionRecordPort;
@@ -192,10 +190,10 @@ public class PlatformExecutionUseCase {
                     String.valueOf(output.usage().totalTokens()));
         }
         long durationMs = elapsedMs(runStartedAt);
-        observability.recordCounter(METRIC_RUN_COUNT, 1.0,
+        observability.recordCounter(MonitoringMetricNames.AGENT_RUN_COUNT, 1.0,
                 ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
                 ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.COMPLETED.name());
-        observability.recordDuration(METRIC_RUN_DURATION, durationMs,
+        observability.recordDuration(MonitoringMetricNames.AGENT_RUN_DURATION, durationMs,
                 ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
                 ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.COMPLETED.name());
     }
@@ -207,10 +205,10 @@ public class PlatformExecutionUseCase {
         span.recordError(ex);
         span.attribute(ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
         span.attribute(ObservabilityAttributes.DURATION_MS, String.valueOf(elapsedMs(runStartedAt)));
-        observability.recordCounter(METRIC_RUN_COUNT, 1.0,
+        observability.recordCounter(MonitoringMetricNames.AGENT_RUN_COUNT, 1.0,
                 ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
                 ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
-        observability.recordDuration(METRIC_RUN_DURATION, elapsedMs(runStartedAt),
+        observability.recordDuration(MonitoringMetricNames.AGENT_RUN_DURATION, elapsedMs(runStartedAt),
                 ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
                 ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
     }

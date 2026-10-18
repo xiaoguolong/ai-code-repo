@@ -14,5 +14,12 @@ echo
 echo "=== 认证策略 ==="
 sshd -T 2>/dev/null | grep -iE '^(passwordauthentication|permitrootlogin)' | sed 's/^/  /'
 echo
+echo "=== 监控栈（Week 20）==="
+docker ps --format '{{.Names}}|{{.Status}}' 2>/dev/null | grep -E '^(prometheus|grafana|alertmanager)\|' || echo "  未启动"
+printf '  prometheus /-/ready : %s\n' "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:19090/-/ready)"
+printf '  grafana /api/health  : %s\n' "$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 http://127.0.0.1:3001/api/health)"
+printf '  指标反向隧道 18084   : %s\n' "$(ss -lnt 2>/dev/null | grep -q '127.0.0.1:18084' && echo LISTEN || echo DOWN)"
+printf '  指标反向隧道 18080   : %s\n' "$(ss -lnt 2>/dev/null | grep -q '127.0.0.1:18080' && echo LISTEN || echo DOWN)"
+echo
 echo "=== ubuntu 可用的公钥数量 ==="
 wc -l < /home/ubuntu/.ssh/authorized_keys 2>/dev/null || echo 0

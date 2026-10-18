@@ -5,6 +5,7 @@ import com.aicode.core.domain.model.ToolDefinition;
 import com.aicode.core.domain.model.ToolResult;
 import com.aicode.core.domain.port.ToolPort;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.MonitoringMetricNames;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.domain.SpanKind;
 import com.aicode.framework.observability.domain.SpanScope;
@@ -27,8 +28,6 @@ public class ObservableToolPort implements ToolPort {
 
     /** tool.call span 名。 */
     public static final String SPAN_NAME = "tool.call";
-
-    private static final String COUNTER_CALL = "tool.call.count";
 
     private final ToolPort delegate;
     private final AgentObservabilityPort observability;
@@ -85,13 +84,13 @@ public class ObservableToolPort implements ToolPort {
                 int chars = result == null || result.output() == null ? 0 : result.output().length();
                 scope.attribute(ObservabilityAttributes.TOOL_RESULT_CHARS, String.valueOf(chars));
                 langfuse.applyTool(scope, call, result);
-                observability.recordCounter(COUNTER_CALL, 1.0,
+                observability.recordCounter(MonitoringMetricNames.TOOL_CALL_COUNT, 1.0,
                         ObservabilityAttributes.TOOL_NAME, toolName,
                         ObservabilityAttributes.TOOL_OUTCOME, ObservabilityAttributes.OUTCOME_SUCCESS);
                 return result;
             } catch (RuntimeException ex) {
                 scope.recordError(ex);
-                observability.recordCounter(COUNTER_CALL, 1.0,
+                observability.recordCounter(MonitoringMetricNames.TOOL_CALL_COUNT, 1.0,
                         ObservabilityAttributes.TOOL_NAME, toolName,
                         ObservabilityAttributes.TOOL_OUTCOME, ObservabilityAttributes.OUTCOME_FAILURE);
                 throw ex;

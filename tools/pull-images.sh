@@ -63,6 +63,11 @@ pull_one "clickhouse/clickhouse-server:25.12"  "clickhouse/clickhouse-server:25.
 # 换成 Docker Hub 官方 minio/minio，功能等价（compose 里已改为可覆盖变量）
 pull_one "minio/minio:latest"                  "minio/minio:latest"                  || f=$((f+1))
 
+echo "=== stage: monitoring (Week 20) ==="
+pull_one "prom/prometheus:v2.55.1"   "prom/prometheus:v2.55.1"   || f=$((f+1))
+pull_one "grafana/grafana:11.3.1"    "grafana/grafana:11.3.1"    || f=$((f+1))
+pull_one "prom/alertmanager:v0.27.0" "prom/alertmanager:v0.27.0" || f=$((f+1))
+
 echo
 echo "=== images ==="
 docker images --format '{{.Repository}}:{{.Tag}}  {{.Size}}' | sort

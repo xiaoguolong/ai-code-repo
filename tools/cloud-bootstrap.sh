@@ -128,6 +128,31 @@ fi
 log "start langfuse stack"
 cd "$LF" && docker compose up -d 2>&1 | tail -8
 
+# ── 4) monitoring/.env（Week 20：Prometheus + Grafana）────────────────────────
+# 前提：deploy/monitoring 已上传到 /opt/ai-code/monitoring（见 docs/deploy/week-20-monitoring.md）。
+log "monitoring .env"
+MON=$BASE/monitoring
+if [ -f "$MON/docker-compose.yml" ]; then
+  if [ ! -f "$MON/.env" ]; then
+    cat > "$MON/.env" <<EOF
+GRAFANA_ADMIN_USER=admin
+GRAFANA_ADMIN_PASSWORD=$(rand_hex 12)
+PROMETHEUS_RETENTION=15d
+PROMETHEUS_RETENTION_SIZE=2GB
+EOF
+    chmod 600 "$MON/.env"
+    echo "generated"
+  else
+    echo "exists, keep as-is"
+  fi
+
+  log "start monitoring stack"
+  cd "$MON" && docker compose up -d 2>&1 | tail -8
+  echo "note: 本地应用指标的抓取还需要在本机执行 tools\\metrics-tunnel.ps1（反向隧道 18084/18080）"
+else
+  echo "SKIP: $MON/docker-compose.yml 不存在（先上传 deploy/monitoring）"
+fi
+
 log "containers"
 docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
 

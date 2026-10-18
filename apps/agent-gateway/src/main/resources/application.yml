@@ -69,14 +69,33 @@ feign:
         readTimeout: 30000
 
 management:
+  # Week 20：公共标签。网关与平台抓进同一个 Prometheus 后，Grafana 用 application 区分曲线；
+  # 同时避免两套服务的 http_server_requests / jvm_* 序列互相覆盖。
+  metrics:
+    tags:
+      application: ${APP_METRICS_TAG:agent-gateway}
+    distribution:
+      # 直方图桶：Grafana 的 P95 与 histogram_quantile 告警依赖 *_bucket 系列
+      percentiles-histogram:
+        gateway.agent.run.duration: true
+        http.server.requests: true
+        http.client.requests: true
+      # 网关转发一次 Agent 执行可能持续数十秒，默认 30s 上界会让 P95 变成 NaN
+      maximum-expected-value:
+        gateway.agent.run.duration: 120s
+        http.server.requests: 30s
+        http.client.requests: 120s
   endpoints:
     web:
       exposure:
-        # 网关只需要探活与基本信息；指标出口留给平台（Week 17/20）
-        include: health,info
+        # Week 20 起开放 prometheus：网关的 HTTP / Feign / Lettuce / JVM 指标可被抓取。
+        # 与平台 8084 同口径；Actuator 端点由独立管理端口/路径暴露，不经过网关鉴权过滤器。
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: never
+    prometheus:
+      enabled: true
 
 logging:
   level:

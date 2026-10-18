@@ -1,0 +1,44 @@
+# Alertmanager 配置模板（Week 20，可选）
+#
+# 默认 receiver 为空：告警会被接收并在 Alertmanager UI 可见，但不外发。
+# 要真正收到通知，按团队渠道二选一填：
+#   1) 企业微信 / 飞书 / 钉钉：webhook_configs
+#   2) 邮件：需要同时提供 smtp_*（Alertmanager 无内置 SMTP 凭据文件，用环境变量替换后挂载）
+#
+# 启用方式：docker compose --profile alerts up -d
+# 校验：curl -s http://127.0.0.1:9093/-/ready
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: default
+  group_by: ["alertname", "component"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  routes:
+    # 严重告警缩短重复间隔：可用性/错误率问题不该等 4 小时才提醒第二次
+    - matchers:
+        - severity="critical"
+      receiver: default
+      repeat_interval: 1h
+
+receivers:
+  - name: default
+    # 示例（取消注释并填自己的 webhook）：
+    # webhook_configs:
+    #   - url: "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<your-key>"
+    #     send_resolved: true
+
+inhibit_rules:
+  # 平台整体抓取失败时，抑制同组件的细粒度告警，避免一次故障刷几十条
+  - source_matchers:
+      - alertname="AiCodePlatformTargetDown"
+    target_matchers:
+      - component="platform"
+    equal: ["component"]
+  - source_matchers:
+      - alertname="AiCodeGatewayTargetDown"
+    target_matchers:
+      - component="gateway"
+    equal: ["component"]

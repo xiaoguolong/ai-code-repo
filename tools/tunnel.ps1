@@ -15,6 +15,9 @@
 #   本地 3000  -> 云端 Langfuse
 #   本地 8088  -> 云端 SkyWalking UI
 #   本地 11800 -> 云端 SkyWalking OAP gRPC（本地应用挂 Agent 时用）
+#   本地 19090  -> 云端 Prometheus（Week 20，需云端 monitoring 栈已启动）
+#   本地 3001  -> 云端 Grafana（Week 20）
+# 注意：Prometheus 抓本地应用走的是反向隧道（tools\metrics-tunnel.ps1），不是本脚本。
 # ============================================================================
 param(
     [switch]$Stop,
@@ -43,7 +46,9 @@ $Forwards = @(
     @{ L = 6379;  R = 6379;  Name = "Redis" },
     @{ L = 3000;  R = 3000;  Name = "Langfuse" },
     @{ L = 8088;  R = 8088;  Name = "SkyWalking UI" },
-    @{ L = 11800; R = 11800; Name = "SkyWalking OAP gRPC" }
+    @{ L = 11800; R = 11800; Name = "SkyWalking OAP gRPC" },
+    @{ L = 19090;  R = 19090;  Name = "Prometheus" },
+    @{ L = 3001;  R = 3001;  Name = "Grafana" }
 )
 
 function Probe-Pg([int]$port) {
@@ -108,6 +113,8 @@ function Show-Status {
         @{ P = 3000;  N = "Langfuse";         R = (Probe-Http 3000 "/api/public/health") },
         @{ P = 8088;  N = "SkyWalking UI";    R = (Probe-Http 8088 "/") },
         @{ P = 11800; N = "OAP gRPC";         R = (Probe-Tcp 11800) },
+        @{ P = 19090;  N = "Prometheus";       R = (Probe-Http 19090 "/-/ready") },
+        @{ P = 3001;  N = "Grafana";          R = (Probe-Http 3001 "/api/health") },
         @{ P = 8084;  N = "platform(未部署)"; R = (Probe-Http 8084 "/actuator/health") }
     )
     foreach ($r in $rows) { "  127.0.0.1:{0,-6} {1,-20} {2}" -f $r.P, $r.N, $r.R }

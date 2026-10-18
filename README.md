@@ -693,6 +693,12 @@ Postman `docs/postman/week-19.postman_collection.json`
 | SkyWalking OAP / UI | 10.2.0 | `:11800` / `:8088` |
 | Langfuse | 4.63.0 | `:3000` |
 
+> 第 20 周追加（同一台云主机，host 网络，只监听回环）：
+> **Prometheus 2.55.1** `127.0.0.1:19090`（3 目标 / 12 告警 / 15d-2GB）、
+> **Grafana 11.3.1** `127.0.0.1:3001`（2 张 provisioning 仪表盘）、
+> 可选 **Alertmanager 0.27.0** `127.0.0.1:9093`。端口 19090 而非 9090，是因为
+> 9090/9091 已被 Langfuse 的 MinIO 占用（详见 `docs/deploy/week-20-monitoring.md`）。
+
 应用仍跑在**本地 IDEA**，通过 **SSH 隧道**（`tools/tunnel.ps1`，已注册 Windows 计划任务登录自启）
 访问云端中间件 —— 数据库与 Redis 只绑回环，公网零暴露。实测结果：
 
@@ -719,11 +725,43 @@ Postman `docs/postman/week-19.postman_collection.json`
 
 完成：
 
-- [ ] SkyWalking
-- [ ] OpenTelemetry
-- [ ] Langfuse
-- [ ] Prometheus
-- [ ] Grafana
+- [x] SkyWalking（复用第 19 周：10.2.0 + Java Agent + Toolkit 业务 span + 服务拓扑）
+- [x] OpenTelemetry（复用第 17 周：span 树 + `/actuator/prometheus` 指标出口）
+- [x] Langfuse（复用第 18 周：LLM trace / token / 成本 / Prompt 管理）
+- [x] Prometheus（2.55.1 自部署：3 个抓取目标 + 12 条告警规则 + 15d/2GB 保留）
+- [x] Grafana（11.3.1 自部署：数据源与 2 张仪表盘 provisioning 自动加载）
+- [x] 四后端统一自检（`GET /api/v1/platform/observability/monitoring-overview`，仅管理员）
+- [x] 网关指标出口（第 19 周只有 `health,info`；本周 `/actuator/prometheus` + 4 个网关业务指标）
+- [x] 指标契约（7 个平台指标 + 5 个网关指标的名字/标签用真实 Prometheus 注册表锁死）
+
+交付：Spec `docs/specs/week-20.md` ｜ 架构 `docs/architecture/week-20-architecture.md` ｜
+接口 `docs/api/week-20-api.md` ｜ 部署 `docs/deploy/week-20-monitoring.md` ｜
+部署物 `deploy/monitoring/`（compose + Prometheus 抓取/告警 + Grafana provisioning + 2 张仪表盘
++ 可选 Alertmanager + `.env.example`）｜ 运维脚本 `tools/metrics-tunnel.ps1`、
+`tools/run-local-gateway.ps1`、`tools/cloud-accept-monitoring.sh` ｜
+实现日志 `notes/impl-logs/week-20.md` ｜ 阅读提纲 `notes/week-20-prometheus-grafana.md` ｜
+Postman `docs/postman/week-20.postman_collection.json`
+
+实测：**在腾讯云 4C8G 上自部署 Prometheus 2.55.1 + Grafana 11.3.1 真机验收通过**，
+与 SkyWalking / Langfuse 共 12 个容器并存（内存余量约 3.1 GB）：
+
+- **抓取链路**：本地平台 8084 / 网关 8080 → `tools\metrics-tunnel.ps1` 反向 SSH
+  （云端 `127.0.0.1:18084/18080`）→ Prometheus 每 15s 抓取，三个 target 全部 `up`；
+- **真实业务指标**：跑真实 DeepSeek Agent 后，Prometheus 查询到
+  `agent_run_count_total{execution_status="COMPLETED"}`、`llm_call_count_total`、
+  `llm_tokens_total{token_type=prompt|completion}`、`llm_cost_usd_total=0.008333`、
+  `tool_call_count_total{PatientLookupTool,HealthMetricTool}`、`jvm_memory_used_bytes`；
+  **P95 实算 34.29s**（`histogram_quantile` + 120s 桶上界）；
+- **网关指标**：`gateway_session_login_count_total{outcome="SUCCESS"}`、
+  `gateway_catalog_lookup_count_total{cache_hit=true/false}`、
+  `gateway_agent_run_count_total{outcome="SUCCESS"}`、Feign `http_client_requests_*` 均有数据；
+- **告警与仪表盘**：12 条 `AiCode*` 规则加载；Grafana 数据源 `aicode-prometheus` 与
+  `aicode-platform-overview` / `aicode-gateway-overview` 两张仪表盘 provision 成功；
+- 根聚合 **615** 用例全绿（平台 354 → 385，网关 85 → 100，本周新增 46）。
+- 真机验收抓出并修复 5 个只在真实环境暴露的缺陷（**9090/9091 被 Langfuse MinIO 占用**、
+  多构造器缺 `@Autowired` 导致网关起不来、**Micrometer 默认不导出直方图桶 → P95 永久 NaN**、
+  **默认 30s 桶上界 < Agent 实际耗时 → P95 仍 NaN**、Spring 测试全局 OTel 监听器污染
+  纯单测的 MDC 断言），详见 `notes/impl-logs/week-20.md` 第 10.2 节。
 
 
 ---
@@ -823,7 +861,9 @@ Postman `docs/postman/week-19.postman_collection.json`
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
 - [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源；
-      Week 18：Langfuse LLM 观测树 + 真实 token/成本 + Prompt 版本关联与托管，正文默认不出站）
+      Week 18：Langfuse LLM 观测树 + 真实 token/成本 + Prompt 版本关联与托管，正文默认不出站；
+      Week 19：SkyWalking 拓扑 + Java Agent 自动埋点 + 三后端关联；
+      Week 20：Prometheus + Grafana 统一纳管，四后端一张体检表，12 条告警 + 2 张仪表盘）
 - [ ] 规范落地度：响应信封与规范 5.6 草案仍有偏离（见 docs/specs/week-16.md 收尾审计）
 
 
@@ -837,8 +877,10 @@ Postman `docs/postman/week-19.postman_collection.json`
       Token/成本上报与成本查询；正文可选、脱敏后出站）
 - [x] SkyWalking（Week 19：10.2.0 自部署（OAP+UI，PostgreSQL 独立库）+ Java Agent 自动埋点
       （HTTP/Feign/JDBC/Redis/JVM）+ Toolkit 业务 span + 服务拓扑；未挂 Agent 时业务不受影响）
-- [ ] Prometheus
-- [ ] Grafana
+- [x] Prometheus（Week 20：2.55.1 自部署（host 网络 / 只监听回环 / 端口 19090），
+      平台 + 网关 + 自身三目标，12 条告警规则，反向 SSH 抓本地指标）
+- [x] Grafana（Week 20：11.3.1 自部署，数据源与两张仪表盘 provisioning，
+      Platform 业务/LLM 与 Gateway 入口两张盘，含跨后端深链）
 
 
 ---

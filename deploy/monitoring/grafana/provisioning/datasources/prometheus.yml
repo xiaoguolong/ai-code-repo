@@ -1,0 +1,16 @@
+# Grafana 数据源自动装配（Week 20）
+# 与 deploy/monitoring/docker-compose.yml 的 host 网络模式配合：Prometheus 监听 127.0.0.1:19090。
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: aicode-prometheus
+    type: prometheus
+    access: proxy
+    url: http://127.0.0.1:19090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s
+      # 与 prometheus.yml 的 scrape_interval 对齐；Grafana 会据此调整 $__rate_interval
+      httpMethod: POST

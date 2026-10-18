@@ -1,0 +1,99 @@
+name: ai-code-monitoring
+
+# ============================================================================
+# Week 20：完整监控体系（Prometheus + Grafana + 可选 Alertmanager）
+# ----------------------------------------------------------------------------
+# 部署位置：与 SkyWalking / Langfuse 同一台云主机（应用仍跑本地 IDEA）。
+#
+# 为什么用 host 网络模式（关键取舍）：
+#   应用在本地，Prometheus 在云上，二者通过「本地 -> 云」的反向 SSH 隧道连通：
+#     ssh -N -R 18084:127.0.0.1:8084 -R 18080:127.0.0.1:8080 <host>
+#   sshd 把 18084/18080 绑在云主机的 127.0.0.1 上。桥接网络的容器看不到宿主的回环，
+#   而 host 网络可以直接抓 127.0.0.1:18084 —— 代价是不再使用 ports 映射，
+#   由「只监听 127.0.0.1 + 安全组不开 19090/3001/9093」保证零公网暴露。
+#
+# 访问方式（都不开公网端口）：
+#   Prometheus 用 **19090** 而不是默认 9090：本机 9090/9091 已被 Langfuse 的 MinIO（S3 API + 控制台）占用
+#   （实测 curl 9090 返回 S3 AccessDenied XML，Prometheus 反复重启）。
+#   tools\tunnel.ps1 已把本地 19090/3001 转发到云端 127.0.0.1:19090 / 127.0.0.1:3001
+#   浏览器打开 http://127.0.0.1:3001（Grafana）或 http://127.0.0.1:19090（Prometheus）
+#
+# 启动：
+#   cp .env.example .env && vi .env      # 填 GRAFANA_ADMIN_PASSWORD
+#   docker compose up -d
+# 可选告警通知（Alertmanager）：
+#   docker compose --profile alerts up -d
+# ============================================================================
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    container_name: prometheus
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 保留策略：15 天 / 2 GB 双上限，50 GB 盘不会被指标写满（与 SkyWalking TTL 同口径）
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-2GB}
+      # 只监听回环：公网不可达；本地通过 SSH 转发访问
+      - --web.listen-address=127.0.0.1:19090
+      # 支持 POST /-/reload 热加载规则（改告警规则不用重启）
+      - --web.enable-lifecycle
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:19090/-/ready"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  grafana:
+    image: grafana/grafana:11.3.1
+    container_name: grafana
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      # 只监听回环；端口 3001（3000 已被 Langfuse 占用）
+      GF_SERVER_HTTP_ADDR: 127.0.0.1
+      GF_SERVER_HTTP_PORT: "3001"
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD 必须在 .env 中设置}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+      # 匿名只读关闭：内部地址与拓扑不对未登录者开放
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      prometheus:
+        condition: service_started
+
+  # 可选：告警通知。默认不启动（Grafana 面板里仍能看到 Prometheus 的 firing 告警）。
+  # 启用：docker compose --profile alerts up -d，并在 alertmanager/alertmanager.yml 配置 webhook/邮件
+  alertmanager:
+    profiles: ["alerts"]
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    network_mode: host
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.listen-address=127.0.0.1:9093
+    volumes:
+      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:

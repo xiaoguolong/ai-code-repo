@@ -3,8 +3,10 @@ package com.aicode.gateway.application;
 import com.aicode.gateway.domain.exception.GatewayUpstreamException;
 import com.aicode.gateway.dto.GatewayErrorCode;
 import com.aicode.gateway.domain.model.AgentSummary;
+import com.aicode.gateway.domain.model.GatewayMetricNames;
 import com.aicode.gateway.domain.model.SessionPrincipal;
 import com.aicode.gateway.domain.port.GatewayCachePort;
+import com.aicode.gateway.domain.port.GatewayMetricsPort;
 import com.aicode.gateway.domain.port.PlatformClientPort;
 import com.aicode.gateway.infrastructure.config.GatewayCatalogProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -36,8 +38,11 @@ public class GatewayAgentUseCase {
     private final GatewayCachePort cache;
     private final GatewayCatalogProperties properties;
     private final ObjectMapper objectMapper;
+    private final GatewayMetricsPort metrics;
 
     /**
+     * Week 19 既有构造器：不记指标（既有测试与手工装配一行未改）。
+     *
      * @param platformClient 平台出站端口
      * @param cache          缓存端口
      * @param properties     目录缓存配置
@@ -49,10 +54,29 @@ public class GatewayAgentUseCase {
             GatewayCatalogProperties properties,
             ObjectMapper objectMapper
     ) {
+        this(platformClient, cache, properties, objectMapper, GatewayMetricsPort.NOOP);
+    }
+
+    /**
+     * @param platformClient 平台出站端口
+     * @param cache          缓存端口
+     * @param properties     目录缓存配置
+     * @param objectMapper   JSON 序列化器（缓存值编解码）
+     * @param metrics        指标端口（Week 20）
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public GatewayAgentUseCase(
+            PlatformClientPort platformClient,
+            GatewayCachePort cache,
+            GatewayCatalogProperties properties,
+            ObjectMapper objectMapper,
+            GatewayMetricsPort metrics
+    ) {
         this.platformClient = platformClient;
         this.cache = cache;
         this.properties = properties;
         this.objectMapper = objectMapper;
+        this.metrics = metrics == null ? GatewayMetricsPort.NOOP : metrics;
     }
 
     /**
@@ -78,14 +102,20 @@ public class GatewayAgentUseCase {
                         })
                         .thenReturn(agents)));
         if (refresh) {
+            metrics.catalogLookup(false);
             return fromPlatform;
         }
         return cache.get(key)
                 .flatMap(cached -> {
                     List<AgentSummary> decoded = decode(cached);
-                    return decoded == null ? Mono.empty() : Mono.just(decoded);
+                    if (decoded == null) {
+                        return Mono.empty();
+                    }
+                    metrics.catalogLookup(true);
+                    return Mono.just(decoded);
                 })
                 .switchIfEmpty(Mono.defer(() -> {
+                    metrics.catalogLookup(false);
                     log.debug("[gateway] 目录缓存未命中，回源平台");
                     return fromPlatform;
                 }))
@@ -115,6 +145,7 @@ public class GatewayAgentUseCase {
                     GatewayErrorCode.VALIDATION_ERROR, "agentKey 不能为空", "VALIDATION_ERROR", 400));
         }
         Map<String, Object> safeInput = input == null ? Map.of() : input;
+        long startedAt = System.nanoTime();
         String idempotencyKey = "gw:idem:" + principal.userId() + ":" + agentKey + ":" + traceId;
         return cache.putIfAbsent(idempotencyKey, "1", Duration.ofSeconds(properties.resolvedIdempotencyTtlSeconds()))
                 .doOnNext(acquired -> log.info("[gateway] 幂等键 acquired={} agentKey={} traceId={}",
@@ -124,7 +155,15 @@ public class GatewayAgentUseCase {
                     return Mono.just(Boolean.TRUE);
                 })
                 .then(platformClient.runAgent(principal.platformToken(), traceId, agentKey, safeInput))
-                .onErrorMap(this::mapUpstream);
+                .onErrorMap(this::mapUpstream)
+                .doOnSuccess(ignored -> metrics.agentRun(
+                        GatewayMetricNames.OUTCOME_SUCCESS, elapsedMs(startedAt)))
+                .doOnError(ex -> {
+                    metrics.agentRun(GatewayMetricNames.OUTCOME_FAILURE, elapsedMs(startedAt));
+                    if (ex instanceof GatewayUpstreamException upstream) {
+                        metrics.upstreamFailure(upstream.errorCode().name());
+                    }
+                });
     }
 
     /**
@@ -157,6 +196,11 @@ public class GatewayAgentUseCase {
             log.warn("[gateway] 目录缓存内容损坏，视为未命中：{}", ex.toString());
             return null;
         }
+    }
+
+    /** 一次执行/调用的毫秒耗时（{@code System.nanoTime} 差值，至少 0）。 */
+    private long elapsedMs(long startedAt) {
+        return Math.max((System.nanoTime() - startedAt) / 1_000_000L, 0L);
     }
 
     /** 上游失败映射：平台 5xx 收敛为网关侧 502；4xx 与连接类故障保持原样（由适配器已分清）。 */

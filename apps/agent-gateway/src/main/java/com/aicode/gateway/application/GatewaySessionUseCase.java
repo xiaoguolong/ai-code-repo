@@ -3,9 +3,11 @@ package com.aicode.gateway.application;
 import com.aicode.gateway.domain.exception.GatewayException;
 import com.aicode.gateway.domain.exception.GatewayUnauthorizedException;
 import com.aicode.gateway.domain.exception.GatewayUpstreamException;
+import com.aicode.gateway.domain.model.GatewayMetricNames;
 import com.aicode.gateway.domain.model.GatewaySession;
 import com.aicode.gateway.domain.model.IssuedSession;
 import com.aicode.gateway.domain.model.PlatformLogin;
+import com.aicode.gateway.domain.port.GatewayMetricsPort;
 import com.aicode.gateway.domain.port.GatewaySessionPort;
 import com.aicode.gateway.domain.port.PlatformClientPort;
 import com.aicode.gateway.dto.GatewayErrorCode;
@@ -50,8 +52,11 @@ public class GatewaySessionUseCase {
     private final PlatformClientPort platformClient;
     private final GatewaySessionPort sessions;
     private final GatewaySessionProperties properties;
+    private final GatewayMetricsPort metrics;
 
     /**
+     * Week 19 既有构造器：不记指标（既有测试与手工装配一行未改）。
+     *
      * @param platformClient 平台出站端口
      * @param sessions       会话存储端口
      * @param properties     会话配置
@@ -61,9 +66,26 @@ public class GatewaySessionUseCase {
             GatewaySessionPort sessions,
             GatewaySessionProperties properties
     ) {
+        this(platformClient, sessions, properties, GatewayMetricsPort.NOOP);
+    }
+
+    /**
+     * @param platformClient 平台出站端口
+     * @param sessions       会话存储端口
+     * @param properties     会话配置
+     * @param metrics        指标端口（Week 20）
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public GatewaySessionUseCase(
+            PlatformClientPort platformClient,
+            GatewaySessionPort sessions,
+            GatewaySessionProperties properties,
+            GatewayMetricsPort metrics
+    ) {
         this.platformClient = platformClient;
         this.sessions = sessions;
         this.properties = properties;
+        this.metrics = metrics == null ? GatewayMetricsPort.NOOP : metrics;
     }
 
     /**
@@ -75,11 +97,14 @@ public class GatewaySessionUseCase {
      */
     public Mono<IssuedSession> login(String username, String password) {
         if (username == null || username.isBlank() || password == null || password.isBlank()) {
+            metrics.sessionLogin(GatewayMetricNames.OUTCOME_FAILURE);
             return Mono.error(new GatewayException(GatewayErrorCode.VALIDATION_ERROR, "username/password 不能为空"));
         }
         return platformClient.login(username.trim(), password)
                 .flatMap(login -> issue(login))
-                .onErrorMap(this::mapUpstream);
+                .onErrorMap(this::mapUpstream)
+                .doOnSuccess(issued -> metrics.sessionLogin(GatewayMetricNames.OUTCOME_SUCCESS))
+                .doOnError(ex -> metrics.sessionLogin(GatewayMetricNames.OUTCOME_FAILURE));
     }
 
     /**

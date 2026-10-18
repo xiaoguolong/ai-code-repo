@@ -1,0 +1,48 @@
+# ============================================================================
+# Prometheus 抓取配置（Week 20）
+# ----------------------------------------------------------------------------
+# 拓扑：应用跑本地 IDEA，Prometheus 跑云主机（host 网络）。
+# 抓取目标 18084 / 18080 是「反向 SSH 隧道」在云主机回环上开的端口：
+#   本地执行 tools\metrics-tunnel.ps1  ->  ssh -N -R 18084:127.0.0.1:8084 -R 18080:127.0.0.1:8080
+# 因此这里写 127.0.0.1 是**正确且唯一**的做法：不需要把应用端口暴露到公网。
+#
+# 将来应用上云：把两个 target 改成应用的真实地址即可（静态配置，不引注册中心）。
+# ============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    stack: ai-code
+    environment: local
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        # 只有 docker compose --profile alerts 启动 Alertmanager 时才真的投递；
+        # 未启动时 Prometheus 会记录投递失败，但告警仍可在 /alerts 与 Grafana 查看。
+        - targets: ["127.0.0.1:9093"]
+
+scrape_configs:
+  # Prometheus 自身：保留 up / scrape_duration / 规则评估等元指标
+  - job_name: prometheus
+    static_configs:
+      - targets: ["127.0.0.1:19090"]
+
+  # 平台 8084：agent / llm / tool / token / cost / HTTP / JVM
+  # 指标本身带 application="ai-code-platform"（management.metrics.tags.application），
+  # 这里刻意**不再加同名 target label**，否则同名标签冲突会被改名成 exported_application，
+  # 面板里按 application 过滤会全部为空（实测坑）。
+  - job_name: ai-code-platform
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["127.0.0.1:18084"]
+
+  # 网关 8080：HTTP / Feign（http_client_requests_*）/ JVM / 网关自有指标
+  - job_name: ai-code-gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["127.0.0.1:18080"]

@@ -84,3 +84,6 @@ coverage/
 *.swp
 *.swo
 *~
+
+# Week 20 部署物打包（tar 产物，不提交）
+target-acceptance/*.tgz

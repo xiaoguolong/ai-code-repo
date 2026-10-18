@@ -1,0 +1,340 @@
+{
+  "info": {
+    "name": "Week 20 — 完整监控体系（统一自检 + 指标出口）",
+    "description": "平台 8084 / 网关 8080 / Prometheus 19090 / Grafana 3001。\n\n前置：\n1. 启动平台与网关（本地脚本或 IDEA）；\n2. 开 tools\\tunnel.ps1（19090/3001 本地转发）与 tools\\metrics-tunnel.ps1（云端抓本地指标）；\n3. 先执行“平台登录”与“网关登录”拿 token（集合变量自动写入）。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "gatewayBaseUrl", "value": "http://127.0.0.1:8080" },
+    { "key": "prometheusBaseUrl", "value": "http://127.0.0.1:19090" },
+    { "key": "grafanaBaseUrl", "value": "http://127.0.0.1:3001" },
+    { "key": "username", "value": "admin" },
+    { "key": "password", "value": "admin123" },
+    { "key": "traceId", "value": "week20-postman" },
+    { "key": "platformToken", "value": "" },
+    { "key": "gatewayToken", "value": "" },
+    { "key": "agentKey", "value": "medical-assistant" }
+  ],
+  "item": [
+    {
+      "name": "01 平台登录（管理员）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "login"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + SUCCESS', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('SUCCESS');",
+              "  pm.expect(b.traceId).to.be.a('string').and.not.empty;",
+              "  pm.collectionVariables.set('platformToken', b.data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 监控概览（管理员 200 / 六组件）",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/observability/monitoring-overview",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "observability", "monitoring-overview"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 统一信封', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().code).to.eql('SUCCESS');",
+              "  pm.expect(pm.response.headers.get('X-Trace-Id')).to.eql(pm.collectionVariables.get('traceId'));",
+              "});",
+              "pm.test('六个组件且顺序固定', () => {",
+              "  const keys = pm.response.json().data.components.map(c => c.key);",
+              "  pm.expect(keys).to.eql(['otel','prometheus','grafana','skywalking','langfuse','gateway-metrics']);",
+              "});",
+              "pm.test('状态合法 + 无密钥', () => {",
+              "  const d = pm.response.json().data;",
+              "  const allowed = ['UP','DOWN','DISABLED','UNKNOWN'];",
+              "  d.components.forEach(c => pm.expect(allowed).to.include(c.status));",
+              "  pm.expect(JSON.stringify(d).toLowerCase()).to.not.match(/secret|password|api-key/);",
+              "  pm.expect(d.correlation.correlationTag).to.eql('aicode.trace_id');",
+              "  pm.expect(d.correlation.queryHints).to.have.property('logs');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 监控概览（未登录 401）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/observability/monitoring-overview",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "observability", "monitoring-overview"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 + UNAUTHORIZED + data 为 null', () => {",
+              "  pm.response.to.have.status(401);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('UNAUTHORIZED');",
+              "  pm.expect(b.data).to.be.null;",
+              "  pm.expect(b.traceId).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 网关登录（建立网关联会话）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{gatewayBaseUrl}}/api/v1/gateway/sessions", "host": ["{{gatewayBaseUrl}}"], "path": ["api", "v1", "gateway", "sessions"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + sessionToken', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('SUCCESS');",
+              "  pm.collectionVariables.set('gatewayToken', b.data.sessionToken);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 网关 Agent 目录（产生 cache_hit 指标）",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{gatewayToken}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "url": { "raw": "{{gatewayBaseUrl}}/api/v1/gateway/agents", "host": ["{{gatewayBaseUrl}}"], "path": ["api", "v1", "gateway", "agents"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 列表', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('SUCCESS');",
+              "  pm.expect(b.data).to.be.an('array');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 经网关执行 Agent（真实 LLM，产生 run 指标）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{gatewayToken}}" },
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}" }
+        ],
+        "url": {
+          "raw": "{{gatewayBaseUrl}}/api/v1/gateway/agents/{{agentKey}}/runs",
+          "host": ["{{gatewayBaseUrl}}"],
+          "path": ["api", "v1", "gateway", "agents", "{{agentKey}}", "runs"]
+        },
+        "body": { "mode": "raw", "raw": "{\"input\":{\"patientId\":\"P001\",\"task\":\"一句话总结健康风险\"}}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 执行完成', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const d = pm.response.json().data;",
+              "  pm.expect(d.status).to.eql('COMPLETED');",
+              "  pm.expect(d.usage.totalTokens).to.be.above(0);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 平台指标出口（文本格式片段）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{platformBaseUrl}}/actuator/prometheus",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["actuator", "prometheus"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 关键指标存在', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const t = pm.response.text();",
+              "  ['agent_run_count_total','llm_tokens_total','tool_call_count_total','jvm_memory_used_bytes','llm_cost_usd_total']",
+              "    .forEach(m => pm.expect(t).to.include(m));",
+              "  pm.expect(t).to.include('application=\"ai-code-platform\"');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 网关指标出口（文本格式片段）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{gatewayBaseUrl}}/actuator/prometheus",
+          "host": ["{{gatewayBaseUrl}}"],
+          "path": ["actuator", "prometheus"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 网关指标存在', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const t = pm.response.text();",
+              "  ['jvm_memory_used_bytes','gateway_session_login_count_total','gateway_catalog_lookup_count_total']",
+              "    .forEach(m => pm.expect(t).to.include(m));",
+              "  pm.expect(t).to.include('application=\"agent-gateway\"');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Prometheus 抓取目标",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{prometheusBaseUrl}}/api/v1/targets?state=active",
+          "host": ["{{prometheusBaseUrl}}"],
+          "path": ["api", "v1", "targets"],
+          "query": [{ "key": "state", "value": "active" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 三个 target 均 up', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const ts = pm.response.json().data.activeTargets;",
+              "  const jobs = ts.map(t => t.labels.job);",
+              "  pm.expect(jobs).to.include.members(['prometheus','ai-code-platform','ai-code-gateway']);",
+              "  ts.filter(t => ['ai-code-platform','ai-code-gateway'].includes(t.labels.job))",
+              "    .forEach(t => pm.expect(t.health).to.eql('up'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Prometheus 告警规则（12 条）",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{prometheusBaseUrl}}/api/v1/rules", "host": ["{{prometheusBaseUrl}}"], "path": ["api", "v1", "rules"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + AiCode* 规则 >= 12', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const groups = pm.response.json().data.groups;",
+              "  const names = [].concat(...groups.map(g => g.rules.map(r => r.name))).filter(n => n.startsWith('AiCode'));",
+              "  pm.expect(names.length).to.be.at.least(12);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Grafana 健康",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": { "raw": "{{grafanaBaseUrl}}/api/health", "host": ["{{grafanaBaseUrl}}"], "path": ["api", "health"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + database ok', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.database).to.eql('ok');",
+              "  pm.expect(b.version).to.be.a('string');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
