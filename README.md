@@ -819,16 +819,23 @@ platform 453 / gateway 100）。关键验证：
 - [x] 部署资产：`deploy/app/`（systemd 单元、`remote-deploy.sh` 备份/切换/健康检查/失败自动回滚、
       Prometheus 目标切换脚本、云端验收脚本、nginx 模板）+ `tools/deploy-app.ps1` 一键部署
 - [x] 反向隧道退役：Prometheus 目标改为 `127.0.0.1:8084/8080`，三个 target 全 up（第 20 周那条脆弱依赖消失）
+- [x] **enterprise 上云 + SSO 真机**：独立库 `enterprise`（跳过 V6，云端 PG 无 pgvector）+ systemd 8081；
+      平台账号首次登录自动开户并建链（platform 2 → enterprise 1），二次登录复用，本地会话有效
 
 交付：Spec `docs/specs/week-22.md` ｜ 部署手册 `docs/deploy/week-22-app-deploy.md` ｜ 实现日志 `notes/impl-logs/week-22.md`
 
-实测：根聚合 **726** 用例全绿；云端验收 `cloud-accept-app.sh` **PASS=18 FAIL=0**（两次）：
+实测：根聚合 **726** 用例全绿；云端验收两份脚本均全通过：
 
-- 真实患者分析 **1713 / 2479 tokens**、`degraded=false`、5 步、写入记忆；operator 3 条记忆、doctor_b 跨租户 0 条；
-- 限流实测 `401 401 401 401 401 429`；`monitoring-overview` **allHealthy=true**（otel DISABLED 不参与判定）；
-- 资源：平台 RSS 529 MB / 网关 457 MB，主机 available ≈ 2.2 GB、swap 仅 5 MB；
-- 真机抓出并修复 3 个只在真实运行环境暴露的缺陷（监控探针 **h2c 升级**导致 Langfuse 误报 DOWN、
-  `chown` 后 `scp` 静默失败、`-Cmd` 带 `[` 被 PowerShell 拆坏），详见实现日志第 13 节。
+- `cloud-accept-app.sh` **PASS=18 FAIL=0**（两次）：真实患者分析 **1713 / 2479 tokens**、`degraded=false`、
+  5 步、写入记忆；operator 3 条记忆、doctor_b 跨租户 0 条；限流 `401 401 401 401 401 429`；
+  `monitoring-overview` **allHealthy=true**（otel DISABLED 不参与判定）；
+- `cloud-accept-enterprise.sh` **PASS=11 FAIL=0**：SSO 首次登录开户 + 建链（`2->1`）、二次登录复用、
+  本地会话有效、平台登录不受影响；enterprise Flyway 为 `1,2,3,4,5,7`（V6 跳过）；
+- 资源：平台 542 MB / 网关 442 MB / enterprise 436 MB，主机 available ≈ 1.6 GB、swap 12 MB；
+- 真机抓出并修复 7 个只在真实运行环境暴露的缺陷（监控探针 **h2c 升级**导致 Langfuse 误报 DOWN、
+  `chown` 后 `scp` 静默失败、`-Cmd` 带 `[` 被 PowerShell 拆坏、`flyway.locations` 字面量不可覆盖、
+  生成 `.env` 重复键、验收脚本「空串相等」假绿、PowerShell 改写 UTF-8 脚本损坏），
+  详见实现日志第 13/14 节。
 
 ---
 

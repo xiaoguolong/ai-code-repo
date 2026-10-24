@@ -204,6 +204,34 @@ docker restart prometheus
   `AiCodeGatewayTargetDown` 告警（第 20 周的规则），而内存余量足够（2.2 GB），故一并部署；
 - **`LANGFUSE_RELEASE` 从 `week20` 改为 `week22`**（`tools/write-app-env.sh`，否则 Langfuse 里会把本周 trace 记到旧版本）。
 
+### 9.4 enterprise 上云 + SSO 真机（同一天追加）
+
+为把第 21 周只做过单测的 SSO 跑通真机，追加部署 enterprise（8081）：
+
+| 项 | 做法 / 结果 |
+|----|-------------|
+| 数据库 | 新建独立库 **`enterprise`**（`aidemo` 是超级用户，`CREATE DATABASE` 成功） |
+| 为什么不共用 aidemo | aidemo 已有 platform 表且没有 enterprise 历史表；共用会触发「V1 被 baseline 跳过 → V2 缺 `app_user`」 |
+| pgvector | 云端 PG16 **没有** `vector` 扩展 → `SPRING_FLYWAY_LOCATIONS=classpath:db/migration` 跳过 V6，`RAG_VECTOR_STORE=memory`（RAG 向量暂存内存，重启丢） |
+| `.env` 生成 | 新增 `tools/write-enterprise-env.sh`（照 `write-app-env.sh` 的思路：读云端 `data/.env` 的库/Redis 密码，覆盖环境相关键） |
+| 健康判据 | enterprise 未引 actuator → `remote-deploy.sh` 对 target=enterprise 用 `/api/v1/auth/me` 的 **401** 作为「已在监听」 |
+| 内存 | 平台 542 MB + 网关 442 MB + enterprise 436 MB；主机 available ≈ **1.6 GB**，swap 12 MB |
+| SSO 验收 | `cloud-accept-enterprise.sh` **PASS=11 FAIL=0**：首次登录自动开户（platform user 2 → enterprise user 1）、`sso_user_link` 写入 `2->1`、二次登录复用同一 userId、本地会话可用、平台登录不受影响 |
+| Flyway | `enterprise` 库历史表：`1,2,3,4,5,7`（V6 已跳过） |
+
+> RAG 的向量检索在云端**暂不可用**（memory 存储）。要恢复：给 PG 装 pgvector（或换
+> `pgvector/pgvector:pg16` 镜像）→ 去掉 `SPRING_FLYWAY_LOCATIONS` 覆盖让 V6 执行 →
+> `RAG_VECTOR_STORE=pgvector`。这是一件独立任务，不要顺手改，它会影响所有已存在的 `document_chunk` 数据。
+
+### 9.5 本批次新增缺陷（已修）
+
+| # | 现象 | 根因 | 修法 |
+|---|------|------|------|
+| 4 | enterprise 启动即失败：`type "vector" does not exist`（V6 仍执行） | `application.yml` 的 `flyway.locations` 是**字面量列表**，`.env`/环境变量覆盖不了——只有占位符才能被覆盖 | 改为 `locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/postgresql}`（默认行为不变，缺扩展的环境可跳过 V6） |
+| 5 | 生成的 enterprise `.env` 出现重复键 | 过滤正则写成了 `^(SPRING_DATASOURCE_)=`，要求前缀后立刻是 `=`，于是 `SPRING_DATASOURCE_URL=` 匹配不到 | 改为按前缀匹配（不带 `=`）；重复键会掩盖配置漂移，必须清零 |
+| 6 | 验收脚本「复用同一用户」误判为 PASS | 读的字段是 `data.user.id`，实际是 `data.user.userId` → 两次都取到空串，空串相等 | 改正字段，并先断言「非空」再比较相等（否则"两个空值相等"会假绿） |
+| 7 | 用 PowerShell 改 UTF-8 脚本后，远端 bash 报 `syntax error near unexpected token ')'` | `Get-Content -Raw` + `WriteAllText` 在 PS 5.1 下按 ANSI 读写，中文与换行被破坏 | 中文脚本一律用编辑器/专用写入方式保持 UTF-8（无 BOM）；PS 改写必须显式指定 `[Text.Encoding]::UTF8` |
+
 ## 10. 下一步（不在本批次）
 
 1. 镜像化（多阶段 Dockerfile → 云上本地构建或 TCR 推送 → compose）；

@@ -112,6 +112,10 @@ docs/deploy/week-22-app-deploy.md         ← 运行手册（前置条件、内�
       Prometheus 目标切到 `127.0.0.1:8084/8080` 后三个 target 全 up（反向隧道退役）；
       `cloud-accept-app.sh` 两次均 **PASS=18 FAIL=0**；`monitoring-overview` `allHealthy=true`；
       平台 RSS 529 MB / 网关 457 MB，主机 available≈2.2 GB、swap 5 MB
+- [x] **enterprise 上云 + SSO 真机（同一天追加）**：独立库 `enterprise` + 跳过 V6（云端 PG 无 pgvector）；
+      `enterprise` 以 systemd 常驻 8081，`cloud-accept-enterprise.sh` **PASS=11 FAIL=0**：
+      首次登录自动开户（platform 2 → enterprise 1）、`sso_user_link` 写入、二次登录复用、
+      本地会话有效、平台登录不受影响；三进程 RSS 合计约 1.4 GB，available≈1.6 GB
 
 ## 本批次自己踩的坑（事后登记）
 
@@ -121,6 +125,9 @@ docs/deploy/week-22-app-deploy.md         ← 运行手册（前置条件、内�
 | 2 | `tools/deploy-app.ps1` 被 PowerShell 5.1 解析报「字符串缺少终止符」 | 新写的 `.ps1` 是无 BOM UTF-8，PS 5.1 按 ANSI 读，中文注释被解成乱码 | 加 UTF-8 BOM（与既有 `tools/*.ps1` 一致；注意 `edit` 工具会丢 BOM，每次改完要补） |
 | 3 | 云端自检里 `langfuse` 报 DOWN (IOException)，curl 却 200 | 监控探针的 JDK HttpClient 未限定版本，对明文 HTTP 发 h2c 升级，Langfuse 断开连接 | 探针强制 `HTTP_1_1`，并补「见 h2c 即断开」的回归用例（先红后绿） |
 | 4 | `scp` 成功但文件不存在 | `chown aicode` 后 `/opt/ai-code/app` 属主变更，`ubuntu` 无写权限；`-Put` 不检查 pscp 退出码 | 上传走 `/tmp` + `sudo install -o aicode`，`deploy-app.ps1` 同步改造 |
+| 5 | enterprise 启动 `type "vector" does not exist` | `flyway.locations` 是字面量列表，`.env` 覆盖不了（只有占位符能） | 改为 `${SPRING_FLYWAY_LOCATIONS:...}` 占位符，默认行为不变 |
+| 6 | 生成的 `.env` 有重复键 | 过滤正则把 `=` 写进了前缀分组 | 按前缀过滤；重复键会掩盖配置漂移 |
+| 7 | 验收脚本「复用同一用户」假绿 | 字段读错（`user.id` vs `user.userId`），两次都是空串 | 改正字段，并**先断言非空再比较** |
 
 ## Open Questions
 

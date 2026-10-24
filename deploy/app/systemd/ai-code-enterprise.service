@@ -1,0 +1,35 @@
+[Unit]
+Description=AI Code Enterprise Knowledge Agent (:8081)
+Documentation=docs/deploy/week-22-app-deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aicode
+Group=aicode
+# 必须是模块目录：application.yml 的 config.import: optional:file:.env 按工作目录解析
+WorkingDirectory=/opt/ai-code/app/enterprise
+Environment=LANG=C.UTF-8
+Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# 该应用数据源指向独立库 enterprise（不与 platform 共用 aidemo），
+# 且因云端 PG 未装 pgvector，.env 里把 flyway locations 限定为 classpath:db/migration（跳过 V6）。
+ExecStart=/usr/bin/java \
+  -Xms256m -Xmx640m -XX:MaxMetaspaceSize=256m \
+  -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai \
+  -javaagent:/opt/ai-code/agent/skywalking-agent.jar \
+  -Dskywalking.agent.service_name=ai-code-enterprise \
+  -Dskywalking.agent.instance_name=enterprise-cloud \
+  -Dskywalking.collector.backend_service=127.0.0.1:11800 \
+  -jar /opt/ai-code/app/enterprise/app.jar
+
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-code-enterprise
+
+[Install]
+WantedBy=multi-user.target

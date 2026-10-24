@@ -16,7 +16,7 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\deploy-app.ps1 -Target platform -Rollback
 # =============================================================================
 param(
-    [ValidateSet("platform", "gateway")]
+    [ValidateSet("platform", "gateway", "enterprise")]
     [string]$Target = "platform",
     [switch]$SkipTests,
     [switch]$Rollback,
@@ -31,13 +31,16 @@ $Maven = Join-Path $Repo "run-maven-jdk17.ps1"
 $DeployScript = Join-Path $Repo "deploy\app\remote-deploy.sh"
 
 $Module = switch ($Target) {
-    "platform" { "apps/spring-ai-alibaba-agent" }
-    "gateway"  { "apps/agent-gateway" }
+    "platform"   { "apps/spring-ai-alibaba-agent" }
+    "gateway"    { "apps/agent-gateway" }
+    "enterprise" { "apps/enterprise-knowledge-agent" }
 }
 $JarName = switch ($Target) {
-    "platform" { "spring-ai-alibaba-agent-*.jar" }
-    "gateway"  { "agent-gateway-*.jar" }
+    "platform"   { "spring-ai-alibaba-agent-*.jar" }
+    "gateway"    { "agent-gateway-*.jar" }
+    "enterprise" { "enterprise-knowledge-agent-*.jar" }
 }
+# 健康判据：enterprise 没引 actuator，remote-deploy.sh 内部用 /api/v1/auth/me 的 401 判定
 $RemoteDir = "/opt/ai-code/app/$Target"
 
 function Invoke-Step {

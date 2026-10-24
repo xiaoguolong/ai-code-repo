@@ -15,9 +15,12 @@ spring:
     password: ${SPRING_DATASOURCE_PASSWORD:}
   flyway:
     enabled: true
-    locations:
-      - classpath:db/migration
-      - classpath:db/postgresql
+    # 注意：这里必须是**占位符**而不是字面量列表。
+    # 字面量列表无法被 .env / 环境变量覆盖，于是「云端 PG 没装 pgvector、想跳过 V6」
+    # 这件事在配置层做不到（Week 22 真机踩过：V6 仍执行 → type "vector" does not exist）。
+    # 默认仍是两个目录（行为不变）；某环境缺扩展时设
+    #   SPRING_FLYWAY_LOCATIONS=classpath:db/migration
+    locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/postgresql}
     baseline-on-migrate: true
   servlet:
     multipart:

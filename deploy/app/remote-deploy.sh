@@ -20,10 +20,14 @@ set -euo pipefail
 
 TARGET="${1:-}"
 MODE="${2:-deploy}"
+# 健康判据按目标区分：
+#   platform/gateway 有 actuator，期望 200；
+#   enterprise 没引 actuator，用 /api/v1/auth/me 的 401 作为「进程已在监听」的证据。
 case "$TARGET" in
-  platform) PORT=8084 ;;
-  gateway)  PORT=8080 ;;
-  *) echo "usage: $0 platform|gateway [--rollback]"; exit 2 ;;
+  platform)   PORT=8084; HEALTH_PATH=/actuator/health; EXPECT=200 ;;
+  gateway)    PORT=8080; HEALTH_PATH=/actuator/health; EXPECT=200 ;;
+  enterprise) PORT=8081; HEALTH_PATH=/api/v1/auth/me;  EXPECT=401 ;;
+  *) echo "usage: $0 platform|gateway|enterprise [--rollback]"; exit 2 ;;
 esac
 case "$MODE" in
   deploy|--rollback) ;;
@@ -35,7 +39,7 @@ SERVICE="ai-code-$TARGET.service"
 JAR="$APP_DIR/app.jar"
 NEW="$APP_DIR/app.jar.new"
 PREV="$APP_DIR/app.jar.prev"
-HEALTH="http://127.0.0.1:${PORT}/actuator/health"
+HEALTH="http://127.0.0.1:${PORT}${HEALTH_PATH}"
 RUN_USER="${APP_RUN_USER:-aicode}"
 
 log() { echo "[$(date '+%F %T')] $*"; }
@@ -43,7 +47,7 @@ log() { echo "[$(date '+%F %T')] $*"; }
 health_ok() {
   local code
   code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "$HEALTH" || true)"
-  [ "$code" = "200" ]
+  [ "$code" = "$EXPECT" ]
 }
 
 wait_health() {
@@ -95,7 +99,7 @@ log "重启 $SERVICE（jar 时间：$(date -r "$JAR" '+%F %T' 2>/dev/null || ech
 restart
 
 if wait_health; then
-  log "OK: $HEALTH 200，当前 jar=$(date -r "$JAR" '+%F %T' 2>/dev/null || echo unknown)"
+  log "OK: $HEALTH 返回 $EXPECT，当前 jar=$(date -r "$JAR" '+%F %T' 2>/dev/null || echo unknown)"
   exit 0
 fi
 

@@ -201,3 +201,51 @@ ai-core 90 / enterprise 37 / patient 21 / platform 477 / gateway 100
 
 - 网关一并上线（原计划先只上平台）：不让 `AiCodeGatewayTargetDown` 持续误报，且内存余量足够；
 - `LANGFUSE_RELEASE` 由 `week20` 改为 `week22`（否则本周 trace 会记到旧版本下）。
+
+## 14. enterprise 上云 + SSO 真机（同一天追加）
+
+### 14.1 背景
+
+第 21 周交付的「统一身份」只有单元测试与 HTTP 桩，没有真正的跨进程调用。要补这一块，
+先得让 enterprise 能启动——它当时根本起不来：`.env` 指向 2026-10-18 已下线的
+`192.168.132.128`，且云上 `aidemo` 库里没有它的任何表。
+
+### 14.2 做法
+
+| 决策 | 选择 | 原因 |
+|------|------|------|
+| 数据库 | 新建独立库 `enterprise` | 共用 `aidemo` 会触发「V1 被 baseline 跳过 → V2 缺 `app_user`」（规范 3.7.2 的坑） |
+| pgvector | **跳过 V6** + `RAG_VECTOR_STORE=memory` | 云端 PG16 没有 `vector` 扩展；SSO 验收不需要 RAG。要真跑 RAG 需装扩展并补 V6（独立任务） |
+| 配置 | 新增 `tools/write-enterprise-env.sh` | 与平台同一套思路：库/Redis 密码取自云端 `data/.env`，环境相关键一律覆盖 |
+| 健康判据 | `/api/v1/auth/me` 的 **401** | enterprise 未引 actuator，没有 `/actuator/health` |
+| 部署 | 复用 `remote-deploy.sh`（新增 enterprise 分支）+ systemd | 与平台同一套回滚/健康检查语义 |
+
+### 14.3 结果
+
+```text
+Flyway(enterprise): 1,2,3,4,5,7      ← V6 已跳过
+SSO 首次登录：PASS  user=operator userId=1
+二次登录：     PASS  复用 userId=1（不重复开户）
+sso_user_link：2->1                  ← platform user 2 ↔ enterprise user 1
+app_user：1 个；本地会话 /auth/me 有效；平台登录仍 200
+cloud-accept-enterprise.sh => PASS=11 FAIL=0
+内存：平台 542MB / 网关 442MB / enterprise 436MB，available≈1.6GB，swap 12MB
+```
+
+### 14.4 本批次新增缺陷（都已修）
+
+| # | 现象 | 根因 | 修法 |
+|---|------|------|------|
+| 4 | enterprise 启动失败 `type "vector" does not exist` | `application.yml` 的 `flyway.locations` 是字面量列表，`.env`/环境变量无法覆盖（只有占位符能） | 改成 `locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/postgresql}`，默认行为不变 |
+| 5 | 生成的 enterprise `.env` 有重复键 | 过滤正则写成 `^(SPRING_DATASOURCE_)=`（要求前缀后立刻是 `=`），匹配不到 `SPRING_DATASOURCE_URL=` | 改为按前缀匹配；重复键会掩盖配置漂移，必须清零 |
+| 6 | 验收脚本把「复用同一用户」误判为 PASS | 读的字段是 `data.user.id`，实际是 `data.user.userId` → 两次都是空串，空串相等 | 改正字段，并**先断言非空再比较**（"两个空值相等"是最典型的假绿） |
+| 7 | 用 PowerShell 改写 UTF-8 脚本后，远端 bash 报 `syntax error near unexpected token ')'` | `Get-Content -Raw` + `WriteAllText` 在 PS 5.1 下按 ANSI 读写，中文和换行被破坏 | 中文脚本保持 UTF-8（无 BOM），PS 改写必须显式 `[Text.Encoding]::UTF8`；改完用 `bash -n` 校验 |
+
+> 第 6 条值得单独记：**断言先判空再判等**。否则「两个取不到的值相等」会让用例长期假绿，
+> 而这正是「测试全绿但功能没验证」最常见的一种形态。
+
+### 14.5 遗留（明确不做）
+
+- 云端 RAG 向量检索：需要装 pgvector 并补 V6，属独立任务；
+- SSO 的 409（同名未建链）与 503（平台不可达）本轮未在真机跑（要造本地同名用户 / 停平台），
+  由 `SsoLoginUseCaseTest` 与 `HttpPlatformIdentityAdapterTest` 覆盖。
