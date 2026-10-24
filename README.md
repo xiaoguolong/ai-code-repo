@@ -800,15 +800,16 @@ platform 453 / gateway 100）。关键验证：
   seed 以「表为空」为整体开关导致新权限/新用户补不上、平台 yml 只映射 embedding.provider 导致
   `EMBEDDING_API_KEY` 读不到、向量为空），详见 `notes/impl-logs/week-21.md` 第 10.2 节。
 
-> 遗留（第 22 周）：记忆过期/删除与向量重建、`sso_user_link` 解绑、患者分析接 HITL、
-> 检查报告换真实 HIS/LIS 数据源、enterprise `.env` 环境迁移（仍指向已下线节点，故 SSO 跨进程真机验收延后）。
+> 遗留（已转第 22 周处理，见下节）：其中「enterprise `.env` 环境迁移 + SSO 跨进程真机」已在第 22 周完成；
+> 其余（记忆生命周期、`sso_user_link` 解绑、HITL、检查报告数据源）的**目标周次见
+> [`docs/specs/week-22.md`](docs/specs/week-22.md) 的「未实现项与目标阶段」表**。
 
 ---
 
-# 第22周：批次 1 — 登录限流 + 应用上云（jar + systemd）
+# 第22周：登录限流 + 应用上云（jar + systemd）+ enterprise/SSO 真机
 
 
-完成（2026-10-24，**已在云端执行**）：
+完成（2026-10-24，**批次 1 代码/资产 + 批次 2 云端执行**）：
 
 - [x] 登录 / 身份校验限流：`/auth/login` 与 `/auth/verify` 共用 `PlatformAuthenticationFacade`，
       按 `IP + 用户名` 滑动窗口计数，默认 5 次失败封 5 分钟；**被限流时不查库、不比对密码**
@@ -836,6 +837,9 @@ platform 453 / gateway 100）。关键验证：
   `chown` 后 `scp` 静默失败、`-Cmd` 带 `[` 被 PowerShell 拆坏、`flyway.locations` 字面量不可覆盖、
   生成 `.env` 重复键、验收脚本「空串相等」假绿、PowerShell 改写 UTF-8 脚本损坏），
   详见实现日志第 13/14 节。
+
+> **未实现项**（HITL、记忆生命周期、SSO 解绑、租户级角色、云端 RAG、真实报告源、前端/CI、Agent 2–4）
+> 已逐条标注目标周次与阻塞条件，见 [`docs/specs/week-22.md`](docs/specs/week-22.md)「未实现项与目标阶段」表。
 
 ---
 
