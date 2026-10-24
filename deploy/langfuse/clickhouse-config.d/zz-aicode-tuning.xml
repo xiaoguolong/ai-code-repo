@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!--
+  ClickHouse 调优（2026-10-24，Week 19 环境批次）
+
+  背景（实测事故）：
+    Langfuse v4 的 ClickHouse 默认以 info 级别把每条查询/每个指标/每次 part 操作
+    都写进系统日志表。运行 6 天后：
+        text_log    3.69 GiB（46 parts）
+        trace_log   4.08 GiB（14 parts）
+        part_log    732 MiB
+        metric_log  189 MiB
+    而业务数据 events_full 只有 501 行 / 134 KiB。
+    容器内存上限 800 MiB，同时 ClickHouse 的 max_memory_usage=0（不限），
+    合并任务反复撞 cgroup 上限 → system.errors 累计
+    MEMORY_LIMIT_EXCEEDED 1,543,904 次 → CPU 长期 350%、4 核负载 11.6、磁盘 29G/50G。
+
+  处置（清空日志表后磁盘 29G→20G，CPU 348%→3%，负载 11.6→4.9）：
+    1) 关闭噪音最大的系统日志表（纯诊断用途）
+    2) 给 ClickHouse 一个低于 cgroup 的内存上限，避免"无限分配→撞墙→重试"
+
+  踩过的两个坑（不要重犯）：
+    · 调小 background_pool_size 会让服务直接启动失败：
+        number_of_free_entries_in_pool_to_execute_mutation (20)
+        > background_pool_size * background_merges_mutations_concurrency_ratio
+      该值必须 ≥ 10，默认 16 不要动。
+    · 在 <query_log> 里写 <ttl> 会让 createSystemLog 解析建表语句失败
+      （该元素不被支持）。要限制保留期请用 ALTER TABLE ... MODIFY TTL。
+-->
+<clickhouse>
+
+    <!-- 只记录 warning 及以上 -->
+    <logger>
+        <level>warning</level>
+    </logger>
+
+    <!-- 关闭噪音最大的系统日志表 -->
+    <text_log remove="1"/>
+    <trace_log remove="1"/>
+    <metric_log remove="1"/>
+    <asynchronous_metric_log remove="1"/>
+    <part_log remove="1"/>
+    <processors_profile_log remove="1"/>
+    <opentelemetry_span_log remove="1"/>
+    <query_thread_log remove="1"/>
+
+    <!-- 内存护栏：容器 cgroup 上限 800 MiB，这里给 600 MiB，
+         让 ClickHouse 自己在该水位拒绝/排队，而不是撞 cgroup 后被反复中断 -->
+    <max_server_memory_usage>600000000</max_server_memory_usage>
+
+</clickhouse>

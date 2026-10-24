@@ -104,6 +104,10 @@ services:
     volumes:
       - langfuse_clickhouse_data:/var/lib/clickhouse
       - langfuse_clickhouse_logs:/var/log/clickhouse-server
+      # [改8] 调优配置：关闭高频系统日志 + 设置内存护栏
+      # 不挂这一层的话，默认 info 级别日志 6 天能涨到 7.8 GB，
+      # 在 800MiB 容器内存下永远合并不完，CPU 长期 350%（2026-10-24 实测事故）
+      - ./clickhouse-config.d:/etc/clickhouse-server/config.d:ro
     ports:
       - 127.0.0.1:8123:8123
       - 127.0.0.1:9000:9000

@@ -366,3 +366,64 @@ docker run --rm -v langfuse_clickhouse_data:/data -v $(pwd):/backup alpine \
 | SkyWalking 自检 `backend` 字段为空 | 小瑕疵 | 只读环境变量 `SW_AGENT_COLLECTOR_BACKEND_SERVICES`，不影响实际上报；可在 `.env` 补一行 |
 | Prometheus / Grafana | 未开始 | 后续周次 |
 | 隧道断线自愈 | 部分 | `ServerAliveInterval=30` 能恢复多数断连；彻底断开需 `Start-ScheduledTask` |
+
+---
+
+## 11. 事故记录：ClickHouse 把 CPU 打满（2026-10-24）
+
+### 11.1 现象
+
+腾讯云 CPU 告警。登录后实测：
+
+```
+load average: 11.65, 9.81, 9.42      ← 4 核机器，约 3 倍过载
+langfuse-clickhouse-1   CPU 348.70%   MEM 711.8MiB / 800MiB   PIDs 755
+```
+
+**容易误判的点**：并发查询只有 1 条（还是我自己敲的），Langfuse 近 10 分钟新增 event = 0，
+应用自 10-18 就已停止。也就是说**没有任何业务流量**，CPU 却接近 4 核全满。
+
+### 11.2 根因
+
+| 证据 | 数值 |
+|------|------|
+| `system.text_log` | **3.69 GiB / 46 parts** |
+| `system.trace_log` | **4.08 GiB / 14 parts** |
+| `system.part_log` / `metric_log` | 732 MiB / 189 MiB |
+| **业务数据** `events_full` | 仅 **501 行 / 134 KiB** |
+| `system.errors` 累计 `MEMORY_LIMIT_EXCEEDED` | **1,543,904 次** |
+| 容器内存上限 | 800 MiB |
+| ClickHouse `max_memory_usage` | **0（不限制）** |
+
+即：ClickHouse 默认以 info 级别把每条查询、每个指标、每次 part 操作都写进系统日志表，
+6 天累积 **7.8 GB**；而容器只给 800 MiB，ClickHouse 自己又不设内存上限 ——
+合并任务一遍遍撞 cgroup 上限被中断，再重试，形成持续 6 天的空转，把 CPU 焊在 350%。
+
+### 11.3 处置
+
+1. **止血**：`TRUNCATE` 掉 text_log / trace_log / metric_log / asynchronous_metric_log /
+   part_log / query_log / error_log 等系统日志表（纯诊断用途）
+   → 磁盘 **29 G → 20 G**（释放 9 GB）、合并队列归零、CPU **348% → 3%**、负载 **11.65 → 1.28**
+2. **持久化**：新增 `deploy/langfuse/clickhouse-config.d/zz-aicode-tuning.xml`，
+   由 compose 挂载到 `/etc/clickhouse-server/config.d/`：
+   - `logger.level=warning`（不再逐条记录）
+   - `text_log / trace_log / metric_log / asynchronous_metric_log / part_log /
+     processors_profile_log / opentelemetry_span_log / query_thread_log` 全部 `remove="1"`
+   - `max_server_memory_usage=600000000`（低于 cgroup 800 MiB，自己先排队而不是撞墙）
+3. **验证**：间隔 60 秒两次采样，所有日志表行数**完全不变**；`MEMORY_LIMIT_EXCEEDED` 归零；
+   `events_full` 501 行完好；12 个容器全部 healthy。
+
+### 11.4 配置里的两个坑（已写进 XML 注释）
+
+| 坑 | 现象 | 正确做法 |
+|----|------|----------|
+| 调小 `background_pool_size` | 启动直接失败：`number_of_free_entries_in_pool_to_execute_mutation (20) > background_pool_size * concurrency_ratio` | 保持默认 16（必须 ≥ 10），CPU 问题不是并发度引起的 |
+| 在 `<query_log>` 里加 `<ttl>` | `createSystemLog` 解析建表语句失败，容器 restarting 循环 | 该元素不被支持；限制保留期用 `ALTER TABLE ... MODIFY TTL` |
+
+### 11.5 遗留建议
+
+- **磁盘没有 TTL 保护**：`events_full` 目前只会长不会删。若长期跑，建议给 events 表设 TTL 或定期归档。
+- **告警只覆盖了机器层面**：这次是 CPU 先告警才发现的。建议在 Prometheus 里补
+  「ClickHouse CPU > 200% 持续 10 分钟」「磁盘 > 80%」「容器 restart 次数 > 3」三条规则。
+- **容器内存上限与 ClickHouse 自身上限要成对设置**：只设 cgroup 不设 ClickHouse，
+  就会退化成"反复超限重试"，比不限制还糟。

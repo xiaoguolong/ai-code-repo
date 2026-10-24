@@ -206,6 +206,7 @@
 | 14 | 远程脚本被截断，报 `unexpected EOF` / `<` 保留字 | 双引号 here-string 里 `\$(...)` 不转义，PowerShell 抢先执行 bash 的 `$( )` | bash 一律用单引号 here-string |
 | 15 | 中文 `.ps1` 解析报错 | PS 5.1 读无 BOM UTF-8 错位 | 写文件统一带 BOM |
 
+| 16 | 上线第 6 天腾讯云 CPU 告警，`load average 11.65`（4 核）；`langfuse-clickhouse-1` 占 **348.7%**、755 个线程，但**并发查询只有 1 条、近 10 分钟零写入** | ClickHouse 默认 info 级别把每条查询/指标/part 操作写进系统日志表，6 天累积 `text_log 3.69G + trace_log 4.08G`（业务数据仅 501 行/134 KiB）；容器内存上限 800 MiB 而 ClickHouse `max_memory_usage=0`（不限）→ 合并反复撞 cgroup 被中断后重试，`MEMORY_LIMIT_EXCEEDED` 累计 **1,543,904 次** | ① TRUNCATE 系统日志表止血（磁盘 29G→20G、CPU 348%→3%、负载→1.28）② 新增 `deploy/langfuse/clickhouse-config.d/zz-aicode-tuning.xml` 由 compose 挂载：关闭噪音日志表 + `max_server_memory_usage=600MB` ③ 间隔 60 秒两次采样确认日志表不再增长 |
 > 其中 #1、#3、#13 的共同点：**报错信息指向的位置是错的**。真正的判据分别是认证日志、
 > 文件编码、`git check-ignore` 的退出码。这类问题不写进日志，下次一定重演。
 
