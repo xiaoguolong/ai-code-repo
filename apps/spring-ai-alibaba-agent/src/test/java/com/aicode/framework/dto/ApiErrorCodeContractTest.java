@@ -59,6 +59,7 @@ class ApiErrorCodeContractTest {
                 HttpStatus.FORBIDDEN,
                 HttpStatus.NOT_FOUND,
                 HttpStatus.CONFLICT,
+                HttpStatus.TOO_MANY_REQUESTS,
                 HttpStatus.BAD_GATEWAY,
                 HttpStatus.INTERNAL_SERVER_ERROR);
 
@@ -73,7 +74,7 @@ class ApiErrorCodeContractTest {
                 "PLATFORM_NOT_FOUND", "PLATFORM_CONFLICT", "AGENT_DISABLED",
                 "CHAT_MODEL_ERROR", "TOOL_EXECUTION_ERROR", "AGENT_LOOP_EXCEEDED",
                 "AGENT_EXECUTION_ERROR", "WORKFLOW_NOT_FOUND", "WORKFLOW_NOT_PENDING",
-                "INTERNAL_ERROR");
+                "RATE_LIMITED", "INTERNAL_ERROR");
 
         assertThat(Arrays.stream(ApiErrorCode.values()).map(Enum::name).collect(Collectors.toSet()))
                 .containsAll(required);

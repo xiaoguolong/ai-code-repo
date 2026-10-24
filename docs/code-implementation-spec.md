@@ -799,7 +799,8 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 18 | Langfuse（LLM Trace / Prompt 管理 / Token 与成本） | docs/specs/week-18.md | notes/impl-logs/week-18.md | 已关闭（v4.50.0 真机端到端验收通过） |
 | 19 | SkyWalking（网关接入 + HTTP/Feign/JDBC/Redis/JVM + 服务拓扑） | docs/specs/week-19.md | notes/impl-logs/week-19.md | 已关闭（10.2.0 真机端到端验收通过） |
 | 20 | 完整监控体系（Prometheus + Grafana + 四后端统一自检 + 网关指标出口） | docs/specs/week-20.md | notes/impl-logs/week-20.md | 已关闭（Prometheus 2.55.1 / Grafana 11.3.1 真机端到端验收通过） |
-| 21 | 医疗 SaaS 起步（多租户 + 统一身份 SSO + 患者分析 Agent 1 + 记忆隔离） | docs/specs/week-21.md | notes/impl-logs/week-21.md | 已关闭（H2 双库迁移 + 692 用例全绿；PostgreSQL 真库见实现日志 9.2） |
+| 21 | 医疗 SaaS 起步（多租户 + 统一身份 SSO + 患者分析 Agent 1 + 记忆隔离） | docs/specs/week-21.md | notes/impl-logs/week-21.md | 已关闭（H2 双库迁移 + 701 用例全绿；PostgreSQL 真机见实现日志 9.2） |
+| 22 | 批次 1：登录限流 + 应用上云部署资产 | docs/specs/week-22.md | notes/impl-logs/week-22.md | 批次 1 已完成（24 例新增、725 全绿）；云端执行待确认前置 |
 | 22–24 | 医疗 SaaS 其余三个 Agent | | | 未开始 |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。

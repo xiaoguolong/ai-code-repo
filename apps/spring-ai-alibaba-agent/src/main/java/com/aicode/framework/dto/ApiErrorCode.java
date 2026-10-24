@@ -29,6 +29,9 @@ public enum ApiErrorCode {
     /** 内容安全护栏拦截（注入、超长、敏感）。HTTP 400。 */
     GUARDRAIL_VIOLATION(HttpStatus.BAD_REQUEST, "请求内容未通过安全校验"),
 
+    /** 登录/身份校验尝试过于频繁（Week 22 限流）。HTTP 429。 */
+    RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "尝试过于频繁，请稍后再试"),
+
     /** 平台资源不存在（Agent / 执行记录 / 角色）。HTTP 404。 */
     PLATFORM_NOT_FOUND(HttpStatus.NOT_FOUND, "平台资源不存在"),
 

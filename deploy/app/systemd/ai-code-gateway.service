@@ -1,0 +1,34 @@
+[Unit]
+Description=AI Code Gateway (agent-gateway, :8080)
+Documentation=docs/deploy/week-22-app-deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=aicode
+Group=aicode
+# 同样是模块目录：网关 application.yml 直接写了 config.import: optional:file:.env
+WorkingDirectory=/opt/ai-code/app/gateway
+Environment=LANG=C.UTF-8
+Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# 网关是响应式（Netty），堆比平台小即可；Redis 与平台同机（127.0.0.1:6379）。
+ExecStart=/usr/bin/java \
+  -Xms192m -Xmx512m -XX:MaxMetaspaceSize=192m \
+  -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai \
+  -javaagent:/opt/ai-code/agent/skywalking-agent.jar \
+  -Dskywalking.agent.service_name=ai-code-gateway \
+  -Dskywalking.agent.instance_name=gateway-cloud \
+  -Dskywalking.collector.backend_service=127.0.0.1:11800 \
+  -jar /opt/ai-code/app/gateway/app.jar
+
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-code-gateway
+
+[Install]
+WantedBy=multi-user.target

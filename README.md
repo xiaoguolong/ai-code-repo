@@ -805,6 +805,31 @@ platform 453 / gateway 100）。关键验证：
 
 ---
 
+# 第22周：批次 1 — 登录限流 + 应用上云部署资产
+
+
+完成（本批次**不执行云端变更**）：
+
+- [x] 登录 / 身份校验限流：`/auth/login` 与 `/auth/verify` 共用 `PlatformAuthenticationFacade`，
+      按 `IP + 用户名` 滑动窗口计数，默认 5 次失败封 5 分钟；**被限流时不查库、不比对密码**
+- [x] 429 语义独立：新增 `ApiErrorCode.RATE_LIMITED`（与 401 严格区分，避免客户端把「试太频」当「密码错」重试）
+- [x] 客户端 IP：默认只信 `remoteAddr`；只有显式 `trust-forwarded-for=true`（前面有可信反代）才取 `X-Forwarded-For`
+- [x] 部署资产（只写文件）：`deploy/app/` 两个 systemd 单元 + `remote-deploy.sh`（备份/切换/健康检查/失败自动回滚）
+      + nginx 模板；`tools/deploy-app.ps1` 一键构建上传切换（`-DryRun` / `-SkipTests` / `-Rollback`）
+- [x] 运行手册 `docs/deploy/week-22-app-deploy.md`：前置三确认、内存预算、验收命令（含限流自检）、回滚
+
+交付：Spec `docs/specs/week-22.md` ｜ 部署手册 `docs/deploy/week-22-app-deploy.md` ｜
+实现日志 `notes/impl-logs/week-22.md`
+
+实测：根聚合 **725** 用例全绿（ai-core 90 / enterprise 37 / patient 21 / platform 477 / gateway 100），
+本批次新增 24。全量跑时抓到一处真实回归：`ApiStandardsContractTest` 因控制器改注入门面而少一个 mock、
+桩失效——已修（详见实现日志第 5 节）。
+
+> 待确认后执行：装 JDK17 → 建运行用户 → 传 jar 与 SkyWalking agent → 装 systemd →
+> `deploy-app.ps1 -Target platform` → 验收 → Prometheus 抓取目标改 `127.0.0.1:8084`（反向隧道退役）。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 
@@ -897,7 +922,8 @@ platform 453 / gateway 100）。关键验证：
 ## 企业能力
 
 - [x] 权限（Week 13 RBAC：用户 → 角色 → Agent → Tool → 数据域，Week 16 落库）
-- [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单）
+- [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单；
+      Week 22：登录/身份校验按 IP+用户名 限流，超阈值 429，默认 5 次/5 分钟）
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
 - [x] 多租户（Week 21：`platform_tenant` + `platform_user.tenant_key`，租户停用即拒绝登录；

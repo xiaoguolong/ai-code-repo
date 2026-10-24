@@ -15,6 +15,7 @@ import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedExcept
 import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledException;
 import com.aicode.framework.platform.domain.exception.PlatformConflictException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
+import com.aicode.framework.platform.domain.exception.PlatformRateLimitExceededException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import org.slf4j.Logger;
@@ -82,6 +83,17 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(GuardrailViolationException.class)
     public ResponseEntity<ApiResponse<Void>> handleGuardrailViolation(GuardrailViolationException ex) {
         return respond(ApiErrorCode.GUARDRAIL_VIOLATION, ex.getMessage());
+    }
+
+    /**
+     * 登录/身份校验被限流 → 429 {@code RATE_LIMITED}（Week 22）。
+     *
+     * <p>与 401 严格区分：401 让客户端以为「密码错」，429 才是「试太频」。</p>
+     */
+    @ExceptionHandler(PlatformRateLimitExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleRateLimit(PlatformRateLimitExceededException ex) {
+        log.warn("[api] auth rate limited traceId={} error={}", TraceIds.current(), ex.getMessage());
+        return respond(ApiErrorCode.RATE_LIMITED, ApiErrorCode.RATE_LIMITED.message());
     }
 
     /**

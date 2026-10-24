@@ -1,0 +1,38 @@
+[Unit]
+Description=AI Code Platform (spring-ai-alibaba-agent, :8084)
+Documentation=docs/deploy/week-22-app-deploy.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# 运行用户：与 /opt/ai-code/app/platform/.env 的属主一致（由 write-app-env.sh 生成，600）
+User=aicode
+Group=aicode
+# ⚠️ 必须是模块目录：application-jdbc.yml 的 spring.config.import: optional:file:.env
+#    按「进程工作目录」解析；目录错了 .env 会静默不加载（表现为"配置写了却没生效"）。
+WorkingDirectory=/opt/ai-code/app/platform
+Environment=LANG=C.UTF-8
+Environment=JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+
+# 堆必须显式给：4C8G 已跑 12 个容器，Spring Boot 默认按物理内存 1/4 取堆会打到 swap。
+# SkyWalking agent 若尚未上传，把 -javaagent 那两行注释掉（否则启动即失败）。
+ExecStart=/usr/bin/java \
+  -Xms256m -Xmx768m -XX:MaxMetaspaceSize=256m \
+  -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Shanghai \
+  -javaagent:/opt/ai-code/agent/skywalking-agent.jar \
+  -Dskywalking.agent.service_name=ai-code-platform \
+  -Dskywalking.agent.instance_name=platform-cloud \
+  -Dskywalking.collector.backend_service=127.0.0.1:11800 \
+  -jar /opt/ai-code/app/platform/app.jar
+
+# 只监听回环：安全组不开 8084；对外一律经 nginx（deploy/app/nginx/aicode.conf.example）
+SuccessExitStatus=143
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ai-code-platform
+
+[Install]
+WantedBy=multi-user.target

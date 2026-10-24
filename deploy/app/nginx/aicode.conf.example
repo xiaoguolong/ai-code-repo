@@ -1,0 +1,51 @@
+# 前端 / 反向代理占位（Week 22 只留模板，未部署）
+#
+# 什么时候用：前端项目到位后，把静态站点放到 /var/www/aicode，
+# 本文件复制为 /etc/nginx/sites-available/aicode 并 ln -s 到 sites-enabled。
+#
+# 关键点：
+#   1) 前端与后端**同域**（都走 80/443），这样浏览器不再触发 CORS 预检；
+#   2) 后端 8084/8080 只监听 127.0.0.1，公网访问一律经过这里；
+#   3) 打开反代之后，平台侧要把 PLATFORM_RATE_LIMIT_TRUST_FORWARDED_FOR 设为 true，
+#      否则限流看到的永远是 127.0.0.1（全部用户共用一个 key）。
+
+server {
+    listen 80;
+    server_name _;
+
+    root /var/www/aicode;
+    index index.html;
+
+    # 前端静态站点（history 路由回退到 index.html）
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 平台 API（路径原样转发，不重写）
+    location /api/ {
+        proxy_pass http://127.0.0.1:8084;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Agent 一次执行可能 30–60s（真实患者分析实测 32s），超时必须大于它
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # 网关自有接口
+    location /gw/ {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_read_timeout 120s;
+    }
+
+    # Actuator / 指标端点**不要**暴露到公网
+    location /actuator/ {
+        return 404;
+    }
+}

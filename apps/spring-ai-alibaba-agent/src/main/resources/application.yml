@@ -69,6 +69,16 @@ platform:
     enforce-direct-runs: false
     web-interceptors:
       enabled: true
+    # Week 22：登录 / 身份校验限流（内存滑动窗口，5 次失败封 5 分钟）。
+    # verify 是 Week 21 新增的**免登录**密码校验端点，没有限流等于把撞库入口开到公网。
+    rate-limit:
+      enabled: ${PLATFORM_RATE_LIMIT_ENABLED:true}
+      max-attempts: ${PLATFORM_RATE_LIMIT_MAX_ATTEMPTS:5}
+      window-seconds: ${PLATFORM_RATE_LIMIT_WINDOW_SECONDS:300}
+      block-seconds: ${PLATFORM_RATE_LIMIT_BLOCK_SECONDS:300}
+      # 只有前面确实有可信反代（会覆盖 X-Forwarded-For）时才置 true，
+      # 否则攻击者伪造该头即可绕过限流。
+      trust-forwarded-for: ${PLATFORM_RATE_LIMIT_TRUST_FORWARDED_FOR:false}
   # Week 16：RBAC / 执行记录 / 审计的持久化模式。
   # jdbc   = 落库（需同时激活 jdbc profile 提供数据源，见 application-jdbc.yml）
   # memory = 进程内（无数据库演示 / 单测）

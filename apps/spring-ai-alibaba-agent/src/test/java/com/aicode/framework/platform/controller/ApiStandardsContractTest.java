@@ -3,6 +3,7 @@ package com.aicode.framework.platform.controller;
 import com.aicode.core.domain.exception.AuthenticationException;
 import com.aicode.framework.dto.ApiErrorCode;
 import com.aicode.framework.platform.application.PlatformAuthUseCase;
+import com.aicode.framework.platform.application.PlatformAuthenticationFacade;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -17,6 +18,7 @@ import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -39,6 +41,9 @@ class ApiStandardsContractTest {
     @MockitoBean
     private PlatformAuthUseCase platformAuthUseCase;
 
+    @MockitoBean
+    private PlatformAuthenticationFacade authenticationFacade;
+
     @Test
     void validationFailureUsesEnumCodeAndCarriesTraceId() throws Exception {
         mockMvc.perform(post("/api/v1/platform/auth/login")
@@ -53,7 +58,8 @@ class ApiStandardsContractTest {
 
     @Test
     void authenticationFailureUsesEnumCodeAndHidesCredentials() throws Exception {
-        when(platformAuthUseCase.login(any())).thenThrow(new AuthenticationException("invalid credentials"));
+        when(authenticationFacade.login(any(), anyString()))
+                .thenThrow(new AuthenticationException("invalid credentials"));
 
         MvcResult result = mockMvc.perform(post("/api/v1/platform/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
