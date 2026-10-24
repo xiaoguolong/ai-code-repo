@@ -31,9 +31,12 @@ public class PlatformSaTokenConfig implements WebMvcConfigurer {
     public void addInterceptors(InterceptorRegistry registry) {
         registry.addInterceptor(directRunAuthInterceptor).addPathPatterns("/**");
         registry.addInterceptor(new SaInterceptor(handler -> {
-            // 白名单：除 login 与 Week 12 目录 CRUD 外，/platform/** 均需登录
+            // 白名单：除 login / verify（Week 21 SSO 身份源）与 Week 12 目录 CRUD 外，/platform/** 均需登录
             SaRouter.match("/api/v1/platform/**")
                     .notMatch("/api/v1/platform/auth/login")
+                    // Week 21：SSO 的 verify 必须是公开端点——它本身就是「用来拿身份」的，
+                    // 真机验收时漏配这一行，表现为 enterprise 登录永远 401（凭据是对的）。
+                    .notMatch("/api/v1/platform/auth/verify")
                     .notMatch("/api/v1/platform/agents")
                     .notMatch("/api/v1/platform/agents/*")
                     .notMatch("/api/v1/platform/agents/*/config")

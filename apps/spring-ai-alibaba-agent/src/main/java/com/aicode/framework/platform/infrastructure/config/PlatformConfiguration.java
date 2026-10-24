@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Configuration;
  * 平台模块配置装配。
  */
 @Configuration
-@EnableConfigurationProperties(PlatformSecurityProperties.class)
+@EnableConfigurationProperties({PlatformSecurityProperties.class, PlatformMemoryProperties.class})
 public class PlatformConfiguration {
 
     @Bean

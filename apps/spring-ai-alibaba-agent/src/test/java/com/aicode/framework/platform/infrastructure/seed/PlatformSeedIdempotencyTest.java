@@ -83,8 +83,10 @@ class PlatformSeedIdempotencyTest {
         PlatformRole operator = platformRolePort.findByKey("operator").orElseThrow();
         PlatformRole viewer = platformRolePort.findByKey("viewer").orElseThrow();
 
-        assertThat(operator.allowedAgentKeys()).containsExactlyInAnyOrder("patient-risk", "medical-assistant");
-        assertThat(operator.allowedToolKeys()).containsExactlyInAnyOrder("PatientLookupTool", "HealthMetricTool");
+        assertThat(operator.allowedAgentKeys()).containsExactlyInAnyOrder(
+                "patient-risk", "medical-assistant", "patient-analysis");
+        assertThat(operator.allowedToolKeys()).containsExactlyInAnyOrder(
+                "PatientLookupTool", "HealthMetricTool", "ReportLookupTool");
         assertThat(operator.allowedPatientIds()).hasSize(10).contains("P001", "P010");
         assertThat(operator.admin()).isFalse();
         assertThat(viewer.allowedAgentKeys()).isEmpty();
@@ -100,8 +102,9 @@ class PlatformSeedIdempotencyTest {
         int workflows = workflowRegistryPort.listAll().size();
         metadataSeedInitializer.run(args);
 
-        assertThat(agentRegistryPort.listAll()).hasSize(agents).hasSize(3);
-        assertThat(toolCatalogPort.listAll()).hasSize(tools).hasSize(2);
+        // Week 21：新增 patient-analysis Agent 与 ReportLookupTool
+        assertThat(agentRegistryPort.listAll()).hasSize(agents).hasSize(4);
+        assertThat(toolCatalogPort.listAll()).hasSize(tools).hasSize(3);
         assertThat(workflowRegistryPort.listAll()).hasSize(workflows).hasSize(2);
     }
 

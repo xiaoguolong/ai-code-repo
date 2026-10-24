@@ -74,6 +74,27 @@ platform:
   # memory = 进程内（无数据库演示 / 单测）
   persistence:
     mode: ${PLATFORM_PERSISTENCE_MODE:jdbc}
+  # Week 21：按 租户+用户 隔离的长期记忆（platform_memory）。
+  memory:
+    # 语义检索先取最近 N 条候选，再在应用侧算余弦（防止全表扫描）
+    candidate-limit: ${PLATFORM_MEMORY_CANDIDATE_LIMIT:500}
+    # 低于该余弦相似度的命中直接丢弃；0 表示不过滤（仍会排除 <=0 的无关项）
+    min-score: ${PLATFORM_MEMORY_MIN_SCORE:0.05}
+    default-top-k: ${PLATFORM_MEMORY_DEFAULT_TOP_K:5}
+    max-top-k: ${PLATFORM_MEMORY_MAX_TOP_K:20}
+
+# Week 21：记忆向量化（平台不做 RAG，维度与 embedding 模型保持一致）。
+# 默认 hashing 为离线确定性实现；换真模型时 provider=openai + base-url/api-key/model 均从环境变量注入。
+# 注意：因为平台之前没有 embedding 需求，这里必须把 key/base-url/model 也映射出来，
+# 只写 provider 会让 EMBEDDING_API_KEY 环境变量「存在但读不到」（真机验收踩过：
+# 记忆落库成功但向量为空，语义检索永远 0 命中）。
+embedding:
+  provider: ${EMBEDDING_PROVIDER:hashing}
+  base-url: ${EMBEDDING_BASE_URL:}
+  api-key: ${EMBEDDING_API_KEY:}
+  model: ${EMBEDDING_MODEL:}
+  dimension: ${EMBEDDING_DIMENSION:1024}
+  timeout-seconds: ${EMBEDDING_TIMEOUT_SECONDS:30}
 
 # Week 17：可观测（OpenTelemetry）。Micrometer Tracing 门面 + OTel bridge，OTLP/HTTP 导出。
 # 优雅降级：collector 未启动时导出失败只打 WARN，业务请求不受影响（与审计同口径：可观测设施不是单点）。

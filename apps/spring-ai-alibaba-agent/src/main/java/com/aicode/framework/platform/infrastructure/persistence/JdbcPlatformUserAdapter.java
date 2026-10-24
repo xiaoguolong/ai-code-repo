@@ -14,10 +14,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 平台用户落库适配器（Week 16，替换 Week 13 内存实现）。
+ * 平台用户落库适配器（Week 16，替换 Week 13 内存实现；Week 21 增加 {@code tenant_key}）。
  *
- * <p>表结构见 {@code db/migration/V1__platform_rbac.sql}；{@link #save} 语义为
- * 「不存在则插入，存在则覆盖」，与内存实现保持一致，便于 seed 重复执行。</p>
+ * <p>表结构见 {@code db/migration/V1__platform_rbac.sql} 与 {@code V4__platform_tenant.sql}；
+ * {@link #save} 语义为「不存在则插入，存在则覆盖」，与内存实现保持一致，便于 seed 重复执行。</p>
  */
 @Component
 @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcTemplate")
@@ -25,7 +25,7 @@ import java.util.Optional;
 public class JdbcPlatformUserAdapter implements PlatformUserPort {
 
     private static final String SELECT_COLUMNS =
-            "SELECT id, username, password_hash, role_key FROM platform_user";
+            "SELECT id, username, password_hash, role_key, tenant_key FROM platform_user";
 
     private final JdbcTemplate jdbcTemplate;
     private final RowMapper<PlatformUser> rowMapper = new PlatformUserRowMapper();
@@ -54,14 +54,14 @@ public class JdbcPlatformUserAdapter implements PlatformUserPort {
     @Override
     public void save(PlatformUser user) {
         int updated = jdbcTemplate.update("""
-                UPDATE platform_user SET username = ?, password_hash = ?, role_key = ?
+                UPDATE platform_user SET username = ?, password_hash = ?, role_key = ?, tenant_key = ?
                 WHERE id = ?
-                """, user.username(), user.passwordHash(), user.roleKey(), user.id());
+                """, user.username(), user.passwordHash(), user.roleKey(), user.tenantKey(), user.id());
         if (updated == 0) {
             jdbcTemplate.update("""
-                    INSERT INTO platform_user (id, username, password_hash, role_key, created_at)
-                    VALUES (?, ?, ?, ?, ?)
-                    """, user.id(), user.username(), user.passwordHash(), user.roleKey(),
+                    INSERT INTO platform_user (id, username, password_hash, role_key, tenant_key, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """, user.id(), user.username(), user.passwordHash(), user.roleKey(), user.tenantKey(),
                     PlatformJdbcSupport.toTimestamp(java.time.Instant.now()));
         }
     }
@@ -77,7 +77,8 @@ public class JdbcPlatformUserAdapter implements PlatformUserPort {
                     rs.getLong("id"),
                     rs.getString("username"),
                     rs.getString("password_hash"),
-                    rs.getString("role_key"));
+                    rs.getString("role_key"),
+                    rs.getString("tenant_key"));
         }
     }
 }

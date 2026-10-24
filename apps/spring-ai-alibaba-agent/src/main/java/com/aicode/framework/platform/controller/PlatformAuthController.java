@@ -5,10 +5,12 @@ import com.aicode.framework.dto.ApiResponse;
 import com.aicode.framework.platform.application.PlatformAuthUseCase;
 import com.aicode.framework.platform.application.PlatformLoginCommand;
 import com.aicode.framework.platform.application.PlatformLoginOutcome;
+import com.aicode.framework.platform.application.PlatformMeView;
 import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.dto.PlatformAuthResponse;
 import com.aicode.framework.platform.dto.PlatformLoginRequest;
 import com.aicode.framework.platform.dto.PlatformMeResponse;
+import com.aicode.framework.platform.dto.PlatformVerifyResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,14 +31,38 @@ public class PlatformAuthController {
         this.platformAuthUseCase = platformAuthUseCase;
     }
 
+    /**
+     * 登录（建会话）。
+     *
+     * @param request 用户名 + 密码
+     * @return 令牌、用户、角色与租户；失败 401
+     */
     @PostMapping("/login")
     public ApiResponse<PlatformAuthResponse> login(@Valid @RequestBody PlatformLoginRequest request) {
         PlatformLoginOutcome outcome = platformAuthUseCase.login(
                 new PlatformLoginCommand(request.username(), request.password()));
         return ApiResponse.success(new PlatformAuthResponse(
-                outcome.token(), outcome.userId(), outcome.username(), outcome.roleKey()));
+                outcome.token(), outcome.userId(), outcome.username(), outcome.roleKey(), outcome.tenantKey()));
     }
 
+    /**
+     * 身份校验（Week 21，SSO 身份源）：只校验凭据，**不建会话**、不返回 token。
+     *
+     * @param request 用户名 + 密码
+     * @return 平台身份（用户、角色、租户）；失败 401
+     */
+    @PostMapping("/verify")
+    public ApiResponse<PlatformVerifyResponse> verify(@Valid @RequestBody PlatformLoginRequest request) {
+        PlatformUser user = platformAuthUseCase.verify(
+                new PlatformLoginCommand(request.username(), request.password()));
+        return ApiResponse.success(PlatformVerifyResponse.from(user));
+    }
+
+    /**
+     * 注销当前登录态。
+     *
+     * @return 空数据
+     */
     @PostMapping("/logout")
     public ApiResponse<Void> logout() {
         StpUtil.checkLogin();
@@ -44,10 +70,15 @@ public class PlatformAuthController {
         return ApiResponse.success(null);
     }
 
+    /**
+     * 当前登录用户（含租户）。
+     *
+     * @return 用户视图；未登录 401
+     */
     @GetMapping("/me")
     public ApiResponse<PlatformMeResponse> me() {
         StpUtil.checkLogin();
-        PlatformUser user = platformAuthUseCase.getUser(StpUtil.getLoginIdAsLong());
-        return ApiResponse.success(PlatformMeResponse.from(user));
+        PlatformMeView view = platformAuthUseCase.me(StpUtil.getLoginIdAsLong());
+        return ApiResponse.success(PlatformMeResponse.from(view));
     }
 }

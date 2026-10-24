@@ -9,8 +9,6 @@ import com.aicode.framework.platform.domain.port.AgentRegistryPort;
 import com.aicode.framework.platform.domain.port.ToolCatalogPort;
 import com.aicode.framework.platform.domain.port.WorkflowRegistryPort;
 import com.aicode.framework.platform.infrastructure.persistence.InMemoryAgentRegistryAdapter;
-import com.aicode.framework.platform.infrastructure.persistence.InMemoryToolCatalogAdapter;
-import com.aicode.framework.platform.infrastructure.persistence.InMemoryWorkflowRegistryAdapter;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
@@ -18,7 +16,7 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 
 /**
- * 启动时预置 Week 8–11 既有 Agent / Tool / Workflow 元数据。
+ * 启动时预置 Week 8–11 与 Week 21 的 Agent / Tool / Workflow 元数据。
  */
 @Component
 public class PlatformSeedDataInitializer implements ApplicationRunner {
@@ -58,6 +56,10 @@ public class PlatformSeedDataInitializer implements ApplicationRunner {
         agentRegistryPort.save(new PlatformAgentDefinition(
                 "medical-assistant", "医疗助手 Multi Agent", "Week 11 Supervisor 四角色",
                 AgentType.MEDICAL_ASSISTANT, PlatformAgentConfig.defaults(), now));
+        agentRegistryPort.save(new PlatformAgentDefinition(
+                "patient-analysis", "患者分析 Agent",
+                "Week 21 Agent 1：查患者/检查报告/健康指标 + 规则风险 + 报告 + 长期记忆",
+                AgentType.PATIENT_ANALYSIS, PlatformAgentConfig.defaults(), now));
     }
 
     private void seedTools() {
@@ -66,6 +68,8 @@ public class PlatformSeedDataInitializer implements ApplicationRunner {
                 "PatientLookupTool", "PatientLookupTool", "按患者编号查询患者基础信息", true, now));
         toolCatalogPort.save(new PlatformToolDefinition(
                 "HealthMetricTool", "HealthMetricTool", "按患者编号查询健康指标", true, now));
+        toolCatalogPort.save(new PlatformToolDefinition(
+                "ReportLookupTool", "ReportLookupTool", "按患者编号查询检查/检验报告列表", true, now));
     }
 
     private void seedWorkflows() {

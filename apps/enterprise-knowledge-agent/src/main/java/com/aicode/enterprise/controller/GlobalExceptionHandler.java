@@ -10,6 +10,7 @@ import com.aicode.enterprise.domain.exception.ForbiddenException;
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.core.domain.exception.NotFoundException;
 import com.aicode.core.domain.exception.OcrException;
+import com.aicode.enterprise.domain.exception.SsoUnavailableException;
 import com.aicode.enterprise.dto.ApiResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -130,6 +131,19 @@ public class GlobalExceptionHandler {
         log.warn("file storage failed: {}", ex.getMessage(), ex);
         return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
                 .body(ApiResponse.error("FILE_STORAGE_ERROR", "文件服务不可用"));
+    }
+
+    /**
+     * 统一身份源不可用 → 503（Week 21）。
+     *
+     * <p>刻意不映射成 401：平台超时/5xx 与「密码错了」是两种故障，
+     * 混用会让用户反复改密码而真正的问题在平台侧。</p>
+     */
+    @ExceptionHandler(SsoUnavailableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSsoUnavailable(SsoUnavailableException ex) {
+        log.warn("[sso] unified identity unavailable: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(ApiResponse.error("AUTH_SSO_UNAVAILABLE", "统一身份服务暂不可用，请稍后重试"));
     }
 
     /**

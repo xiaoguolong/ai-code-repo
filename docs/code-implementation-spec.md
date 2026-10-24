@@ -799,7 +799,8 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 18 | Langfuse（LLM Trace / Prompt 管理 / Token 与成本） | docs/specs/week-18.md | notes/impl-logs/week-18.md | 已关闭（v4.50.0 真机端到端验收通过） |
 | 19 | SkyWalking（网关接入 + HTTP/Feign/JDBC/Redis/JVM + 服务拓扑） | docs/specs/week-19.md | notes/impl-logs/week-19.md | 已关闭（10.2.0 真机端到端验收通过） |
 | 20 | 完整监控体系（Prometheus + Grafana + 四后端统一自检 + 网关指标出口） | docs/specs/week-20.md | notes/impl-logs/week-20.md | 已关闭（Prometheus 2.55.1 / Grafana 11.3.1 真机端到端验收通过） |
-| 21–24 | 医疗 SaaS 四 Agent | | | 未开始 |
+| 21 | 医疗 SaaS 起步（多租户 + 统一身份 SSO + 患者分析 Agent 1 + 记忆隔离） | docs/specs/week-21.md | notes/impl-logs/week-21.md | 已关闭（H2 双库迁移 + 692 用例全绿；PostgreSQL 真库见实现日志 9.2） |
+| 22–24 | 医疗 SaaS 其余三个 Agent | | | 未开始 |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
@@ -810,9 +811,9 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 8084 RBAC + ExecutionRecord PostgreSQL/Flyway | **第 16 周（已完成）** | 见 `docs/specs/week-16.md`；Port 契约不变，`platform.persistence.mode=jdbc` 时换 `Jdbc*Adapter`，另增审计表 `audit_log` |
 | Prompt 过滤 / 输入校验 / 输出脱敏 / Tool 内容白名单 | **第 14 周** | `GuardrailPort`；与 RBAC 身份授权正交 |
 | Gateway 层统一鉴权 + 路由 | **第 19 周（已完成：统一入口与统一鉴权）** | 见 `docs/specs/week-19.md`；新增 `apps/agent-gateway`（Spring Cloud Gateway + 会话鉴权 + Feign 出站）。**「整段透传代理」留到第 20 周**：真机暴露它与鉴权链的响应二次写出冲突，取舍与依据见 `notes/impl-logs/week-19.md` 10.2 |
-| enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周** | 医疗 SaaS 实战启动时整合 |
-| 8082 patient-agent 收敛至 8084 Platform | **第 21 周** | 标注 deprecated；统一 Run 入口 |
-| 长期记忆按用户/租户隔离（pgvector） | **第 21 周** | Week 13 仅 patientId 数据域；记忆落库随 SaaS |
+| enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周（已完成）** | enterprise 实际端口是 **8081**（本文原写 8083 有误，已按 `application.yml` 纠正）；平台新增 `/api/v1/platform/auth/verify` 作唯一身份源，enterprise 用 `sso.enabled` 开关委托 + `sso_user_link` 映射表，不合并 `app_user` |
+| 8082 patient-agent 收敛至 8084 Platform | **第 21 周（已完成）** | patient-agent 实际端口是 **8083**（原写 8082 有误）；本周只标注 deprecated（`Deprecation`/`Sunset`/`Link` 三头 + 启动告警），不删代码，第 5–7 周 19 个用例继续作回归对照 |
+| 长期记忆按用户/租户隔离（pgvector） | **第 21 周（隔离已完成，pgvector 延后）** | `platform_memory` 用 `tenant_key + user_id` 谓词强制隔离；向量以 JSON 文本存储 + Java 余弦，换 pgvector 只需换适配器（触发条件与理由见 `docs/specs/week-21.md` 七） |
 
 ---
 

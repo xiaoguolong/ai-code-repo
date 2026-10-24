@@ -2,9 +2,9 @@ package com.aicode.enterprise.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.enterprise.application.GetCurrentUserUseCase;
+import com.aicode.enterprise.application.LoginFacade;
 import com.aicode.enterprise.application.LoginUserCommand;
 import com.aicode.enterprise.application.LoginUserOutcome;
-import com.aicode.enterprise.application.LoginUserUseCase;
 import com.aicode.enterprise.application.LogoutUseCase;
 import com.aicode.enterprise.application.RegisterUserCommand;
 import com.aicode.enterprise.application.RegisterUserOutcome;
@@ -32,18 +32,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final RegisterUserUseCase registerUserUseCase;
-    private final LoginUserUseCase loginUserUseCase;
+    private final LoginFacade loginFacade;
     private final LogoutUseCase logoutUseCase;
     private final GetCurrentUserUseCase getCurrentUserUseCase;
 
     public AuthController(
             RegisterUserUseCase registerUserUseCase,
-            LoginUserUseCase loginUserUseCase,
+            LoginFacade loginFacade,
             LogoutUseCase logoutUseCase,
             GetCurrentUserUseCase getCurrentUserUseCase
     ) {
         this.registerUserUseCase = registerUserUseCase;
-        this.loginUserUseCase = loginUserUseCase;
+        this.loginFacade = loginFacade;
         this.logoutUseCase = logoutUseCase;
         this.getCurrentUserUseCase = getCurrentUserUseCase;
     }
@@ -63,13 +63,13 @@ public class AuthController {
     }
 
     /**
-     * 登录。
+     * 登录。身份源由 {@code sso.enabled} 决定：本地校验或委托平台（Week 21）。
      *
-     * @return 200 带 token 与 user；失败 401
+     * @return 200 带 token 与 user；凭据错 401；SSO 身份源不可用 503；同名冲突 409
      */
     @PostMapping("/login")
     public ApiResponse<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
-        LoginUserOutcome outcome = loginUserUseCase.login(
+        LoginUserOutcome outcome = loginFacade.login(
                 new LoginUserCommand(request.username(), request.password())
         );
         return ApiResponse.success(new AuthResponse(outcome.token(), new UserDto(outcome.userId(), outcome.username())));

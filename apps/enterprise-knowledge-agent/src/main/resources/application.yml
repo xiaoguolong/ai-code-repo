@@ -84,3 +84,14 @@ auth:
 file:
   storage-dir: ${FILE_STORAGE_DIR:./data/files}
   public-base-url: ${FILE_PUBLIC_BASE_URL:http://localhost:8081}
+
+# Week 21：统一身份（SSO）。默认关闭——升级后不配置也完全走第 4 周本地校验。
+# 打开后登录委托平台 POST /api/v1/platform/auth/verify（只校验、不建平台会话）。
+# 密钥/地址一律来自环境变量或模块 .env；本文件只给占位默认值。
+sso:
+  enabled: ${SSO_ENABLED:false}
+  platform-base-url: ${SSO_PLATFORM_BASE_URL:http://localhost:8084}
+  timeout-ms: ${SSO_PLATFORM_TIMEOUT_MS:3000}
+  # 首次登录是否自动创建本地用户并建链；关闭则要求管理员先建链（更保守）
+  auto-provision: ${SSO_AUTO_PROVISION:true}
+

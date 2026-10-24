@@ -10,5 +10,7 @@ public enum AgentType {
     /** Week 9-10 患者风险 Workflow */
     PATIENT_RISK_WORKFLOW,
     /** Week 11 Supervisor 多 Agent */
-    MEDICAL_ASSISTANT
+    MEDICAL_ASSISTANT,
+    /** Week 21 Agent 1：患者分析（查患者/报告/指标 + 规则风险 + 报告 + 记忆） */
+    PATIENT_ANALYSIS
 }

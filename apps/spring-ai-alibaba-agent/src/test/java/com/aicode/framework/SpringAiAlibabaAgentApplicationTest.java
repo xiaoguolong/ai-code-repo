@@ -46,9 +46,10 @@ class SpringAiAlibabaAgentApplicationTest {
     @Test
     void wiresFrameworkBeans() {
         assertThat(context.getBean(ChatModelPort.class)).isNotNull();
-        assertThat(context.getBean(ToolPort.class).definitions()).hasSize(2);
+        // Week 21：工具集增加 ReportLookupTool（患者分析 Agent 的检查报告数据源）
+        assertThat(context.getBean(ToolPort.class).definitions()).hasSize(3);
         assertThat(context.getBean(FrameworkAgentGraph.class)).isNotNull();
-        assertThat(context.getBean(ToolCallbackProvider.class).getToolCallbacks()).hasSize(2);
+        assertThat(context.getBean(ToolCallbackProvider.class).getToolCallbacks()).hasSize(3);
         assertThat(context.getBean(PatientRiskAssessor.class)).isNotNull();
         assertThat(context.getBean(PatientRiskWorkflow.class)).isNotNull();
         assertThat(context.getBean(PatientRiskUseCase.class)).isNotNull();

@@ -766,6 +766,45 @@ Postman `docs/postman/week-20.postman_collection.json`
 
 ---
 
+# 第21周：医疗 SaaS 起步（多租户 + 统一身份 SSO + Agent 1）
+
+
+完成：
+
+- [x] 多租户（`platform_tenant` + `platform_user.tenant_key`；`default` / `hospital-b` 两个租户）
+- [x] 统一身份 SSO（平台 `POST /api/v1/platform/auth/verify` 为唯一身份源，**只校验不建会话**；
+      enterprise 由 `sso.enabled` 开关式委托 + `sso_user_link` 首次登录自动开户，同名未建链拒绝合并）
+- [x] Agent 1 患者分析 Agent（`patient-analysis`：查患者 → 查检查报告 → 查健康指标 → 规则风险 → 报告 → 写长期记忆）
+- [x] 长期记忆按 租户 + 用户 隔离（`platform_memory`，隔离谓词写死在 SQL；admin 才可换 scope）
+- [x] patient-agent（**8083**）标注 deprecated（`Deprecation` / `Sunset` / `Link` 三个响应头 + 启动告警，业务零改动）
+- [x] 端口文档纠错：enterprise 实际 **8081**、patient-agent 实际 **8083**（规范 7.4 原写 8083/8082，已改正）
+
+交付：Spec `docs/specs/week-21.md` ｜ 架构 `docs/architecture/week-21-architecture.md` ｜
+接口 `docs/api/week-21-api.md` ｜ 实现日志 `notes/impl-logs/week-21.md` ｜
+阅读提纲 `notes/week-21-saas-multitenancy.md` ｜ Postman `docs/postman/week-21.postman_collection.json`
+
+实测：本周新增 **86** 个用例全绿，根聚合 **701** 用例零回退（ai-core 90 / enterprise 37 / patient 21 /
+platform 453 / gateway 100）。关键验证：
+
+- **真机（腾讯云 PostgreSQL 16 + 真实 DeepSeek + 真实 embedding）**：
+  `V4/V5` 首次启动 `Successfully applied 2 migrations`，重启只校验不重跑、seed 只补缺；
+  一次真实患者分析 `COMPLETED`、`degraded=false`、**1587 tokens**、5 步轨迹、写入记忆；
+  语义检索命中 `score=0.6703`；`doctor_b`（hospital-b）查同一患者 **0 条**（跨租户隔离生效）；
+- **租户**：停用租户登录与 `/verify` 均 401（不暴露「租户被停用」）；`GET /tenants` 仅管理员，运营 403；
+- **SSO**：`/verify` 免登录、不返回 token、不建会话（成功写 `LOGIN` 审计，detail 带 `sso=true`）；
+  平台不可达 → **503 `AUTH_SSO_UNAVAILABLE`**（不伪装成 401）；`sso.enabled=false` 时行为与第 4 周完全一致；
+- **Agent 1**：模型不可用时 `degraded=true` 且执行 `COMPLETED`，报告明确标注「规则模板生成」；
+- **记忆隔离**：同租户不同用户、同用户不同租户都查不到对方数据（H2 真实 SQL + 真机双重验证）；
+  响应不含 embedding；非管理员带 `userId` 查他人 → 403；
+- 真机抓出并修复 **3 个只在真实装配/初始化里出现**的缺陷（verify 漏配 Sa-Token 白名单、
+  seed 以「表为空」为整体开关导致新权限/新用户补不上、平台 yml 只映射 embedding.provider 导致
+  `EMBEDDING_API_KEY` 读不到、向量为空），详见 `notes/impl-logs/week-21.md` 第 10.2 节。
+
+> 遗留（第 22 周）：记忆过期/删除与向量重建、`sso_user_link` 解绑、患者分析接 HITL、
+> 检查报告换真实 HIS/LIS 数据源、enterprise `.env` 环境迁移（仍指向已下线节点，故 SSO 跨进程真机验收延后）。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 
@@ -779,13 +818,14 @@ Postman `docs/postman/week-20.postman_collection.json`
 # Agent 1：患者分析Agent
 
 
-完成：
+完成（Week 21 交付，平台 `patient-analysis`）：
 
-- [ ] 查询患者
-- [ ] 查询检查报告
-- [ ] 查询健康指标
-- [ ] 风险分析
-- [ ] 自动生成报告
+- [x] 查询患者（`PatientLookupTool`）
+- [x] 查询检查报告（`ReportLookupTool`，Week 21 新增）
+- [x] 查询健康指标（`HealthMetricTool`）
+- [x] 风险分析（复用 Week 9 `PatientRiskAssessor` 规则，可解释、可单测）
+- [x] 自动生成报告（模型生成；模型不可用时降级为规则模板并显式标记 `degraded`）
+- [x] 附加：长期记忆落库（租户 + 用户隔离）、执行记录 / 审计 / RBAC / 四后端观测全链路
 
 
 ---
@@ -860,6 +900,8 @@ Postman `docs/postman/week-20.postman_collection.json`
 - [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单）
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
+- [x] 多租户（Week 21：`platform_tenant` + `platform_user.tenant_key`，租户停用即拒绝登录；
+      记忆按 租户+用户 隔离，隔离谓词在 SQL；enterprise ↔ platform 统一身份由平台 `/auth/verify` 提供）
 - [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源；
       Week 18：Langfuse LLM 观测树 + 真实 token/成本 + Prompt 版本关联与托管，正文默认不出站；
       Week 19：SkyWalking 拓扑 + Java Agent 自动埋点 + 三后端关联；

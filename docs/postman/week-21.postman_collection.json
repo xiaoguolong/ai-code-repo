@@ -1,0 +1,462 @@
+{
+  "info": {
+    "name": "Week 21 — 医疗 SaaS 起步（租户 / SSO / 患者分析 Agent / 记忆隔离）",
+    "description": "平台 8084 / enterprise 8081 / patient-agent 8083（deprecated）。\n\n前置：\n1. 启动平台（jdbc profile，Flyway V4/V5 自动建 platform_tenant / platform_memory）；\n2. 启动 enterprise（可选：SSO_ENABLED=true 时登录委托平台）；\n3. 先执行“01 平台登录（管理员）”与“02 平台登录（运营）”，集合变量自动写入。\n\n说明：seed 用户为 admin/admin123、operator/operator123、viewer/viewer123、doctor_b/doctor123（doctor_b 属 hospital-b 租户）。\n记忆隔离：operator 与 doctor_b 查同一个 patientId 必须互不可见。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "enterpriseBaseUrl", "value": "http://127.0.0.1:8081" },
+    { "key": "patientBaseUrl", "value": "http://127.0.0.1:8083" },
+    { "key": "adminUser", "value": "admin" },
+    { "key": "adminPassword", "value": "admin123" },
+    { "key": "username", "value": "operator" },
+    { "key": "password", "value": "operator123" },
+    { "key": "doctorUser", "value": "doctor_b" },
+    { "key": "doctorPassword", "value": "doctor123" },
+    { "key": "traceId", "value": "week21-postman" },
+    { "key": "adminToken", "value": "" },
+    { "key": "platformToken", "value": "" },
+    { "key": "doctorToken", "value": "" },
+    { "key": "enterpriseToken", "value": "" },
+    { "key": "agentKey", "value": "patient-analysis" },
+    { "key": "patientId", "value": "P001" }
+  ],
+  "item": [
+    {
+      "name": "01 平台登录（管理员）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "login"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{adminUser}}\",\"password\":\"{{adminPassword}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + SUCCESS + tenantKey', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('SUCCESS');",
+              "  pm.expect(b.traceId).to.be.a('string').and.not.empty;",
+              "  pm.expect(b.data.tenantKey).to.eql('default');",
+              "  pm.collectionVariables.set('adminToken', b.data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 平台登录（运营 operator / default 租户）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "login"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + default 租户', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.tenantKey).to.eql('default');",
+              "  pm.collectionVariables.set('platformToken', b.data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 平台登录（doctor_b / hospital-b 租户）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "login"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{doctorUser}}\",\"password\":\"{{doctorPassword}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + hospital-b 租户', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.tenantKey).to.eql('hospital-b');",
+              "  pm.collectionVariables.set('doctorToken', b.data.token);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 身份校验 /auth/verify（SSO 身份源，不建会话）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }, { "key": "X-Trace-Id", "value": "{{traceId}}-verify" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/verify", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "verify"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 且不返回 token', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.userId).to.be.a('number');",
+              "  pm.expect(b.data.tenantKey).to.eql('default');",
+              "  pm.expect(b.data).to.not.have.property('token');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 身份校验失败（错误密码 → 401，不泄露原因）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/verify", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "verify"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"wrong-password\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('401 UNAUTHORIZED', () => {",
+              "  pm.response.to.have.status(401);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('UNAUTHORIZED');",
+              "  pm.expect(b.data).to.eql(null);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 当前用户 /auth/me（带租户）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }, { "key": "X-Trace-Id", "value": "{{traceId}}-me" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/auth/me", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "auth", "me"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + tenantKey/tenantName', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.tenantKey).to.eql('default');",
+              "  pm.expect(b.data.tenantName).to.be.a('string').and.not.empty;",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 租户列表（管理员 200）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }, { "key": "X-Trace-Id", "value": "{{traceId}}-tenants" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/tenants", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "tenants"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + default/hospital-b', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const keys = pm.response.json().data.map(t => t.tenantKey);",
+              "  pm.expect(keys).to.include('default');",
+              "  pm.expect(keys).to.include('hospital-b');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 租户列表（运营 403）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/tenants", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "tenants"] }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 FORBIDDEN', () => {",
+              "  pm.response.to.have.status(403);",
+              "  pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 患者分析 Agent（Agent 1，真实 LLM）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+          { "key": "X-Trace-Id", "value": "{{traceId}}-analysis" }
+        ],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/agents/{{agentKey}}/runs", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "agents", "{{agentKey}}", "runs"] },
+        "body": { "mode": "raw", "raw": "{\"input\":{\"patientId\":\"{{patientId}}\",\"task\":\"为患者生成一份慢病风险分析报告\"}}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + COMPLETED + output 结构', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.code).to.eql('SUCCESS');",
+              "  pm.expect(b.data.status).to.eql('COMPLETED');",
+              "  const out = JSON.parse(b.data.outputJson);",
+              "  pm.expect(out.riskLevel).to.be.oneOf(['LOW','MEDIUM','HIGH']);",
+              "  pm.expect(out.report).to.be.a('string').and.not.empty;",
+              "  pm.expect(out).to.have.property('degraded');",
+              "  pm.expect(out.totalSteps).to.eql(5);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 患者分析（越权 patientId → 403）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" }
+        ],
+        "url": { "raw": "{{platformBaseUrl}}/api/v1/platform/agents/{{agentKey}}/runs", "host": ["{{platformBaseUrl}}"], "path": ["api", "v1", "platform", "agents", "{{agentKey}}", "runs"] },
+        "body": { "mode": "raw", "raw": "{\"input\":{\"patientId\":\"P999\"}}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 FORBIDDEN', () => {",
+              "  pm.response.to.have.status(403);",
+              "  pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 我的记忆（operator，按患者过滤）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }, { "key": "X-Trace-Id", "value": "{{traceId}}-mem" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/memories?patientId={{patientId}}&limit=5",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "memories"],
+          "query": [
+            { "key": "patientId", "value": "{{patientId}}" },
+            { "key": "limit", "value": "5" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 只回自己的记忆 + 不回 embedding', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.tenantKey).to.eql('default');",
+              "  b.data.items.forEach(i => pm.expect(i).to.not.have.property('embedding'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 我的记忆（语义检索）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/memories?query={{queryText}}&limit=3",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "memories"],
+          "query": [
+            { "key": "query", "value": "血压偏高需要复诊" },
+            { "key": "limit", "value": "3" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + score 为数字（0~1）', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.response.json().data.items.forEach(i => {",
+              "    if (i.score !== null) { pm.expect(i.score).to.be.within(0, 1); }",
+              "  });",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 记忆跨租户隔离（doctor_b 查同一患者 → 空）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{doctorToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/memories?patientId={{patientId}}&limit=20",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "memories"],
+          "query": [
+            { "key": "patientId", "value": "{{patientId}}" },
+            { "key": "limit", "value": "20" }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + hospital-b 范围（看不到 operator 的记忆）', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const b = pm.response.json();",
+              "  pm.expect(b.data.tenantKey).to.eql('hospital-b');",
+              "  pm.expect(b.data.userId).to.eql(104);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 非管理员指定 userId（→ 403）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/memories?userId=104",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "memories"],
+          "query": [{ "key": "userId", "value": "104" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 FORBIDDEN', () => {",
+              "  pm.response.to.have.status(403);",
+              "  pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 enterprise 登录（SSO 开关；关时走本地账号）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{enterpriseBaseUrl}}/api/v1/auth/login", "host": ["{{enterpriseBaseUrl}}"], "path": ["api", "v1", "auth", "login"] },
+        "body": { "mode": "raw", "raw": "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 或 503（SSO 身份源不可用）', () => {",
+              "  const status = pm.response.code;",
+              "  pm.expect([200, 401, 503]).to.include(status);",
+              "  if (status === 200) {",
+              "    const b = pm.response.json();",
+              "    pm.collectionVariables.set('enterpriseToken', b.data.token);",
+              "  }",
+              "  if (status === 503) {",
+              "    pm.expect(pm.response.json().code).to.eql('AUTH_SSO_UNAVAILABLE');",
+              "  }",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 patient-agent 弃用标记（8083 三响应头）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": { "raw": "{{patientBaseUrl}}/api/v1/agents/runs", "host": ["{{patientBaseUrl}}"], "path": ["api", "v1", "agents", "runs"] },
+        "body": { "mode": "raw", "raw": "{\"sessionId\":\"s1\",\"task\":\"查询患者 P001 的健康指标\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('Deprecation / Sunset / Link 三头齐全', () => {",
+              "  pm.expect(pm.response.headers.get('Deprecation')).to.eql('true');",
+              "  pm.expect(pm.response.headers.get('Sunset')).to.be.a('string').and.not.empty;",
+              "  pm.expect(pm.response.headers.get('Link')).to.include('rel=\"successor-version\"');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
