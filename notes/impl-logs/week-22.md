@@ -98,7 +98,7 @@ java.lang.IllegalStateException: Failed to load ApplicationContext ...
 4. **默认不信 `X-Forwarded-For`**：只有显式开启才取第一跳，否则伪造头即可绕过（这比不做更糟）；
 5. **429 单独错误码**：混用 401 会让客户端以为「密码错」而继续重试，等于帮攻击者打满限流。
 
-## 7. 部署资产（未执行）
+## 7. 部署资产（已写文件；同一批次内已在云端执行，见第 13 节）
 
 - `deploy/app/systemd/*.service`：`WorkingDirectory` 强制模块目录（`.env` 按工作目录解析）、
   显式堆（平台 768m / 网关 512m）、SkyWalking agent 参数、`Restart=always`；
@@ -158,3 +158,46 @@ ai-core 90 / enterprise 37 / patient 21 / platform 477 / gateway 100
 | 429 vs 401 | 复用 401 / 独立 429 | 独立 429 | 语义不同，混用会导致客户端重试放大攻击 |
 | 部署形态 | 镜像 / jar+systemd | jar+systemd | 单机单环境，镜像收益低；先消灭隧道依赖 |
 | 健康检查位置 | 本地轮询 / 远端脚本内 | 远端脚本内 | 失败可在一次 ssh 会话内自动回滚，减少人工介入 |
+
+## 13. 云端执行（2026-10-24，同一批次）
+
+前置三件事确认后执行（装 JDK / 建 `aicode` 用户 / 安全组保持关闭），全程只动 `/opt/ai-code/app`、
+`/opt/ai-code/agent` 与 `/etc/systemd/system`，未开任何公网端口。
+
+### 13.1 执行顺序
+
+1. `apt install openjdk-17-jre-headless` → `17.0.20.1`；`useradd -r aicode`；
+2. 打包 jar（94.1 MB）与 SkyWalking agent（tar 43.9 MB）→ 经 `/tmp` 落到 `/opt/ai-code/**`；
+3. `write-app-env.sh` 生成 `.env`（DB/Redis/Langfuse 连通性自检：`1` / `PONG` / `200`；无重复键、LF only）；
+4. 安装两个 systemd 单元（`WorkingDirectory` = 模块目录、显式堆、`-javaagent`）→ `enable --now`；
+5. `remote-deploy.sh platform` → 11.5 s 启动、健康 200；`gateway` → 13 s、健康 200（并生成 `app.jar.prev`）；
+6. Prometheus 目标从 `127.0.0.1:18084/18080` 切到 `8084/8080`（改前备份 + `promtool` 校验），三个 target 全 up；
+7. `cloud-accept-app.sh` 验收两次，均 **PASS=18 FAIL=0**。
+
+### 13.2 真机数据
+
+| 指标 | 值 |
+|------|-----|
+| 平台 RSS / 网关 RSS | 529 MB / 457 MB（`-Xmx768m` / `-Xmx512m`） |
+| 主机 available / swap used | ≈ 2.2 GB / 5 MB |
+| 真实患者分析 | 两次分别 **1713** 与 **2479** tokens，`degraded=false`，5 步，均写入记忆 |
+| 记忆条数 | operator 3 条；doctor_b（hospital-b）0 条 |
+| 限流 | 6 次错误密码 → `401 401 401 401 401 429` |
+| 监控自检 | `allHealthy=true`（六组件：otel DISABLED / 其余 UP） |
+| SkyWalking | `bridgeAvailable=true`、`correlated=true` |
+
+### 13.3 真机暴露并修复的缺陷
+
+| # | 现象 | 根因 | 修法 |
+|---|------|------|------|
+| 1 | 自检里 `langfuse` **DOWN (IOException)**，而 `curl` 3 ms 返回 200 | `HttpMonitoringProbe` 未限定 HTTP 版本，JDK HttpClient 对明文 HTTP 发 **h2c 升级**；Langfuse（Next.js）见到 `Upgrade: h2c` 直接断开 → `IOException: header parser received no bytes` | 探针强制 `HTTP_1_1`；新增 `HttpMonitoringProbeH2cUpgradeTest`（假服务端见 h2c 即断开），**先红后绿**。第 18 周在 Langfuse 导出器上踩过同一坑 |
+| 2 | `scp` 打印「上传完成」但目标目录没有文件 | `chown aicode` 后 `/opt/ai-code/app/**` 属主变更，`ubuntu` 无写权限；`remote.ps1 -Put` 不检查 `pscp` 退出码 | 上传一律先到 `/tmp`，再 `sudo install -o aicode -g aicode`；`tools/deploy-app.ps1` 已同步改造 |
+| 3 | `-Cmd` 带 `[` / 引号时命令被拆坏（`Test-Path ... wildcard` 报错） | PowerShell 5.1 把 `[...]` 当通配符、内嵌引号丢失（第 20 周同类） | 巡检/查询写成 `.sh` 用 `-Script`；`-Cmd` 只留简单命令 |
+
+> 三条都属于「装配/环境」类，而不是业务逻辑错误——与第 19–21 周的结论一致：
+> **单测再全，也覆盖不到「进程怎么被启动、配置怎么被读到、网络怎么被握手」**。
+
+### 13.4 与计划的偏差
+
+- 网关一并上线（原计划先只上平台）：不让 `AiCodeGatewayTargetDown` 持续误报，且内存余量足够；
+- `LANGFUSE_RELEASE` 由 `week20` 改为 `week22`（否则本周 trace 会记到旧版本下）。

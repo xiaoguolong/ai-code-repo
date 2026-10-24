@@ -60,6 +60,12 @@ public class HttpMonitoringProbe implements MonitoringProbePort {
         this.clock = clock == null ? System::currentTimeMillis : clock;
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofMillis(this.timeoutMs))
+                // 强制 HTTP/1.1：JDK HttpClient 对明文 HTTP 默认会尝试 h2c 升级，
+                // 而 Langfuse（Next.js）等后端看到 `Upgrade: h2c` 会直接断开，
+                // 客户端表现为 `IOException: HTTP/1.1 header parser received no bytes`
+                // → 健康的后端在自检里被报成 DOWN。第 18 周在 Langfuse 导出器上踩过同一个坑，
+                // 第 22 周应用真正上云、自检第一次跑在真实 Langfuse 上又踩了一次。
+                .version(HttpClient.Version.HTTP_1_1)
                 // 不跟随重定向：3xx 本身就是「进程在监听」的有效证据，
                 // 跟随反而会因缺 Location 抛 IOException，把可达误判为不可达。
                 .followRedirects(HttpClient.Redirect.NEVER)

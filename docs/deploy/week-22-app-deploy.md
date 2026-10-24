@@ -1,7 +1,7 @@
 # Week 22 部署手册 — 应用上云（jar + systemd 过渡形态）
 
-> 状态：**资产已就绪，云端尚未执行**。本批次按约定只写文件、不碰服务器。
-> 执行前必须先确认第 2 节的三件事；一步步照做即可，出问题按第 7 节回滚。
+> 状态：**已于 2026-10-24 在腾讯云执行完毕**（平台 8084 + 网关 8080 均为 systemd 常驻，仅监听回环）。
+> 第 9 节是实测记录（含两个只在真机暴露的缺陷）；照本手册在新环境可复现同一形态。
 
 ## 1. 形态与边界
 
@@ -19,11 +19,11 @@
 
 ## 2. 执行前必须确认（Ask first）
 
-| # | 事项 | 默认建议 | 不确认的后果 |
+| # | 事项 | 本次结论 | 不确认的后果 |
 |---|------|----------|--------------|
-| 1 | 允许 `apt install openjdk-17-jre-headless` | 装 | 没有 JDK 17 无法启动 |
-| 2 | 应用运行用户 | 新建 `aicode`（与 `.env` 属主一致） | 用 root 跑或 `.env` 读不到（600 + 属主不符） |
-| 3 | 安全组保持关闭 8084/8080 | 关闭 | 免鉴权指标端点与登录接口直接暴露公网 |
+| 1 | 允许 `apt install openjdk-17-jre-headless` | ✅ 已装（17.0.20.1） | 没有 JDK 17 无法启动 |
+| 2 | 应用运行用户 | ✅ 新建 `aicode`（uid 998，nologin） | 用 root 跑或 `.env` 读不到（600 + 属主不符） |
+| 3 | 安全组保持关闭 8084/8080 | ✅ 未开，仅回环 | 免鉴权指标端点与登录接口直接暴露公网 |
 
 ## 3. 目录与文件
 
@@ -171,7 +171,40 @@ docker restart prometheus
   直接连共用库会踩「V1 被跳过」的坑（见 Week 21 实现日志 9.6）；
 - **`.env` 属主**：`write-app-env.sh` 以 root 写 600，必须 `chown aicode`，否则服务起不来且报错含糊。
 
-## 9. 下一步（不在本批次）
+## 9. 实测记录（2026-10-24，腾讯云 4C8G / Ubuntu 22.04.5）
+
+### 9.1 结果
+
+| 项 | 结果 |
+|----|------|
+| JDK | OpenJDK 17.0.20.1（`openjdk-17-jre-headless`） |
+| 运行用户 | `aicode`（uid 998，`/usr/sbin/nologin`） |
+| 服务 | `ai-code-platform`（8084）、`ai-code-gateway`（8080）均 `active (running)`、`enabled` |
+| 监听 | `127.0.0.1` 回环（安全组未开放 8084/8080） |
+| 内存 | 平台 RSS ≈ 529 MB（`-Xmx768m`）、网关 RSS ≈ 457 MB（`-Xmx512m`）、主机 available ≈ 2.2 GB、swap 仅 5 MB |
+| Flyway | 首次启动 `Successfully validated 5 migrations`（V4/V5 在第 21 周已应用，本次只校验） |
+| 启动耗时 | 平台 11.5 s、网关 13 s |
+| SkyWalking | `bridgeAvailable=true`、`correlated=true`、`service=ai-code-platform` |
+| Prometheus | 目标切到 `127.0.0.1:8084/8080` 后，`ai-code-platform` / `ai-code-gateway` / `prometheus` 三个 target 全部 **up**；反向隧道退役 |
+| 监控自检 | `monitoring-overview`：`allHealthy=true`（otel DISABLED 不参与判定） |
+| 验收脚本 | `cloud-accept-app.sh` **PASS=18 FAIL=0**（连续两次；真实患者分析 1713 / 2479 tokens，`degraded=false`） |
+| 网关链路 | `POST /api/v1/gateway/sessions` 登录 → `GET /api/v1/gateway/agents`（Feign 拉云端平台目录）成功 |
+
+### 9.2 真机暴露的缺陷（都已修）
+
+| # | 现象 | 根因 | 修法 |
+|---|------|------|------|
+| 1 | 监控自检里 `langfuse` 一直 **DOWN (IOException)**，尽管 `curl` 3 ms 返回 200 | `HttpMonitoringProbe` 的 JDK HttpClient 未限定版本，对明文 HTTP 会发 **h2c 升级**；Langfuse（Next.js）看到 `Upgrade: h2c` 直接断开 → `IOException: HTTP/1.1 header parser received no bytes` | 客户端强制 `HTTP_1_1`；补 `HttpMonitoringProbeH2cUpgradeTest`（用"见到 h2c 就断开"的假服务端，先红后绿）。第 18 周在 Langfuse 导出器上踩过同一个坑 |
+| 2 | `scp` 报「上传完成」，但目标目录没有文件 | `chown aicode` 之后 `/opt/ai-code/app/**` 属主已变，`ubuntu` 账号无写权限；而 `remote.ps1 -Put` 不检查 `pscp` 退出码 | 所有上传先到 `/tmp`，再 `sudo install -o aicode -g aicode` 落位；`tools/deploy-app.ps1` 已按此改造 |
+| 3 | `-Cmd` 里带 `[` 或引号的命令被拆坏（`Test-Path ... wildcard pattern is not valid`） | PowerShell 5.1 传参把 `[...]` 当通配符、把内嵌引号拆散（第 20 周同类） | 查询/巡检一律写成 `.sh` 用 `-Script` 执行，`-Cmd` 只放简单命令 |
+
+### 9.3 与计划的偏差
+
+- **网关也一起上了**：原计划「先只上平台，观察一天」。实际发现网关 target 若保持 down 会持续触发
+  `AiCodeGatewayTargetDown` 告警（第 20 周的规则），而内存余量足够（2.2 GB），故一并部署；
+- **`LANGFUSE_RELEASE` 从 `week20` 改为 `week22`**（`tools/write-app-env.sh`，否则 Langfuse 里会把本周 trace 记到旧版本）。
+
+## 10. 下一步（不在本批次）
 
 1. 镜像化（多阶段 Dockerfile → 云上本地构建或 TCR 推送 → compose）；
 2. CI：`mvn test` + 镜像构建 + 部署，替换 `deploy-app.ps1` 的手工上传；

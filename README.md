@@ -805,28 +805,30 @@ platform 453 / gateway 100）。关键验证：
 
 ---
 
-# 第22周：批次 1 — 登录限流 + 应用上云部署资产
+# 第22周：批次 1 — 登录限流 + 应用上云（jar + systemd）
 
 
-完成（本批次**不执行云端变更**）：
+完成（2026-10-24，**已在云端执行**）：
 
 - [x] 登录 / 身份校验限流：`/auth/login` 与 `/auth/verify` 共用 `PlatformAuthenticationFacade`，
       按 `IP + 用户名` 滑动窗口计数，默认 5 次失败封 5 分钟；**被限流时不查库、不比对密码**
 - [x] 429 语义独立：新增 `ApiErrorCode.RATE_LIMITED`（与 401 严格区分，避免客户端把「试太频」当「密码错」重试）
 - [x] 客户端 IP：默认只信 `remoteAddr`；只有显式 `trust-forwarded-for=true`（前面有可信反代）才取 `X-Forwarded-For`
-- [x] 部署资产（只写文件）：`deploy/app/` 两个 systemd 单元 + `remote-deploy.sh`（备份/切换/健康检查/失败自动回滚）
-      + nginx 模板；`tools/deploy-app.ps1` 一键构建上传切换（`-DryRun` / `-SkipTests` / `-Rollback`）
-- [x] 运行手册 `docs/deploy/week-22-app-deploy.md`：前置三确认、内存预算、验收命令（含限流自检）、回滚
+- [x] 应用上云：JDK 17 + `aicode` 用户 + systemd 两个单元，平台 8084 / 网关 8080 **只监听回环**；
+      平台 11.5 s、网关 13 s 启动；Flyway 只校验（V4/V5 第 21 周已应用）
+- [x] 部署资产：`deploy/app/`（systemd 单元、`remote-deploy.sh` 备份/切换/健康检查/失败自动回滚、
+      Prometheus 目标切换脚本、云端验收脚本、nginx 模板）+ `tools/deploy-app.ps1` 一键部署
+- [x] 反向隧道退役：Prometheus 目标改为 `127.0.0.1:8084/8080`，三个 target 全 up（第 20 周那条脆弱依赖消失）
 
-交付：Spec `docs/specs/week-22.md` ｜ 部署手册 `docs/deploy/week-22-app-deploy.md` ｜
-实现日志 `notes/impl-logs/week-22.md`
+交付：Spec `docs/specs/week-22.md` ｜ 部署手册 `docs/deploy/week-22-app-deploy.md` ｜ 实现日志 `notes/impl-logs/week-22.md`
 
-实测：根聚合 **725** 用例全绿（ai-core 90 / enterprise 37 / patient 21 / platform 477 / gateway 100），
-本批次新增 24。全量跑时抓到一处真实回归：`ApiStandardsContractTest` 因控制器改注入门面而少一个 mock、
-桩失效——已修（详见实现日志第 5 节）。
+实测：根聚合 **726** 用例全绿；云端验收 `cloud-accept-app.sh` **PASS=18 FAIL=0**（两次）：
 
-> 待确认后执行：装 JDK17 → 建运行用户 → 传 jar 与 SkyWalking agent → 装 systemd →
-> `deploy-app.ps1 -Target platform` → 验收 → Prometheus 抓取目标改 `127.0.0.1:8084`（反向隧道退役）。
+- 真实患者分析 **1713 / 2479 tokens**、`degraded=false`、5 步、写入记忆；operator 3 条记忆、doctor_b 跨租户 0 条；
+- 限流实测 `401 401 401 401 401 429`；`monitoring-overview` **allHealthy=true**（otel DISABLED 不参与判定）；
+- 资源：平台 RSS 529 MB / 网关 457 MB，主机 available ≈ 2.2 GB、swap 仅 5 MB；
+- 真机抓出并修复 3 个只在真实运行环境暴露的缺陷（监控探针 **h2c 升级**导致 Langfuse 误报 DOWN、
+  `chown` 后 `scp` 静默失败、`-Cmd` 带 `[` 被 PowerShell 拆坏），详见实现日志第 13 节。
 
 ---
 

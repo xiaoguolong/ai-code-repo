@@ -91,10 +91,15 @@ if (-not $Jar) {
 }
 
 Invoke-Step "上传 jar 与远端部署脚本" {
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $Remote -Put "$($Jar.FullName) $RemoteDir/app.jar.new"
+    # 为什么先传 /tmp 再 sudo mv：真机验证发现，`chown aicode` 之后 ubuntu 账号
+    # 写不进 /opt/ai-code/app（目录属主已变更），而 pscp 失败不会让 remote.ps1 返回非 0，
+    # 表现为"上传完成但文件不存在"。统一走 /tmp + sudo mv + chown。
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $Remote -Put "$($Jar.FullName) /tmp/app-$Target.jar.new"
     if ($LASTEXITCODE -ne 0) { throw "上传 jar 失败 (exit=$LASTEXITCODE)" }
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $Remote -Put "$DeployScript /opt/ai-code/app/remote-deploy.sh"
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $Remote -Put "$DeployScript /tmp/remote-deploy.sh"
     if ($LASTEXITCODE -ne 0) { throw "上传部署脚本失败 (exit=$LASTEXITCODE)" }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $Remote -Cmd "sudo install -m 640 -o aicode -g aicode /tmp/app-$Target.jar.new $RemoteDir/app.jar.new && sudo install -m 755 /tmp/remote-deploy.sh /opt/ai-code/app/remote-deploy.sh && ls -la $RemoteDir/app.jar.new"
+    if ($LASTEXITCODE -ne 0) { throw "落到目标目录失败（见上一条输出）" }
 }
 
 Invoke-Step "远端切换 + 健康检查（失败自动回滚）" {

@@ -105,8 +105,13 @@ docs/deploy/week-22-app-deploy.md         ← 运行手册（前置条件、内�
 - [x] 配置：`platform.security.rate-limit.*` 可配、可关；`.env.example` 列全 5 个可选键
 - [x] 部署资产：`deploy/app/` 三件 + `tools/deploy-app.ps1`（`-DryRun` 实测不发任何远程命令、exit 0）；
       运行手册含前置条件、内存预算、验收步骤（含限流自检）、回滚步骤与「未执行云端」的显式说明
-- [x] 根聚合 `test` 全绿：**725** 用例（ai-core 90 / enterprise 37 / patient 21 / platform 477 / gateway 100），
-      本批次新增 24，Week 4–21 用例零回退（期间修掉 1 处切片测试装配回归，见实现日志 5 节）
+- [x] 根聚合 `test` 全绿：**726** 用例（ai-core 90 / enterprise 37 / patient 21 / platform 478 / gateway 100），
+      本批次新增 25，Week 4–21 用例零回退（期间修掉 1 处切片测试装配回归 + 1 个真机 h2c 探针缺陷）
+- [x] **云端执行（2026-10-24，经确认后）**：JDK 17 + `aicode` 用户 + systemd 两个单元常驻；
+      平台 11.5 s / 网关 13 s 启动、健康 200；Flyway 只校验 5 个迁移；
+      Prometheus 目标切到 `127.0.0.1:8084/8080` 后三个 target 全 up（反向隧道退役）；
+      `cloud-accept-app.sh` 两次均 **PASS=18 FAIL=0**；`monitoring-overview` `allHealthy=true`；
+      平台 RSS 529 MB / 网关 457 MB，主机 available≈2.2 GB、swap 5 MB
 
 ## 本批次自己踩的坑（事后登记）
 
@@ -114,6 +119,8 @@ docs/deploy/week-22-app-deploy.md         ← 运行手册（前置条件、内�
 |---|------|------|------|
 | 1 | `ApiStandardsContractTest` 5 例全错，context 起不来 | 控制器改注入 `PlatformAuthenticationFacade` 后，切片测试只 mock 了旧用例，少一个 bean；且桩打在旧用例上失效 | 补 `@MockitoBean`，桩改到门面；全量跑才发现，说明只跑新增用例不足以证明无回归 |
 | 2 | `tools/deploy-app.ps1` 被 PowerShell 5.1 解析报「字符串缺少终止符」 | 新写的 `.ps1` 是无 BOM UTF-8，PS 5.1 按 ANSI 读，中文注释被解成乱码 | 加 UTF-8 BOM（与既有 `tools/*.ps1` 一致；注意 `edit` 工具会丢 BOM，每次改完要补） |
+| 3 | 云端自检里 `langfuse` 报 DOWN (IOException)，curl 却 200 | 监控探针的 JDK HttpClient 未限定版本，对明文 HTTP 发 h2c 升级，Langfuse 断开连接 | 探针强制 `HTTP_1_1`，并补「见 h2c 即断开」的回归用例（先红后绿） |
+| 4 | `scp` 成功但文件不存在 | `chown aicode` 后 `/opt/ai-code/app` 属主变更，`ubuntu` 无写权限；`-Put` 不检查 pscp 退出码 | 上传走 `/tmp` + `sudo install -o aicode`，`deploy-app.ps1` 同步改造 |
 
 ## Open Questions
 
