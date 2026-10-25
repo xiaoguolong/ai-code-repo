@@ -1,0 +1,826 @@
+{
+    "info":  {
+                 "name":  "Week 23 - 患者分析 HITL + 记忆生命周期",
+                 "description":  "平台 8084。前置：启动平台（jdbc profile，Flyway V6 自动创建 platform_approval，并给 platform_memory 加 expires_at / embedding_model）；先执行 01/02 登录。HIGH 风险用 P002，中风险用 P001。",
+                 "schema":  "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+             },
+    "variable":  [
+                     {
+                         "key":  "platformBaseUrl",
+                         "value":  "http://127.0.0.1:8084"
+                     },
+                     {
+                         "key":  "adminUser",
+                         "value":  "admin"
+                     },
+                     {
+                         "key":  "adminPassword",
+                         "value":  "admin123"
+                     },
+                     {
+                         "key":  "username",
+                         "value":  "operator"
+                     },
+                     {
+                         "key":  "password",
+                         "value":  "operator123"
+                     },
+                     {
+                         "key":  "adminToken",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "platformToken",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "agentKey",
+                         "value":  "patient-analysis"
+                     },
+                     {
+                         "key":  "highPatientId",
+                         "value":  "P002"
+                     },
+                     {
+                         "key":  "mediumPatientId",
+                         "value":  "P001"
+                     },
+                     {
+                         "key":  "executionId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "approvalId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "memoryId",
+                         "value":  ""
+                     },
+                     {
+                         "key":  "enterpriseBaseUrl",
+                         "value":  "http://127.0.0.1:8081"
+                     },
+                     {
+                         "key":  "enterpriseAdminToken",
+                         "value":  ""
+                     }
+                 ],
+    "item":  [
+                 {
+                     "name":  "01 平台登录（admin）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/auth/login",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "auth",
+                                                              "login"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"username\":\"{{adminUser}}\",\"password\":\"{{adminPassword}}\"}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + SUCCESS + traceId\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.traceId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "  pm.collectionVariables.set(\u0027adminToken\u0027, b.data.token);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "02 平台登录（operator）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/auth/login",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "auth",
+                                                              "login"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"username\":\"{{username}}\",\"password\":\"{{password}}\"}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + default 租户\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.data.tenantKey).to.eql(\u0027default\u0027);",
+                                                                   "  pm.collectionVariables.set(\u0027platformToken\u0027, b.data.token);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "03 运行患者分析（P002 HIGH → 待审）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/agents/{{agentKey}}/runs",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "agents",
+                                                              "{{agentKey}}",
+                                                              "runs"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"input\":{\"patientId\":\"{{highPatientId}}\",\"task\":\"为患者生成慢病风险分析报告\"}}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + PENDING_APPROVAL + approvalId\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.data.status).to.eql(\u0027PENDING_APPROVAL\u0027);",
+                                                                   "  pm.expect(b.data.finishedAt).to.be.null;",
+                                                                   "  const out = JSON.parse(b.data.outputJson);",
+                                                                   "  pm.expect(out.riskLevel).to.eql(\u0027HIGH\u0027);",
+                                                                   "  pm.expect(out.approvalId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "  pm.expect(out.memoryId).to.be.null;",
+                                                                   "  pm.collectionVariables.set(\u0027executionId\u0027, b.data.executionId);",
+                                                                   "  pm.collectionVariables.set(\u0027approvalId\u0027, out.approvalId);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "04 待办列表（PENDING）",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/approvals?status=PENDING\u0026limit=20",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "approvals"
+                                                          ],
+                                                 "query":  [
+                                                               {
+                                                                   "key":  "status",
+                                                                   "value":  "PENDING"
+                                                               },
+                                                               {
+                                                                   "key":  "limit",
+                                                                   "value":  "20"
+                                                               }
+                                                           ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + 至少一条待办 + 含刚创建的审批\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  const items = b.data.items;",
+                                                                   "  pm.expect(items).to.be.an(\u0027array\u0027).and.not.empty;",
+                                                                   "  const target = items.find(i =\u003e i.approvalId === pm.collectionVariables.get(\u0027approvalId\u0027));",
+                                                                   "  pm.expect(target).to.be.an(\u0027object\u0027);",
+                                                                   "  pm.expect(target.status).to.eql(\u0027PENDING\u0027);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "05 审批详情",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/approvals/{{approvalId}}",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "approvals",
+                                                              "{{approvalId}}"
+                                                          ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + 审批归属与风险\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.data.approvalId).to.eql(pm.collectionVariables.get(\u0027approvalId\u0027));",
+                                                                   "  pm.expect(b.data.riskLevel).to.eql(\u0027HIGH\u0027);",
+                                                                   "  pm.expect(b.data.status).to.eql(\u0027PENDING\u0027);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "06 批准（写记忆 + COMPLETED）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/approvals/{{approvalId}}/decision",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "approvals",
+                                                              "{{approvalId}}",
+                                                              "decision"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"approved\":true,\"comment\":\"报告已核对，同意进入随访\"}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + APPROVED + COMPLETED + memoryId\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.data.status).to.eql(\u0027APPROVED\u0027);",
+                                                                   "  pm.expect(b.data.executionStatus).to.eql(\u0027COMPLETED\u0027);",
+                                                                   "  pm.expect(b.data.memoryId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "  pm.collectionVariables.set(\u0027memoryId\u0027, b.data.memoryId);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "07 重复决策（409）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/approvals/{{approvalId}}/decision",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "approvals",
+                                                              "{{approvalId}}",
+                                                              "decision"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"approved\":false,\"comment\":\"重复决策\"}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027409 PLATFORM_CONFLICT\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(409);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027PLATFORM_CONFLICT\u0027);",
+                                                                   "  pm.expect(b.traceId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "08 运行患者分析（P001 中风险 → COMPLETED）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/agents/{{agentKey}}/runs",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "agents",
+                                                              "{{agentKey}}",
+                                                              "runs"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"input\":{\"patientId\":\"{{mediumPatientId}}\",\"task\":\"为患者生成慢病风险分析报告\"}}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + COMPLETED + memoryId\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.data.status).to.eql(\u0027COMPLETED\u0027);",
+                                                                   "  const out = JSON.parse(b.data.outputJson);",
+                                                                   "  pm.expect(out.riskLevel).to.eql(\u0027MEDIUM\u0027);",
+                                                                   "  pm.expect(out.memoryId).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "  pm.collectionVariables.set(\u0027memoryId\u0027, out.memoryId);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "09 删除一条记忆",
+                     "request":  {
+                                     "method":  "DELETE",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/memories/{{memoryId}}",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "memories",
+                                                              "{{memoryId}}"
+                                                          ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + deleted=1\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.data.deleted).to.eql(1);",
+                                                                   "  pm.expect(b.data.memoryId).to.eql(pm.collectionVariables.get(\u0027memoryId\u0027));",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "10 清理过期记忆（admin）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{adminToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/memories/purge-expired?limit=100",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "memories",
+                                                              "purge-expired"
+                                                          ],
+                                                 "query":  [
+                                                               {
+                                                                   "key":  "limit",
+                                                                   "value":  "100"
+                                                               }
+                                                           ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + deleted \u003e= 0\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.data.deleted).to.be.at.least(0);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "11 重建向量（admin）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{adminToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/memories/rebuild-embeddings?limit=100",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "memories",
+                                                              "rebuild-embeddings"
+                                                          ],
+                                                 "query":  [
+                                                               {
+                                                                   "key":  "limit",
+                                                                   "value":  "100"
+                                                               }
+                                                           ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + scanned/rebuilt/failed + currentModel\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "  pm.expect(b.data.scanned).to.be.at.least(0);",
+                                                                   "  pm.expect(b.data.rebuilt).to.be.at.least(0);",
+                                                                   "  pm.expect(b.data.failed).to.be.at.least(0);",
+                                                                   "  pm.expect(b.data.currentModel).to.be.a(\u0027string\u0027).and.not.empty;",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "12 非 admin 清理过期（403）",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/memories/purge-expired",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "memories",
+                                                              "purge-expired"
+                                                          ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027403 FORBIDDEN\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(403);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.code).to.eql(\u0027FORBIDDEN\u0027);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "13 enterprise SSO 映射列表（运维令牌）",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "X-Admin-Token",
+                                                        "value":  "{{enterpriseAdminToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{enterpriseBaseUrl}}/api/v1/admin/sso-links?limit=50",
+                                                 "host":  [
+                                                              "{{enterpriseBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "admin",
+                                                              "sso-links"
+                                                          ],
+                                                 "query":  [
+                                                               {
+                                                                   "key":  "limit",
+                                                                   "value":  "50"
+                                                               }
+                                                           ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + SUCCESS\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  pm.expect(pm.response.json().code).to.eql(\u0027SUCCESS\u0027);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "14 enterprise SSO 建链/重建",
+                     "request":  {
+                                     "method":  "POST",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Content-Type",
+                                                        "value":  "application/json"
+                                                    },
+                                                    {
+                                                        "key":  "X-Admin-Token",
+                                                        "value":  "{{enterpriseAdminToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{enterpriseBaseUrl}}/api/v1/admin/sso-links",
+                                                 "host":  [
+                                                              "{{enterpriseBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "admin",
+                                                              "sso-links"
+                                                          ]
+                                             },
+                                     "body":  {
+                                                  "mode":  "raw",
+                                                  "raw":  "{\"platformUserId\":2,\"enterpriseUserId\":1,\"tenantKey\":\"default\"}"
+                                              }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + link\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const b = pm.response.json();",
+                                                                   "  pm.expect(b.data.platformUserId).to.eql(2);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "15 enterprise SSO 解绑（只解绑）",
+                     "request":  {
+                                     "method":  "DELETE",
+                                     "header":  [
+                                                    {
+                                                        "key":  "X-Admin-Token",
+                                                        "value":  "{{enterpriseAdminToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{enterpriseBaseUrl}}/api/v1/admin/sso-links/2",
+                                                 "host":  [
+                                                              "{{enterpriseBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "admin",
+                                                              "sso-links",
+                                                              "2"
+                                                          ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + unlinked\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  pm.expect(pm.response.json().data.unlinked).to.eql(true);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 },
+                 {
+                     "name":  "16 角色按租户查询（hospital-b）",
+                     "request":  {
+                                     "method":  "GET",
+                                     "header":  [
+                                                    {
+                                                        "key":  "Authorization",
+                                                        "value":  "Bearer {{platformToken}}"
+                                                    }
+                                                ],
+                                     "url":  {
+                                                 "raw":  "{{platformBaseUrl}}/api/v1/platform/roles?tenantKey=hospital-b",
+                                                 "host":  [
+                                                              "{{platformBaseUrl}}"
+                                                          ],
+                                                 "path":  [
+                                                              "api",
+                                                              "v1",
+                                                              "platform",
+                                                              "roles"
+                                                          ],
+                                                 "query":  [
+                                                               {
+                                                                   "key":  "tenantKey",
+                                                                   "value":  "hospital-b"
+                                                               }
+                                                           ]
+                                             }
+                                 },
+                     "event":  [
+                                   {
+                                       "listen":  "test",
+                                       "script":  {
+                                                      "type":  "text/javascript",
+                                                      "exec":  [
+                                                                   "pm.test(\u0027200 + tenantKey\u0027, () =\u003e {",
+                                                                   "  pm.response.to.have.status(200);",
+                                                                   "  const items = pm.response.json().data;",
+                                                                   "  pm.expect(items.length).to.be.at.least(1);",
+                                                                   "  pm.expect(items[0].tenantKey).to.eql(\u0027hospital-b\u0027);",
+                                                                   "});"
+                                                               ]
+                                                  }
+                                   }
+                               ]
+                 }
+             ]
+}

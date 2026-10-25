@@ -92,6 +92,13 @@ platform:
     min-score: ${PLATFORM_MEMORY_MIN_SCORE:0.05}
     default-top-k: ${PLATFORM_MEMORY_DEFAULT_TOP_K:5}
     max-top-k: ${PLATFORM_MEMORY_MAX_TOP_K:20}
+    # Week 23：生命周期（TTL 过期可见性 + 每日清理 + 向量重建批量）。
+    # ttl-days <= 0 表示永不过期；清理任务只删 expires_at <= now 的行。
+    lifecycle:
+      ttl-days: ${PLATFORM_MEMORY_TTL_DAYS:90}
+      cleanup-enabled: ${PLATFORM_MEMORY_CLEANUP_ENABLED:true}
+      cleanup-cron: "${PLATFORM_MEMORY_CLEANUP_CRON:0 30 3 * * *}"
+      rebuild-batch-limit: ${PLATFORM_MEMORY_REBUILD_BATCH_LIMIT:100}
 
 # Week 21：记忆向量化（平台不做 RAG，维度与 embedding 模型保持一致）。
 # 默认 hashing 为离线确定性实现；换真模型时 provider=openai + base-url/api-key/model 均从环境变量注入。

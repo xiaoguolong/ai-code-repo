@@ -98,3 +98,9 @@ sso:
   # 首次登录是否自动创建本地用户并建链；关闭则要求管理员先建链（更保守）
   auto-provision: ${SSO_AUTO_PROVISION:true}
 
+# Week 23：SSO 映射运维（A1 运维令牌）。只用于 /api/v1/admin/sso-links；
+# 令牌未配置时端点一律 403（fail closed）。生产必须用环境变量覆盖，禁止入库。
+enterprise:
+  admin:
+    token: ${ENTERPRISE_ADMIN_TOKEN:}
+

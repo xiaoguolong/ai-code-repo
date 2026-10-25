@@ -93,13 +93,29 @@ class PatientAnalysisUseCaseTest {
         assertThat(result.report()).isEqualTo("报告正文");
     }
 
+    @Test
+    void highRiskSkipsMemoryAndRequiresApproval() {
+        when(agent.run("P002", "生成报告")).thenReturn(result(RiskLevel.HIGH));
+
+        PatientAnalysisResult result = useCase.run("P002", "生成报告", SCOPE);
+
+        assertThat(result.requiresApproval()).isTrue();
+        assertThat(result.memoryId()).isNull();
+        assertThat(result.report()).isEqualTo("报告正文");
+        verify(memoryUseCase, never()).save(any(), anyString(), anyString(), anyString());
+    }
+
     private PatientAnalysisResult result() {
+        return result(RiskLevel.MEDIUM);
+    }
+
+    private PatientAnalysisResult result(RiskLevel riskLevel) {
         return new PatientAnalysisResult(
                 "P001",
                 new PatientProfile("P001", "张三", 62, "male", "2 型糖尿病"),
                 new HealthMetrics(148, 92, 8.6, 7.9),
                 List.of(new ReportSummary("R001", "糖化血红蛋白", "2026-09-12", "HbA1c 8.1%", true)),
-                RiskLevel.MEDIUM,
+                riskLevel,
                 "收缩压 148 达到 140 阈值",
                 "报告正文",
                 false,

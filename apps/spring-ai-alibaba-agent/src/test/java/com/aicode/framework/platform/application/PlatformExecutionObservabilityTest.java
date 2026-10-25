@@ -10,9 +10,11 @@ import com.aicode.framework.observability.domain.NoopObservabilityAdapter;
 import com.aicode.framework.observability.domain.ObservabilityAttributes;
 import com.aicode.framework.observability.infrastructure.MicrometerObservabilityAdapter;
 import com.aicode.framework.platform.domain.model.AgentType;
+import com.aicode.framework.platform.domain.model.ApprovalStatus;
 import com.aicode.framework.platform.domain.model.ExecutionStatus;
 import com.aicode.framework.platform.domain.model.PlatformAgentConfig;
 import com.aicode.framework.platform.domain.model.PlatformAgentDefinition;
+import com.aicode.framework.platform.domain.model.PlatformApproval;
 import com.aicode.framework.platform.domain.model.PlatformRole;
 import com.aicode.framework.platform.domain.model.PlatformRunOutput;
 import com.aicode.framework.platform.domain.model.PlatformUser;
@@ -42,6 +44,9 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
@@ -175,6 +180,47 @@ class PlatformExecutionObservabilityTest extends OtelSdkTestSupport {
                 .noneMatch(value -> String.valueOf(value).contains("13812345678")
                         || String.valueOf(value).contains("138****5678")
                         || String.valueOf(value).contains("P001"));
+    }
+
+    @Test
+    void recordsPendingApprovalStatusInSpanAndMetric() {
+        InMemoryAgentRegistryAdapter agents = new InMemoryAgentRegistryAdapter();
+        InMemoryPlatformUserAdapter users = new InMemoryPlatformUserAdapter();
+        InMemoryPlatformRoleAdapter roles = new InMemoryPlatformRoleAdapter();
+        roles.save(new PlatformRole("operator", "Operator", false,
+                Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));
+        users.save(new PlatformUser(2L, "operator", "hash", "operator"));
+        agents.save(new PlatformAgentDefinition(
+                "medical-assistant", "Medical", "desc", AgentType.MEDICAL_ASSISTANT,
+                PlatformAgentConfig.defaults(), Instant.now()));
+        PlatformApproval approval = new PlatformApproval(
+                "ap-1", "exec-1", "default", 2L, "medical-assistant", "P001", "HIGH", "task",
+                ApprovalStatus.PENDING, "", null, Instant.now(), null);
+        PlatformApprovalUseCase approvalUseCase = mock(PlatformApprovalUseCase.class);
+        when(approvalUseCase.create(anyString(), anyLong(), anyString(), anyString(),
+                anyString(), anyString())).thenReturn(approval);
+        PlatformExecutionUseCase hitl = new PlatformExecutionUseCase(
+                agents, new InMemoryExecutionRecordAdapter(), platformAgentRunner,
+                new PlatformPermissionChecker(users, roles),
+                new PlatformGuardrailService(new DefaultGuardrailAdapter(
+                        new GuardrailProperties(true, 8192, true, true, List.of("patientId", "task")))),
+                new ObjectMapper(), new InMemoryAuditLogAdapter(),
+                new MicrometerObservabilityAdapter(tracer, registry), approvalUseCase);
+        when(platformAgentRunner.run(any(), any())).thenReturn(new PlatformRunOutput(
+                Map.of("riskLevel", "HIGH", "report", "ok", "task", "t"),
+                new TokenUsage(1, 1, 2), "deepseek-chat", true));
+
+        hitl.runAgent(2L, "medical-assistant", Map.of("patientId", "P001"));
+
+        assertThat(finishedSpan(SPAN_AGENT_RUN).getAttributes()
+                .get(AttributeKey.stringKey(ObservabilityAttributes.EXECUTION_STATUS)))
+                .isEqualTo("PENDING_APPROVAL");
+        assertThat(registry.find("agent.run.count")
+                .tag(ObservabilityAttributes.EXECUTION_STATUS, "PENDING_APPROVAL")
+                .counter().count()).isEqualTo(1.0);
+        assertThat(registry.find("agent.run.duration")
+                .tag(ObservabilityAttributes.EXECUTION_STATUS, "PENDING_APPROVAL")
+                .timer()).isNotNull();
     }
 
     @Test

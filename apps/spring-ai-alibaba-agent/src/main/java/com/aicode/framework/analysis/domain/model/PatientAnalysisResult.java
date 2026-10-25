@@ -45,6 +45,17 @@ public record PatientAnalysisResult(
     }
 
     /**
+     * 是否需要人工审核后才写随访记忆（Week 23）。
+     *
+     * <p>只有 HIGH 触发 HITL；中/低风险保持第 21 周行为（直接写记忆）。</p>
+     *
+     * @return true = HIGH 风险，调用方不得直接写记忆
+     */
+    public boolean requiresApproval() {
+        return riskLevel == RiskLevel.HIGH;
+    }
+
+    /**
      * 复制一份并挂上记忆 ID（记忆写入发生在 Agent 之外，由用例层负责）。
      *
      * @param memoryId 记忆 ID

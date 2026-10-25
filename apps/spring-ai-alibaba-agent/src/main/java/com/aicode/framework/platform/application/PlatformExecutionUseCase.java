@@ -5,12 +5,14 @@ import com.aicode.core.domain.model.TokenUsage;
 import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
+import com.aicode.framework.platform.domain.model.ApprovalStatus;
 import com.aicode.framework.platform.domain.model.AuditAction;
 import com.aicode.framework.platform.domain.model.AuditLogEntry;
 import com.aicode.framework.platform.domain.model.AuditResult;
 import com.aicode.framework.platform.domain.model.ExecutionRecord;
 import com.aicode.framework.platform.domain.model.ExecutionStatus;
 import com.aicode.framework.platform.domain.model.PlatformAgentDefinition;
+import com.aicode.framework.platform.domain.model.PlatformApproval;
 import com.aicode.framework.platform.domain.model.PlatformRunOutput;
 import com.aicode.framework.platform.domain.port.AgentRegistryPort;
 import com.aicode.framework.platform.domain.port.AuditLogPort;
@@ -30,6 +32,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -64,7 +67,20 @@ public class PlatformExecutionUseCase {
     private final ObjectMapper objectMapper;
     private final AuditLogPort auditLogPort;
     private final AgentObservabilityPort observability;
+    private final PlatformApprovalUseCase approvalUseCase;
 
+    /**
+     * Week 8–22 兼容构造器（不含审批能力，供既有单测直接 new）。
+     *
+     * @param agentRegistryPort         Agent 注册表
+     * @param executionRecordPort       执行记录
+     * @param platformAgentRunner       Agent 调度
+     * @param permissionChecker         权限校验
+     * @param platformGuardrailService  Guardrail
+     * @param objectMapper              JSON
+     * @param auditLogPort              审计
+     * @param observability             观测
+     */
     public PlatformExecutionUseCase(
             AgentRegistryPort agentRegistryPort,
             ExecutionRecordPort executionRecordPort,
@@ -75,6 +91,37 @@ public class PlatformExecutionUseCase {
             AuditLogPort auditLogPort,
             AgentObservabilityPort observability
     ) {
+        this(agentRegistryPort, executionRecordPort, platformAgentRunner, permissionChecker,
+                platformGuardrailService, objectMapper, auditLogPort, observability, null);
+    }
+
+    /**
+     * Spring 注入构造器（Week 23 增加审批用例）。
+     *
+     * <p>多个构造器必须显式 {@code @Autowired}（第 19/20 周真机踩过启动失败）。</p>
+     *
+     * @param agentRegistryPort         Agent 注册表
+     * @param executionRecordPort       执行记录
+     * @param platformAgentRunner       Agent 调度
+     * @param permissionChecker         权限校验
+     * @param platformGuardrailService  Guardrail
+     * @param objectMapper              JSON
+     * @param auditLogPort              审计
+     * @param observability             观测
+     * @param approvalUseCase           人工审批用例（HIGH 风险患者分析）
+     */
+    @Autowired
+    public PlatformExecutionUseCase(
+            AgentRegistryPort agentRegistryPort,
+            ExecutionRecordPort executionRecordPort,
+            PlatformAgentRunner platformAgentRunner,
+            PlatformPermissionChecker permissionChecker,
+            PlatformGuardrailService platformGuardrailService,
+            ObjectMapper objectMapper,
+            AuditLogPort auditLogPort,
+            AgentObservabilityPort observability,
+            PlatformApprovalUseCase approvalUseCase
+    ) {
         this.agentRegistryPort = agentRegistryPort;
         this.executionRecordPort = executionRecordPort;
         this.platformAgentRunner = platformAgentRunner;
@@ -83,6 +130,7 @@ public class PlatformExecutionUseCase {
         this.objectMapper = objectMapper;
         this.auditLogPort = auditLogPort;
         this.observability = observability;
+        this.approvalUseCase = approvalUseCase;
     }
 
     /**
@@ -108,10 +156,11 @@ public class PlatformExecutionUseCase {
         }
 
         String executionId = UUID.randomUUID().toString();
+        String tenantKey = permissionChecker.tenantKeyOf(userId);
         Instant startedAt = Instant.now();
         ExecutionRecord running = new ExecutionRecord(
                 executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.RUNNING,
-                toJson(input), "", "", TokenUsage.unknown(), "", startedAt, null);
+                toJson(input), "", "", TokenUsage.unknown(), "", startedAt, null, tenantKey);
         executionRecordPort.save(running);
         log.info("[platform] execution started executionId={} userId={} agentKey={} agentType={} input={}",
                 executionId, userId, agent.agentKey(), agent.agentType(), running.inputJson());
@@ -130,10 +179,14 @@ public class PlatformExecutionUseCase {
                 PlatformRunOutput output = platformAgentRunner.run(agent, input);
                 Map<String, Object> sanitizedOutput = platformGuardrailService.sanitizeRunOutput(
                         userId, agent.agentKey(), output.output());
+                if (output.pendingApproval()) {
+                    return recordPendingApproval(executionId, userId, agent, input, running,
+                            output, sanitizedOutput, span, runStartedAt, startedAt);
+                }
                 ExecutionRecord completed = new ExecutionRecord(
                         executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.COMPLETED,
                         running.inputJson(), toJson(sanitizedOutput), output.model(), output.usage(),
-                        "", startedAt, Instant.now());
+                        "", startedAt, Instant.now(), running.tenantKey());
                 executionRecordPort.save(completed);
                 log.info("[platform] execution completed executionId={} userId={} agentKey={} model={} tokens={}",
                         executionId, userId, agent.agentKey(), output.model(), output.usage().totalTokens());
@@ -145,7 +198,7 @@ public class PlatformExecutionUseCase {
                 ExecutionRecord failed = new ExecutionRecord(
                         executionId, userId, agent.agentKey(), agent.agentType(), ExecutionStatus.FAILED,
                         running.inputJson(), "", "", TokenUsage.unknown(), ex.getMessage(),
-                        startedAt, Instant.now());
+                        startedAt, Instant.now(), running.tenantKey());
                 executionRecordPort.save(failed);
                 log.warn("[platform] execution failed executionId={} userId={} agentKey={} error={}",
                         executionId, userId, agent.agentKey(), ex.getMessage());
@@ -156,6 +209,77 @@ public class PlatformExecutionUseCase {
                 PlatformSecurityContext.clear();
             }
         }
+    }
+
+    /**
+     * HIGH 风险患者分析：落待审执行记录 + 创建审批任务（Week 23）。
+     *
+     * <p>不写 {@code AGENT_RUN} 审计（执行尚未终态）；审批任务创建本身写
+     * {@code APPROVAL_SUBMIT}。决策后的终态与审计由 {@link PlatformApprovalUseCase} 负责。</p>
+     */
+    private ExecutionRecord recordPendingApproval(
+            String executionId,
+            long userId,
+            PlatformAgentDefinition agent,
+            Map<String, Object> input,
+            ExecutionRecord running,
+            PlatformRunOutput output,
+            Map<String, Object> sanitizedOutput,
+            SpanScope span,
+            long runStartedAt,
+            Instant startedAt
+    ) {
+        if (approvalUseCase == null) {
+            throw new IllegalStateException("approval use case is not configured");
+        }
+        String patientId = text(input == null ? null : input.get("patientId"));
+        String riskLevel = text(sanitizedOutput.get("riskLevel"));
+        String task = text(sanitizedOutput.get("task"));
+        PlatformApproval approval = approvalUseCase.create(
+                executionId, userId, agent.agentKey(), patientId, riskLevel, task);
+
+        Map<String, Object> pendingOutput = new LinkedHashMap<>(sanitizedOutput);
+        pendingOutput.put("approvalId", approval.approvalId());
+        pendingOutput.put("approvalStatus", ApprovalStatus.PENDING.name());
+        ExecutionRecord pending = new ExecutionRecord(
+                executionId, userId, agent.agentKey(), agent.agentType(),
+                ExecutionStatus.PENDING_APPROVAL, running.inputJson(), toJson(pendingOutput),
+                output.model(), output.usage(), "", startedAt, null, running.tenantKey());
+        executionRecordPort.save(pending);
+        log.info("[platform] execution pending approval executionId={} userId={} agentKey={} approvalId={} riskLevel={}",
+                executionId, userId, agent.agentKey(), approval.approvalId(), riskLevel);
+        recordPendingApprovalMetrics(span, agent, output, runStartedAt);
+        return pending;
+    }
+
+    /**
+     * 待审终态的观测：span 属性 + {@code execution.status=PENDING_APPROVAL} 指标。
+     */
+    private void recordPendingApprovalMetrics(
+            SpanScope span,
+            PlatformAgentDefinition agent,
+            PlatformRunOutput output,
+            long runStartedAt
+    ) {
+        span.attribute(ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.PENDING_APPROVAL.name());
+        span.attribute(ObservabilityAttributes.DURATION_MS, String.valueOf(elapsedMs(runStartedAt)));
+        if (output.model() != null && !output.model().isBlank()) {
+            span.attribute(ObservabilityAttributes.GEN_AI_REQUEST_MODEL, output.model());
+        }
+        if (output.usage() != null) {
+            span.attribute(ObservabilityAttributes.GEN_AI_USAGE_TOTAL_TOKENS,
+                    String.valueOf(output.usage().totalTokens()));
+        }
+        observability.recordCounter(MonitoringMetricNames.AGENT_RUN_COUNT, 1.0,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.PENDING_APPROVAL.name());
+        observability.recordDuration(MonitoringMetricNames.AGENT_RUN_DURATION, elapsedMs(runStartedAt),
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.PENDING_APPROVAL.name());
+    }
+
+    private String text(Object value) {
+        return value == null ? "" : value.toString().trim();
     }
 
     /**

@@ -46,6 +46,12 @@ public class MyBatisUserAdapter implements UserPort {
                 .map(this::toModel);
     }
 
+    @Override
+    @Transactional
+    public boolean deleteById(long id) {
+        return userMapper.deleteById(id) > 0;
+    }
+
     private User toModel(AppUserEntity entity) {
         return new User(entity.getId(), entity.getUsername(), entity.getPasswordHash(), entity.getCreatedAt());
     }

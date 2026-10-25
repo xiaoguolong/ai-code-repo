@@ -33,6 +33,11 @@ public class InMemoryUserPort implements UserPort {
         return Optional.ofNullable(byId.get(id));
     }
 
+    @Override
+    public boolean deleteById(long id) {
+        return byId.remove(id) != null;
+    }
+
     /** 供测试预置已存在用户。 */
     public User save(User user) {
         return create(user);

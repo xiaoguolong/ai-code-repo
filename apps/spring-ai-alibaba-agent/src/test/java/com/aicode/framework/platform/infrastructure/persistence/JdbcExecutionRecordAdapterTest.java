@@ -42,6 +42,21 @@ class JdbcExecutionRecordAdapterTest {
         // execution_record.user_id 外键指向 platform_user，写入前必须先有用户行
         platformUserPort.save(new PlatformUser(3L, "exec-user-3", "hash", "operator"));
         platformUserPort.save(new PlatformUser(4L, "exec-user-4", "hash", "operator"));
+        platformUserPort.save(new PlatformUser(5L, "exec-user-5", "hash", "operator", "hospital-b"));
+    }
+
+    @Test
+    void persistsTenantKeyWithExecutionRecord() {
+        Instant startedAt = Instant.parse("2026-10-01T03:00:00Z");
+        executionRecordPort.save(new ExecutionRecord(
+                "exec-tenant-1", 5L, "patient-analysis", AgentType.PATIENT_ANALYSIS,
+                ExecutionStatus.COMPLETED, "{}", "{}", "model",
+                TokenUsage.unknown(), "", startedAt, startedAt, "hospital-b"));
+
+        ExecutionRecord loaded = executionRecordPort.findById("exec-tenant-1").orElseThrow();
+
+        assertThat(loaded.tenantKey()).isEqualTo("hospital-b");
+        assertThat(loaded.userId()).isEqualTo(5L);
     }
 
     @Test

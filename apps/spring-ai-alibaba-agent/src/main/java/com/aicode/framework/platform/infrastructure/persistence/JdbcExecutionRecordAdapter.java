@@ -18,10 +18,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 执行记录落库适配器（Week 16，替换 Week 13 内存实现）。
+ * 执行记录落库适配器（Week 16，替换 Week 13 内存实现；Week 23 加 tenant_key）。
  *
- * <p>同一次执行会先写 RUNNING、再覆盖为 COMPLETED / FAILED，因此 {@link #save}
- * 采用「存在则 UPDATE，否则 INSERT」的覆盖写语义，与内存实现保持一致。
+ * <p>同一次执行会先写 RUNNING、再覆盖为 COMPLETED / FAILED / PENDING_APPROVAL / REJECTED，
+ * 因此 {@link #save} 采用「存在则 UPDATE，否则 INSERT」的覆盖写语义，与内存实现保持一致。
  * 主键 {@code id} 由 {@link PlatformJdbcSupport#nextId} 生成，双库通用。</p>
  */
 @Component
@@ -30,8 +30,8 @@ import java.util.Optional;
 public class JdbcExecutionRecordAdapter implements ExecutionRecordPort {
 
     private static final String SELECT_COLUMNS = """
-            SELECT execution_id, user_id, agent_key, agent_type, status, input_json, output_json,
-                   model, prompt_tokens, completion_tokens, total_tokens, error_message,
+            SELECT execution_id, user_id, tenant_key, agent_key, agent_type, status, input_json,
+                   output_json, model, prompt_tokens, completion_tokens, total_tokens, error_message,
                    started_at, finished_at
             FROM execution_record
             """;
@@ -49,13 +49,13 @@ public class JdbcExecutionRecordAdapter implements ExecutionRecordPort {
     public void save(ExecutionRecord record) {
         int updated = jdbcTemplate.update("""
                 UPDATE execution_record SET
-                    user_id = ?, agent_key = ?, agent_type = ?, status = ?, input_json = ?,
+                    user_id = ?, tenant_key = ?, agent_key = ?, agent_type = ?, status = ?, input_json = ?,
                     output_json = ?, model = ?, prompt_tokens = ?, completion_tokens = ?,
                     total_tokens = ?, error_message = ?, started_at = ?, finished_at = ?
                 WHERE execution_id = ?
                 """,
-                record.userId(), record.agentKey(), record.agentType().name(), record.status().name(),
-                record.inputJson(), record.outputJson(), nullToEmpty(record.model()),
+                record.userId(), record.tenantKey(), record.agentKey(), record.agentType().name(),
+                record.status().name(), record.inputJson(), record.outputJson(), nullToEmpty(record.model()),
                 record.usage().promptTokens(), record.usage().completionTokens(), record.usage().totalTokens(),
                 nullToEmpty(record.errorMessage()),
                 PlatformJdbcSupport.toTimestamp(record.startedAt()),
@@ -64,14 +64,15 @@ public class JdbcExecutionRecordAdapter implements ExecutionRecordPort {
         if (updated == 0) {
             jdbcTemplate.update("""
                     INSERT INTO execution_record (
-                        id, execution_id, user_id, agent_key, agent_type, status, input_json,
+                        id, execution_id, user_id, tenant_key, agent_key, agent_type, status, input_json,
                         output_json, model, prompt_tokens, completion_tokens, total_tokens,
                         error_message, started_at, finished_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     jdbcSupport.nextId("execution_record", "id"),
-                    record.executionId(), record.userId(), record.agentKey(), record.agentType().name(),
-                    record.status().name(), record.inputJson(), record.outputJson(), nullToEmpty(record.model()),
+                    record.executionId(), record.userId(), record.tenantKey(), record.agentKey(),
+                    record.agentType().name(), record.status().name(), record.inputJson(),
+                    record.outputJson(), nullToEmpty(record.model()),
                     record.usage().promptTokens(), record.usage().completionTokens(), record.usage().totalTokens(),
                     nullToEmpty(record.errorMessage()),
                     PlatformJdbcSupport.toTimestamp(record.startedAt()),
@@ -127,7 +128,8 @@ public class JdbcExecutionRecordAdapter implements ExecutionRecordPort {
                             rs.getInt("total_tokens")),
                     rs.getString("error_message"),
                     PlatformJdbcSupport.toInstant(rs.getTimestamp("started_at")),
-                    finishedAt);
+                    finishedAt,
+                    rs.getString("tenant_key"));
         }
     }
 }

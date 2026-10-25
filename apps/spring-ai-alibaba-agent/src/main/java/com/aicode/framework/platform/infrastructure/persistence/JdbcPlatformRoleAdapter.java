@@ -16,11 +16,13 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * 平台角色落库适配器（Week 16，替换 Week 13 内存实现）。
+ * 平台角色落库适配器（Week 16；Week 23 迁移 V7 起按租户隔离）。
  *
  * <p>角色主体在 {@code platform_role}，Agent / Tool / patientId 三类授权分别落在
- * {@code platform_role_agent} / {@code platform_role_tool} / {@code platform_role_patient}。
- * {@link #save} 为「先删后插」覆盖写：授权集合以本次入参为准，避免残留旧授权造成越权。</p>
+ * {@code platform_role_agent} / {@code platform_role_tool} / {@code platform_role_patient}；
+ * 四张表都以 {@code (tenant_key, role_key)} 定位，避免 A 租户改角色影响 B 租户。</p>
+ *
+ * <p>{@link #save} 为「先删后插」覆盖写：授权集合以本次入参为准，避免残留旧授权造成越权。</p>
  */
 @Component
 @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcTemplate")
@@ -28,7 +30,7 @@ import java.util.TreeSet;
 public class JdbcPlatformRoleAdapter implements PlatformRolePort {
 
     private static final String SELECT_ROLES =
-            "SELECT role_key, display_name, is_admin FROM platform_role";
+            "SELECT tenant_key, role_key, display_name, is_admin FROM platform_role";
 
     private final JdbcTemplate jdbcTemplate;
     private final RowMapper<PlatformRole> partialMapper = new RoleHeaderRowMapper();
@@ -38,12 +40,13 @@ public class JdbcPlatformRoleAdapter implements PlatformRolePort {
     }
 
     @Override
-    public Optional<PlatformRole> findByKey(String roleKey) {
-        if (roleKey == null || roleKey.isBlank()) {
+    public Optional<PlatformRole> findByKey(String tenantKey, String roleKey) {
+        if (tenantKey == null || tenantKey.isBlank() || roleKey == null || roleKey.isBlank()) {
             return Optional.empty();
         }
         return jdbcTemplate.query(
-                        SELECT_ROLES + " WHERE role_key = ?", partialMapper, roleKey.trim())
+                        SELECT_ROLES + " WHERE tenant_key = ? AND role_key = ?",
+                        partialMapper, tenantKey.trim(), roleKey.trim())
                 .stream()
                 .findFirst()
                 .map(this::withGrants);
@@ -51,7 +54,7 @@ public class JdbcPlatformRoleAdapter implements PlatformRolePort {
 
     @Override
     public List<PlatformRole> listAll() {
-        return jdbcTemplate.query(SELECT_ROLES + " ORDER BY role_key", partialMapper)
+        return jdbcTemplate.query(SELECT_ROLES + " ORDER BY tenant_key, role_key", partialMapper)
                 .stream()
                 .map(this::withGrants)
                 .toList();
@@ -60,47 +63,54 @@ public class JdbcPlatformRoleAdapter implements PlatformRolePort {
     @Override
     public void save(PlatformRole role) {
         int updated = jdbcTemplate.update(
-                "UPDATE platform_role SET display_name = ?, is_admin = ? WHERE role_key = ?",
-                role.displayName(), role.admin(), role.roleKey());
+                "UPDATE platform_role SET display_name = ?, is_admin = ?"
+                        + " WHERE tenant_key = ? AND role_key = ?",
+                role.displayName(), role.admin(), role.tenantKey(), role.roleKey());
         if (updated == 0) {
             jdbcTemplate.update(
-                    "INSERT INTO platform_role (role_key, display_name, is_admin) VALUES (?, ?, ?)",
-                    role.roleKey(), role.displayName(), role.admin());
+                    "INSERT INTO platform_role (tenant_key, role_key, display_name, is_admin)"
+                            + " VALUES (?, ?, ?, ?)",
+                    role.tenantKey(), role.roleKey(), role.displayName(), role.admin());
         }
-        replaceGrants("platform_role_agent", "agent_key", role.roleKey(), role.allowedAgentKeys());
-        replaceGrants("platform_role_tool", "tool_key", role.roleKey(), role.allowedToolKeys());
-        replaceGrants("platform_role_patient", "patient_id", role.roleKey(), role.allowedPatientIds());
+        replaceGrants("platform_role_agent", "agent_key", role, role.allowedAgentKeys());
+        replaceGrants("platform_role_tool", "tool_key", role, role.allowedToolKeys());
+        replaceGrants("platform_role_patient", "patient_id", role, role.allowedPatientIds());
     }
 
-    /** 先清空该角色的同类授权，再按入参重建，实现覆盖写语义。 */
-    private void replaceGrants(String table, String valueColumn, String roleKey, Set<String> values) {
-        jdbcTemplate.update("DELETE FROM " + table + " WHERE role_key = ?", roleKey);
+    /** 先清空该租户角色的同类授权，再按入参重建，实现覆盖写语义。 */
+    private void replaceGrants(String table, String valueColumn, PlatformRole role, Set<String> values) {
+        jdbcTemplate.update(
+                "DELETE FROM " + table + " WHERE tenant_key = ? AND role_key = ?",
+                role.tenantKey(), role.roleKey());
         if (values == null || values.isEmpty()) {
             return;
         }
         for (String value : new TreeSet<>(values)) {
             jdbcTemplate.update(
-                    "INSERT INTO " + table + " (role_key, " + valueColumn + ") VALUES (?, ?)",
-                    roleKey, value);
+                    "INSERT INTO " + table + " (tenant_key, role_key, " + valueColumn + ")"
+                            + " VALUES (?, ?, ?)",
+                    role.tenantKey(), role.roleKey(), value);
         }
     }
 
     /** 补齐三类授权集合。 */
     private PlatformRole withGrants(PlatformRole header) {
+        String tenantKey = header.tenantKey();
         String roleKey = header.roleKey();
         return new PlatformRole(
                 roleKey,
                 header.displayName(),
                 header.admin(),
-                readGrants("platform_role_agent", "agent_key", roleKey),
-                readGrants("platform_role_tool", "tool_key", roleKey),
-                readGrants("platform_role_patient", "patient_id", roleKey));
+                readGrants("platform_role_agent", "agent_key", tenantKey, roleKey),
+                readGrants("platform_role_tool", "tool_key", tenantKey, roleKey),
+                readGrants("platform_role_patient", "patient_id", tenantKey, roleKey),
+                tenantKey);
     }
 
-    private Set<String> readGrants(String table, String valueColumn, String roleKey) {
+    private Set<String> readGrants(String table, String valueColumn, String tenantKey, String roleKey) {
         return Set.copyOf(jdbcTemplate.queryForList(
-                "SELECT " + valueColumn + " FROM " + table + " WHERE role_key = ?",
-                String.class, roleKey));
+                "SELECT " + valueColumn + " FROM " + table + " WHERE tenant_key = ? AND role_key = ?",
+                String.class, tenantKey, roleKey));
     }
 
     /**
@@ -116,7 +126,8 @@ public class JdbcPlatformRoleAdapter implements PlatformRolePort {
                     rs.getBoolean("is_admin"),
                     Set.of(),
                     Set.of(),
-                    Set.of());
+                    Set.of(),
+                    rs.getString("tenant_key"));
         }
     }
 }

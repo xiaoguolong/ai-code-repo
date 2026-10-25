@@ -32,4 +32,15 @@ public interface UserPort {
      * @return 命中用户，不存在为空
      */
     Optional<User> findById(long id);
+
+    /**
+     * 按主键删除用户（Week 23 运维解绑用）。
+     *
+     * <p>只做物理删除；若用户仍被文档/会话等外键引用，实现会抛异常，调用方应转成 409，
+     * 不要静默级联删业务数据。</p>
+     *
+     * @param id 用户主键
+     * @return true = 删除了一条
+     */
+    boolean deleteById(long id);
 }

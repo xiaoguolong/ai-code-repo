@@ -50,6 +50,12 @@ public class PatientAnalysisUseCase {
         if (scope == null) {
             return result;
         }
+        if (result.requiresApproval()) {
+            // Week 23 HITL：HIGH 风险先进入审批，批准后才写随访记忆。
+            log.info("[patient-analysis] high risk requires approval patientId={} userId={} risk={}",
+                    normalizedPatientId, scope.userId(), result.riskLevel().name());
+            return result;
+        }
         try {
             PlatformMemoryRecord saved = memoryUseCase.save(
                     scope, normalizedPatientId, normalizedTask, result.report());
@@ -65,6 +71,16 @@ public class PatientAnalysisUseCase {
         if (task != null && !task.trim().isEmpty()) {
             return task.trim();
         }
+        return defaultTask(patientId);
+    }
+
+    /**
+     * 默认任务文案（Week 23：平台创建审批任务时也要用同一份，避免两处措辞漂移）。
+     *
+     * @param patientId 患者编号
+     * @return 默认任务描述
+     */
+    public static String defaultTask(String patientId) {
         return DEFAULT_TASK_TEMPLATE.formatted(patientId);
     }
 

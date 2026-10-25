@@ -37,4 +37,31 @@ class JdbcSsoUserLinkAdapterTest {
     void returnsEmptyForUnknownPlatformUser() {
         assertThat(ssoUserLinkPort.findEnterpriseUserId(999999L)).isEmpty();
     }
+
+    @Test
+    void readsFullLinkFromBothDirections() {
+        ssoUserLinkPort.link(44L, 9L, "hospital-b");
+
+        assertThat(ssoUserLinkPort.findByPlatformUserId(44L)).get()
+                .satisfies(link -> {
+                    assertThat(link.enterpriseUserId()).isEqualTo(9L);
+                    assertThat(link.tenantKey()).isEqualTo("hospital-b");
+                    assertThat(link.linkedAt()).isNotNull();
+                });
+        assertThat(ssoUserLinkPort.findByEnterpriseUserId(9L).orElseThrow().platformUserId())
+                .isEqualTo(44L);
+    }
+
+    @Test
+    void listsLinksAndUnlinks() {
+        ssoUserLinkPort.link(45L, 10L, "default");
+        ssoUserLinkPort.link(46L, 11L, "default");
+
+        assertThat(ssoUserLinkPort.listAll(50))
+                .extracting(link -> link.platformUserId())
+                .contains(45L, 46L);
+        assertThat(ssoUserLinkPort.unlink(45L)).isTrue();
+        assertThat(ssoUserLinkPort.unlink(45L)).isFalse();
+        assertThat(ssoUserLinkPort.findByPlatformUserId(45L)).isEmpty();
+    }
 }

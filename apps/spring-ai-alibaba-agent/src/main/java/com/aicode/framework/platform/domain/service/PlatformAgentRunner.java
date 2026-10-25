@@ -151,7 +151,10 @@ public class PlatformAgentRunner {
         String task = optionalString(input, "task");
         PlatformMemoryScope scope = runScopePort.currentScope().orElse(null);
         PatientAnalysisResult result = patientAnalysisUseCase.run(patientId, task, scope);
-        return new PlatformRunOutput(toOutput(result), result.usage(), result.model());
+        Map<String, Object> output = toOutput(result);
+        output.put("task", task == null ? PatientAnalysisUseCase.defaultTask(patientId) : task);
+        boolean pendingApproval = scope != null && result.requiresApproval();
+        return new PlatformRunOutput(output, result.usage(), result.model(), pendingApproval);
     }
 
     private Map<String, Object> toOutput(PatientAnalysisResult result) {

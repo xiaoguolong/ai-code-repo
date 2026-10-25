@@ -188,6 +188,10 @@ curl -s "http://localhost:8084/api/v1/platform/memories?patientId=P001&query=血
 
 成功 200（`data` 为执行记录，形状与 Week 13–16 完全一致）：
 
+> **Week 23 行为变更**：HIGH 风险不再直接 `COMPLETED`，而是返回
+> `status=PENDING_APPROVAL` + `outputJson.approvalId`，且不写随访记忆；
+> 批准/拒绝接口见 `docs/api/week-23-api.md`。中/低风险仍为 `COMPLETED`。
+
 ```json
 {
   "code": "SUCCESS",

@@ -5,17 +5,23 @@ import com.aicode.framework.platform.infrastructure.security.DirectRunAuthInterc
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 import java.time.Clock;
 
 /**
  * 平台模块配置装配。
+ *
+ * <p>Week 23 起开启 Spring 调度：长期记忆过期清理需要一个每日任务；
+ * 单测通过 {@code platform.memory.lifecycle.cleanup-enabled=false} 关闭，避免后台线程干扰。</p>
  */
 @Configuration
+@EnableScheduling
 @EnableConfigurationProperties({
         PlatformSecurityProperties.class,
         PlatformMemoryProperties.class,
-        PlatformRateLimitProperties.class
+        PlatformRateLimitProperties.class,
+        PlatformMemoryLifecycleProperties.class
 })
 public class PlatformConfiguration {
 

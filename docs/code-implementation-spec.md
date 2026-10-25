@@ -801,7 +801,9 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 20 | 完整监控体系（Prometheus + Grafana + 四后端统一自检 + 网关指标出口） | docs/specs/week-20.md | notes/impl-logs/week-20.md | 已关闭（Prometheus 2.55.1 / Grafana 11.3.1 真机端到端验收通过） |
 | 21 | 医疗 SaaS 起步（多租户 + 统一身份 SSO + 患者分析 Agent 1 + 记忆隔离） | docs/specs/week-21.md | notes/impl-logs/week-21.md | 已关闭（H2 双库迁移 + 701 用例全绿；PostgreSQL 真机见实现日志 9.2） |
 | 22 | 登录限流 + 应用上云（jar/systemd）+ enterprise/SSO 真机 | docs/specs/week-22.md | notes/impl-logs/week-22.md | 已关闭（726 用例全绿；平台/网关/enterprise 云端常驻，两份验收脚本 PASS=18 / PASS=11） |
-| 22–24 | 医疗 SaaS 其余三个 Agent | | | 未开始 |
+| 23 | 患者分析 HITL + 长期记忆生命周期（V6）+ SSO 解绑/租户角色（V7） | docs/specs/week-23.md | notes/impl-logs/week-23.md | 批次 1/2 均完成：V6 云端 PASS=21；V7 云端 PASS=19；根聚合 798 全绿 |
+| 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
+| 24 | 医疗 SaaS 其余三个 Agent（运营 / 知识库 / 随访） | | | 未开始 |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
@@ -815,6 +817,9 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | enterprise（8083）↔ platform（8084）统一身份 SSO | **第 21 周（已完成）** | enterprise 实际端口是 **8081**（本文原写 8083 有误，已按 `application.yml` 纠正）；平台新增 `/api/v1/platform/auth/verify` 作唯一身份源，enterprise 用 `sso.enabled` 开关委托 + `sso_user_link` 映射表，不合并 `app_user` |
 | 8082 patient-agent 收敛至 8084 Platform | **第 21 周（已完成）** | patient-agent 实际端口是 **8083**（原写 8082 有误）；本周只标注 deprecated（`Deprecation`/`Sunset`/`Link` 三头 + 启动告警），不删代码，第 5–7 周 19 个用例继续作回归对照 |
 | 长期记忆按用户/租户隔离（pgvector） | **第 21 周（隔离已完成，pgvector 延后）** | `platform_memory` 用 `tenant_key + user_id` 谓词强制隔离；向量以 JSON 文本存储 + Java 余弦，换 pgvector 只需换适配器（触发条件与理由见 `docs/specs/week-21.md` 七） |
+| 长期记忆生命周期（TTL / 删除 / 向量重建） | **第 23 周批次 1（已完成）** | V6 加 `expires_at` / `embedding_model`；读取过滤过期、每日清理、admin 删除/重建；详见 `docs/specs/week-23.md` 第四/五节 |
+| 患者分析 HITL（HIGH 风险人工确认） | **第 23 周批次 1（已完成）** | `platform_approval` + `PENDING_APPROVAL` / `REJECTED`；跨进程可重启；决策不调用模型 |
+| SSO 解绑 / 租户级角色 | **第 23 周批次 2（已完成并上线）** | A1 运维令牌 + B2 按租户复制角色；V7 角色四表 + 执行记录 tenant；H2/真实 PostgreSQL 均通过；409/503 真机 PASS；见 `docs/specs/week-23.md` 第十节 |
 
 ---
 

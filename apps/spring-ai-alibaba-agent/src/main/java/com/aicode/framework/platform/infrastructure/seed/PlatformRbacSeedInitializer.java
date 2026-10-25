@@ -12,6 +12,7 @@ import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.stereotype.Component;
 
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -22,14 +23,19 @@ import java.util.stream.IntStream;
  * <p>Week 16：改为按 Port 判空，做到落库与内存两种模式都幂等——已有数据直接跳过，
  * 重启、单测重复调用都不会重复插入或抛主键冲突。密码只存哈希，明文不落库。</p>
  *
- * <p>Week 21：只有 operator 角色扩容（新增 patient-analysis / ReportLookupTool）；
- * 第二租户用户 {@code doctor_b} 不在这里创建——本类以「用户表是否为空」为整体开关，
- * 升级到第 21 周的老库已有用户会导致它永远建不出来。见 {@link PlatformHospitalBSeedInitializer}。</p>
+ * <p>Week 23（B2）：角色按租户复制。本类改为「逐 (tenant, role) 判空、只补缺」，
+ * 因此老库升级后 hospital-b 也能拿到自己的 admin/operator/viewer 副本；
+ * 已有的角色/授权不会被覆盖（避免把运维手工撤销的权限加回来）。
+ * 用户仍只在用户表为空时 seed（老库不重建用户）。</p>
  */
 @Component
 public class PlatformRbacSeedInitializer implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(PlatformRbacSeedInitializer.class);
+
+    /** 当前产品已知租户；更多租户时由 V7 迁移按 platform_tenant 复制。 */
+    static final List<String> KNOWN_TENANTS = List.of(
+            PlatformTenant.DEFAULT_TENANT_KEY, "hospital-b");
 
     private final PlatformRolePort platformRolePort;
     private final PlatformUserPort platformUserPort;
@@ -47,12 +53,14 @@ public class PlatformRbacSeedInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        if (!platformRolePort.listAll().isEmpty() || !isUserTableEmpty()) {
-            return;
+        int created = seedRolesIfMissing();
+        if (created > 0) {
+            log.info("[platform] rbac roles seeded for tenants={} created={}", KNOWN_TENANTS, created);
         }
-        seedRoles();
-        seedUsers();
-        log.info("[platform] rbac seed applied roles=3 users=3");
+        if (isUserTableEmpty()) {
+            seedUsers();
+            log.info("[platform] rbac users seeded users=3");
+        }
     }
 
     private boolean isUserTableEmpty() {
@@ -62,17 +70,29 @@ public class PlatformRbacSeedInitializer implements ApplicationRunner {
                 && platformUserPort.findById(3L).isEmpty();
     }
 
-    private void seedRoles() {
-        platformRolePort.save(new PlatformRole(
-                "admin", "平台管理员", true, Set.of(), Set.of(), Set.of()));
-        platformRolePort.save(new PlatformRole(
-                "operator", "运营人员",
-                false,
-                Set.of("patient-risk", "medical-assistant", "patient-analysis"),
-                Set.of("PatientLookupTool", "HealthMetricTool", "ReportLookupTool"),
-                operatorPatientIds()));
-        platformRolePort.save(new PlatformRole(
-                "viewer", "只读访客", false, Set.of(), Set.of(), Set.of()));
+    private int seedRolesIfMissing() {
+        int created = 0;
+        for (String tenantKey : KNOWN_TENANTS) {
+            if (platformRolePort.findByKey(tenantKey, "admin").isEmpty()) {
+                platformRolePort.save(new PlatformRole(
+                        "admin", "平台管理员", true, Set.of(), Set.of(), Set.of(), tenantKey));
+                created++;
+            }
+            if (platformRolePort.findByKey(tenantKey, "operator").isEmpty()) {
+                platformRolePort.save(new PlatformRole(
+                        "operator", "运营人员", false,
+                        Set.of("patient-risk", "medical-assistant", "patient-analysis"),
+                        Set.of("PatientLookupTool", "HealthMetricTool", "ReportLookupTool"),
+                        operatorPatientIds(), tenantKey));
+                created++;
+            }
+            if (platformRolePort.findByKey(tenantKey, "viewer").isEmpty()) {
+                platformRolePort.save(new PlatformRole(
+                        "viewer", "只读访客", false, Set.of(), Set.of(), Set.of(), tenantKey));
+                created++;
+            }
+        }
+        return created;
     }
 
     private void seedUsers() {

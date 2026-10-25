@@ -67,9 +67,12 @@ class PlatformExecutionUseCaseTest {
 
         roles.save(new PlatformRole("operator", "Operator", false,
                 Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001")));
+        roles.save(new PlatformRole("operator", "Operator B", false,
+                Set.of("medical-assistant"), Set.of("PatientLookupTool"), Set.of("P001"), "hospital-b"));
         roles.save(new PlatformRole("viewer", "Viewer", false, Set.of(), Set.of(), Set.of()));
         users.save(new PlatformUser(2L, "operator", "hash", "operator"));
         users.save(new PlatformUser(3L, "viewer", "hash", "viewer"));
+        users.save(new PlatformUser(4L, "doctor_b", "hash", "operator", "hospital-b"));
 
         agentRegistry.save(new PlatformAgentDefinition(
                 "medical-assistant", "Medical", "desc", AgentType.MEDICAL_ASSISTANT,
@@ -89,6 +92,17 @@ class PlatformExecutionUseCaseTest {
         assertThat(record.userId()).isEqualTo(2L);
         assertThat(record.outputJson()).contains("分析报告");
         assertThat(useCase.listExecutions(2L)).hasSize(1);
+    }
+
+    @Test
+    void runAgentPersistsTenantFromCaller() {
+        when(platformAgentRunner.run(any(), any())).thenReturn(new PlatformRunOutput(
+                Map.of("report", "ok"), new TokenUsage(1, 1, 2), "m"));
+
+        var record = useCase.runAgent(4L, "medical-assistant", Map.of("patientId", "P001"));
+
+        assertThat(record.tenantKey()).isEqualTo("hospital-b");
+        assertThat(record.userId()).isEqualTo(4L);
     }
 
     @Test

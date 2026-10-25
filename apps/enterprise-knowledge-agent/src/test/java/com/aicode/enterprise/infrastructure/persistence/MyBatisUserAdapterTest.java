@@ -37,4 +37,15 @@ class MyBatisUserAdapterTest {
     void returnsEmptyForUnknownUsername() {
         assertThat(adapter.findByUsername("nobody")).isEmpty();
     }
+
+    @Test
+    void createDeleteCreateStillGetsGeneratedId() {
+        User first = adapter.create(new User(null, "tmp-first", "hash", Instant.parse("2026-09-04T00:00:00Z")));
+        assertThat(first.id()).isNotNull();
+        assertThat(adapter.deleteById(first.id())).isTrue();
+
+        User second = adapter.create(new User(null, "tmp-second", "hash", Instant.parse("2026-09-04T00:00:00Z")));
+        assertThat(second.id()).isNotNull();
+        assertThat(second.id()).isNotEqualTo(first.id());
+    }
 }

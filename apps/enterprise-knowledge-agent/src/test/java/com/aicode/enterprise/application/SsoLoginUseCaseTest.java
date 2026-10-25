@@ -120,6 +120,22 @@ class SsoLoginUseCaseTest {
     }
 
     @Test
+    void unlinkAndDeleteLocalUserAllowsReprovisioning() {
+        User local = userPort.save(new User(null, "alice", "hash", NOW));
+        linkPort.link(42L, local.id(), "default");
+        // 运维语义：只解绑 + 删本地用户后，下次 SSO 登录应重新开户，而不是撞 409 死结。
+        linkPort.unlink(42L);
+        userPort.deleteById(local.id());
+        SsoLoginUseCase useCase = useCase(identity(42L, "alice", "default"));
+
+        LoginUserOutcome outcome = useCase.login(new LoginUserCommand("alice", "pass123"));
+
+        assertThat(outcome.userId()).isNotEqualTo(local.id());
+        assertThat(userPort.findById(local.id())).isEmpty();
+        assertThat(linkPort.findEnterpriseUserId(42L)).contains(outcome.userId());
+    }
+
+    @Test
     void rejectsBlankCredentialsBeforeCallingPlatform() {
         SsoLoginUseCase useCase = useCase(identity(42L, "alice", "default"));
 

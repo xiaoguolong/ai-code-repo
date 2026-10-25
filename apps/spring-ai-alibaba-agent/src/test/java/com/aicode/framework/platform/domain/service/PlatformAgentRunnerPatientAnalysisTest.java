@@ -79,6 +79,24 @@ class PlatformAgentRunnerPatientAnalysisTest {
         PlatformRunOutput output = runner().run(agent(), Map.of("patientId", "P001"));
 
         assertThat(output.output()).containsEntry("memoryId", null);
+        assertThat(output.pendingApproval()).isFalse();
+    }
+
+    @Test
+    void marksHighRiskAsPendingApprovalWhenScopePresent() {
+        PlatformMemoryScope scope = new PlatformMemoryScope("default", 2L);
+        when(runScopePort.currentScope()).thenReturn(Optional.of(scope));
+        when(patientAnalysisUseCase.run("P002", "生成报告", scope))
+                .thenReturn(result("P002", null, RiskLevel.HIGH));
+
+        PlatformRunOutput output = runner().run(agent(), Map.of("patientId", "P002", "task", "生成报告"));
+
+        assertThat(output.pendingApproval()).isTrue();
+        assertThat(output.output())
+                .containsEntry("patientId", "P002")
+                .containsEntry("riskLevel", "HIGH")
+                .containsEntry("task", "生成报告")
+                .containsEntry("memoryId", null);
     }
 
     private PlatformAgentRunner runner() {
@@ -93,12 +111,16 @@ class PlatformAgentRunnerPatientAnalysisTest {
     }
 
     private PatientAnalysisResult result(String memoryId) {
+        return result("P001", memoryId, RiskLevel.MEDIUM);
+    }
+
+    private PatientAnalysisResult result(String patientId, String memoryId, RiskLevel riskLevel) {
         return new PatientAnalysisResult(
-                "P001",
-                new PatientProfile("P001", "张三", 62, "male", "2 型糖尿病"),
+                patientId,
+                new PatientProfile(patientId, "张三", 62, "male", "2 型糖尿病"),
                 new HealthMetrics(148, 92, 8.6, 7.9),
                 List.of(new ReportSummary("R001", "糖化血红蛋白", "2026-09-12", "HbA1c 8.1%", true)),
-                RiskLevel.MEDIUM,
+                riskLevel,
                 "收缩压 148 达到 140 阈值",
                 "报告正文",
                 false,
@@ -107,7 +129,7 @@ class PlatformAgentRunnerPatientAnalysisTest {
                         new PatientAnalysisStep(1, "patient_lookup", "loaded patient"),
                         new PatientAnalysisStep(2, "report_lookup", "loaded reports"),
                         new PatientAnalysisStep(3, "metric_lookup", "loaded metrics"),
-                        new PatientAnalysisStep(4, "risk_analysis", "risk=MEDIUM"),
+                        new PatientAnalysisStep(4, "risk_analysis", "risk=" + riskLevel.name()),
                         new PatientAnalysisStep(5, "report_generation", "generated report")),
                 new TokenUsage(400, 400, 800),
                 "deepseek-chat");

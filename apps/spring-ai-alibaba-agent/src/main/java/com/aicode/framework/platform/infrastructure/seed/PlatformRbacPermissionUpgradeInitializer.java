@@ -40,20 +40,24 @@ public class PlatformRbacPermissionUpgradeInitializer implements ApplicationRunn
 
     @Override
     public void run(ApplicationArguments args) {
-        rolePort.findByKey(OPERATOR_ROLE_KEY).ifPresent(role -> {
-            Set<String> existingAgents = role.allowedAgentKeys() == null ? Set.of() : role.allowedAgentKeys();
-            Set<String> existingTools = role.allowedToolKeys() == null ? Set.of() : role.allowedToolKeys();
-            Set<String> agents = union(existingAgents, WEEK_21_AGENTS);
-            Set<String> tools = union(existingTools, WEEK_21_TOOLS);
-            if (agents.equals(existingAgents) && tools.equals(existingTools)) {
-                return;
-            }
-            rolePort.save(new PlatformRole(
-                    role.roleKey(), role.displayName(), role.admin(),
-                    agents, tools, role.allowedPatientIds()));
-            log.info("[platform] rbac permissions upgraded roleKey={} agents={} tools={}",
-                    role.roleKey(), agents, tools);
-        });
+        rolePort.listAll().stream()
+                .filter(role -> OPERATOR_ROLE_KEY.equals(role.roleKey()))
+                .forEach(this::upgrade);
+    }
+
+    private void upgrade(PlatformRole role) {
+        Set<String> existingAgents = role.allowedAgentKeys() == null ? Set.of() : role.allowedAgentKeys();
+        Set<String> existingTools = role.allowedToolKeys() == null ? Set.of() : role.allowedToolKeys();
+        Set<String> agents = union(existingAgents, WEEK_21_AGENTS);
+        Set<String> tools = union(existingTools, WEEK_21_TOOLS);
+        if (agents.equals(existingAgents) && tools.equals(existingTools)) {
+            return;
+        }
+        rolePort.save(new PlatformRole(
+                role.roleKey(), role.displayName(), role.admin(),
+                agents, tools, role.allowedPatientIds(), role.tenantKey()));
+        log.info("[platform] rbac permissions upgraded tenantKey={} roleKey={} agents={} tools={}",
+                role.tenantKey(), role.roleKey(), agents, tools);
     }
 
     private Set<String> union(Set<String> existing, Set<String> additions) {

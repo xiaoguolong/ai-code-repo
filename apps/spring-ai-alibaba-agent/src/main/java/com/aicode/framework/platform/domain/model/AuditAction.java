@@ -12,5 +12,15 @@ public enum AuditAction {
     /** 平台调度 Agent 执行（终态） */
     AGENT_RUN,
     /** 读取执行记录（含越权被拒） */
-    EXECUTION_READ
+    EXECUTION_READ,
+    /** 高风险患者分析生成人工审批任务（Week 23） */
+    APPROVAL_SUBMIT,
+    /** 人工批准/拒绝审批任务（Week 23） */
+    APPROVAL_DECIDE,
+    /** 删除长期记忆（Week 23） */
+    MEMORY_DELETE,
+    /** 清理过期长期记忆（Week 23，仅手工触发） */
+    MEMORY_PURGE,
+    /** 重建长期记忆向量（Week 23） */
+    MEMORY_REBUILD
 }

@@ -18,6 +18,8 @@ public class SaTokenConfig implements WebMvcConfigurer {
         registry.addInterceptor(new SaInterceptor(handler ->
                 SaRouter.match("/api/v1/**")
                         .notMatch("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/files/*")
+                        // Week 23：运维端点在 Sa-Token 之外，由 X-Admin-Token 守卫（fail closed）。
+                        .notMatch("/api/v1/admin/**")
                         .check(r -> StpUtil.checkLogin())
         )).addPathPatterns("/**");
     }

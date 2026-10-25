@@ -30,12 +30,20 @@ public class PatientLookupTool implements Tool {
     @Override
     public ToolResult execute(Map<String, Object> arguments) {
         String patientId = ToolSupport.requireString(arguments, ToolSupport.PATIENT_ID, "patientId 不能为空");
-        Map<String, Object> data = Map.of(
-                "patientId", patientId,
-                "name", "张三",
-                "age", 62,
-                "gender", "male",
-                "diagnosis", "2 型糖尿病");
+        // Week 23：P002 为 HIGH 风险演示患者，与 HealthMetricTool 的指标配套。
+        Map<String, Object> data = HealthMetricTool.HIGH_RISK_PATIENT_ID.equals(patientId)
+                ? Map.of(
+                        "patientId", patientId,
+                        "name", "李四",
+                        "age", 67,
+                        "gender", "female",
+                        "diagnosis", "2 型糖尿病伴高血压")
+                : Map.of(
+                        "patientId", patientId,
+                        "name", "张三",
+                        "age", 62,
+                        "gender", "male",
+                        "diagnosis", "2 型糖尿病");
         return new ToolResult(toJson(data));
     }
 

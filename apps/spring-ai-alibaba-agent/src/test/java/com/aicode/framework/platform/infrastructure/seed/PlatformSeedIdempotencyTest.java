@@ -90,6 +90,12 @@ class PlatformSeedIdempotencyTest {
         assertThat(operator.allowedPatientIds()).hasSize(10).contains("P001", "P010");
         assertThat(operator.admin()).isFalse();
         assertThat(viewer.allowedAgentKeys()).isEmpty();
+
+        // Week 23（B2）：hospital-b 拥有自己的一份角色副本，且授权不被 default 串改。
+        PlatformRole hospitalBOperator = platformRolePort.findByKey("hospital-b", "operator").orElseThrow();
+        assertThat(hospitalBOperator.tenantKey()).isEqualTo("hospital-b");
+        assertThat(hospitalBOperator.allowedAgentKeys()).contains("patient-analysis");
+        assertThat(hospitalBOperator.allowedPatientIds()).contains("P001", "P010");
     }
 
     @Test

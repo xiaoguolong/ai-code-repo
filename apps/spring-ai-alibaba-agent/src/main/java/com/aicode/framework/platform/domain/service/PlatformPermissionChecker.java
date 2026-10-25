@@ -64,9 +64,31 @@ public class PlatformPermissionChecker {
         }
     }
 
+    /** 校验审批任务归属：发起人本人或 admin（Week 23）。 */
+    public void requireApprovalAccess(long userId, long ownerUserId) {
+        if (isAdmin(userId)) {
+            return;
+        }
+        if (userId != ownerUserId) {
+            throw new PlatformAccessDeniedException("approval access denied");
+        }
+    }
+
     /** 是否 admin 角色。 */
     public boolean isAdmin(long userId) {
         return roleOf(userId).admin();
+    }
+
+    /**
+     * 当前用户的租户键（Week 23：执行记录落 tenant 维度用）。
+     *
+     * @param userId 用户 ID
+     * @return 租户键，用户不存在时 404
+     */
+    public String tenantKeyOf(long userId) {
+        return platformUserPort.findById(userId)
+                .orElseThrow(() -> new PlatformNotFoundException("user not found: " + userId))
+                .tenantKey();
     }
 
     private void requirePatientAccess(long userId, String patientId) {
@@ -79,7 +101,9 @@ public class PlatformPermissionChecker {
     private PlatformRole roleOf(long userId) {
         PlatformUser user = platformUserPort.findById(userId)
                 .orElseThrow(() -> new PlatformNotFoundException("user not found: " + userId));
-        return platformRolePort.findByKey(user.roleKey())
+        // Week 23：优先按用户租户取角色；旧库/测试里只有 default 角色时回退 default。
+        return platformRolePort.findByKey(user.tenantKey(), user.roleKey())
+                .or(() -> platformRolePort.findByKey(user.roleKey()))
                 .orElseThrow(() -> new PlatformNotFoundException("role not found: " + user.roleKey()));
     }
 

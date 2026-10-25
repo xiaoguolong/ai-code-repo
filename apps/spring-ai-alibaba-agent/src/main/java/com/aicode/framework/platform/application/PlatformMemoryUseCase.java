@@ -10,12 +10,17 @@ import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.port.PlatformMemoryPort;
 import com.aicode.framework.platform.domain.port.PlatformUserPort;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
+import com.aicode.framework.platform.infrastructure.config.PlatformMemoryLifecycleProperties;
 import com.aicode.framework.platform.infrastructure.config.PlatformMemoryProperties;
+import com.aicode.framework.platform.infrastructure.embedding.MemoryEmbeddingIdentity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -39,7 +44,19 @@ public class PlatformMemoryUseCase {
     private final PlatformPermissionChecker permissionChecker;
     private final EmbeddingModelPort embeddingModelPort;
     private final PlatformMemoryProperties properties;
+    private final PlatformMemoryLifecycleProperties lifecycleProperties;
+    private final Clock clock;
+    private final MemoryEmbeddingIdentity embeddingIdentity;
 
+    /**
+     * Week 21 兼容构造器：不启用 TTL、不标记向量来源（供既有单测直接 new）。
+     *
+     * @param memoryPort        记忆端口
+     * @param userPort          用户端口
+     * @param permissionChecker 权限校验
+     * @param embeddingModelPort 向量化端口
+     * @param properties        记忆检索配置
+     */
     public PlatformMemoryUseCase(
             PlatformMemoryPort memoryPort,
             PlatformUserPort userPort,
@@ -47,15 +64,50 @@ public class PlatformMemoryUseCase {
             EmbeddingModelPort embeddingModelPort,
             PlatformMemoryProperties properties
     ) {
+        this(memoryPort, userPort, permissionChecker, embeddingModelPort, properties,
+                new PlatformMemoryLifecycleProperties(0, false, "", 0),
+                Clock.systemUTC(), null);
+    }
+
+    /**
+     * Spring 注入构造器（Week 23）：TTL 与向量来源标识需要配置、时钟与 embedding 身份。
+     *
+     * @param memoryPort         记忆端口
+     * @param userPort           用户端口
+     * @param permissionChecker  权限校验
+     * @param embeddingModelPort 向量化端口
+     * @param properties         记忆检索配置
+     * @param lifecycleProperties 生命周期配置（TTL）
+     * @param clock              UTC 时钟（单测注入固定时钟）
+     * @param embeddingIdentity  当前向量来源标识（可为 null，测试兼容）
+     */
+    @Autowired
+    public PlatformMemoryUseCase(
+            PlatformMemoryPort memoryPort,
+            PlatformUserPort userPort,
+            PlatformPermissionChecker permissionChecker,
+            EmbeddingModelPort embeddingModelPort,
+            PlatformMemoryProperties properties,
+            PlatformMemoryLifecycleProperties lifecycleProperties,
+            Clock clock,
+            MemoryEmbeddingIdentity embeddingIdentity
+    ) {
         this.memoryPort = memoryPort;
         this.userPort = userPort;
         this.permissionChecker = permissionChecker;
         this.embeddingModelPort = embeddingModelPort;
         this.properties = properties;
+        this.lifecycleProperties = lifecycleProperties == null
+                ? new PlatformMemoryLifecycleProperties(0, false, "", 0) : lifecycleProperties;
+        this.clock = clock == null ? Clock.systemUTC() : clock;
+        this.embeddingIdentity = embeddingIdentity;
     }
 
     /**
      * 保存一条长期记忆。
+     *
+     * <p>Week 23 起同时写入 {@code expires_at}（TTL，{@code <=0} 为永不过期）与
+     * {@code embedding_model}（换模型后可识别旧向量）。</p>
      *
      * @param scope    访问范围（非空，由服务端推导）
      * @param sessionId 会话标识（patientId）
@@ -65,6 +117,10 @@ public class PlatformMemoryUseCase {
      */
     public PlatformMemoryRecord save(PlatformMemoryScope scope, String sessionId, String task, String answer) {
         String normalizedSession = sessionId == null ? "" : sessionId.trim();
+        Instant createdAt = clock.instant();
+        int ttlDays = lifecycleProperties.resolvedTtlDays();
+        Instant expiresAt = ttlDays > 0 ? createdAt.plus(ttlDays, ChronoUnit.DAYS) : null;
+        String embeddingModel = embeddingIdentity == null ? "unknown" : embeddingIdentity.currentKey();
         PlatformMemoryRecord record = new PlatformMemoryRecord(
                 UUID.randomUUID().toString(),
                 scope.tenantKey(),
@@ -72,11 +128,13 @@ public class PlatformMemoryUseCase {
                 normalizedSession,
                 task == null ? "" : task,
                 answer == null ? "" : answer,
-                Instant.now());
+                createdAt,
+                expiresAt,
+                embeddingModel);
         memoryPort.save(record, embedSafely(task));
-        log.info("[platform] memory saved memoryId={} tenantKey={} userId={} sessionId={} chars={}",
+        log.info("[platform] memory saved memoryId={} tenantKey={} userId={} sessionId={} chars={} expiresAt={} embeddingModel={}",
                 record.memoryId(), record.tenantKey(), record.userId(), record.sessionId(),
-                record.answer().length());
+                record.answer().length(), expiresAt, embeddingModel);
         return record;
     }
 

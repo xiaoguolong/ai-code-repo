@@ -840,6 +840,57 @@ platform 453 / gateway 100）。关键验证：
 
 > **未实现项**（HITL、记忆生命周期、SSO 解绑、租户级角色、云端 RAG、真实报告源、前端/CI、Agent 2–4）
 > 已逐条标注目标周次与阻塞条件，见 [`docs/specs/week-22.md`](docs/specs/week-22.md)「未实现项与目标阶段」表。
+> 其中 HITL 与记忆生命周期已在第 23 周批次 1 完成；SSO 解绑/租户级角色已在批次 2（A1+B2）完成并上线。
+
+---
+
+# 第23周：患者分析 HITL + 长期记忆生命周期（批次 1）+ SSO 解绑/租户角色（批次 2）
+
+
+完成（2026-10-25，批次 1 + 批次 2 代码/测试）：
+
+- [x] **HIGH 风险人工闸门**：`patient-analysis` 判定 HIGH 后停在 `PENDING_APPROVAL`，
+      生成 `platform_approval` 待办并**不写随访记忆**；报告已生成，审核人可据报告决策
+- [x] **跨进程审批**：`GET /approvals` 待办/历史、`GET /approvals/{id}` 详情、
+      `POST /approvals/{id}/decision` 批准/拒绝；批准 → 写记忆 + `COMPLETED`，
+      拒绝 → 不写记忆 + `REJECTED`；**决策不调用模型**
+- [x] **原子决策**：`UPDATE ... WHERE status='PENDING'`，并发/重复决策只有一个人成功，另一个 409
+- [x] **审批归属**：本人或 admin 可决策；他人 403、不存在 404；审计 `APPROVAL_SUBMIT` / `APPROVAL_DECIDE`
+- [x] **记忆 TTL**：保存写 `expires_at`（默认 90 天，`<=0` 永不过期）；列表/语义检索都过滤过期；
+      每日 03:30 清理（可关），admin 可手工 `POST /memories/purge-expired`
+- [x] **按范围删除**：`DELETE /memories/{memoryId}`，谓词带 `tenant_key + user_id`，删不到 404；
+      审计 `MEMORY_DELETE`
+- [x] **向量重建**：保存写 `embedding_model=provider:model:dimension`；换模型后
+      `POST /memories/rebuild-embeddings`（admin，100 条/批）重建旧/空向量，单条失败不中断；
+      审计 `MEMORY_REBUILD`
+- [x] **V6 迁移**：`platform_memory` 加两列 + 索引，新建 `platform_approval` + 3 索引；
+      旧行 `expires_at=NULL`（不误删）/ `embedding_model=NULL`（待重建）
+- [x] **演示数据**：`P002` 作为 HIGH 风险患者（168/104、HbA1c 9.6），供真机 HITL 验收
+- [x] **批次 2 · A1**：enterprise `/api/v1/admin/sso-links` 运维端点（`X-Admin-Token`，fail closed）；
+      支持列表/建链/重建/解绑，`deleteLocalUser=true` 解绑并删本地用户，避免 409 死结
+- [x] **批次 2 · B2**：V7 把角色四表改为 `(tenant_key, role_key)` 并按租户复制；
+      `execution_record.tenant_key` + 按 user 回填；权限按用户租户取角色，旧库回退 default
+
+交付：Spec `docs/specs/week-23.md` ｜ 架构 `docs/architecture/week-23-architecture.md` ｜
+接口 `docs/api/week-23-api.md` ｜ 迁移手册 `docs/deploy/week-23-migration.md` ｜
+云端验收脚本 `deploy/app/cloud-accept-week23.sh` ｜ 实现日志 `notes/impl-logs/week-23.md` ｜
+Postman `docs/postman/week-23.postman_collection.json`
+
+实测：根聚合 **777** 用例全绿（ai-core 90 / enterprise 37 / patient 21 / platform 529 / gateway 100；
+Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式）首次启动
+`Successfully applied 6 migrations ... now at version v6`，后续上下文只校验不重跑。
+**真实 PostgreSQL 已于 2026-10-25 02:51 应用 V6**（`Successfully applied 1 migration ... now at version v6`，
+重启幂等、5 条旧记忆不丢，备份 `/opt/ai-code/backup/week23-20261025-024942`）；
+云端 `cloud-accept-week23.sh` **PASS=21 FAIL=0**：P002 HIGH **1731 tokens** → 待审 → 批准写记忆 →
+重复决策 409 → 删除 → 5 条旧向量重建为 `openai:qwen3.7-text-embedding-flash:1024`。
+
+> **批次 2 已完成并上线（2026-10-25，A1 + B2）**：
+> enterprise 新增 `ENTERPRISE_ADMIN_TOKEN` + `/api/v1/admin/sso-links`（列表/建链/重建/解绑，
+> `deleteLocalUser=true` 可避免 409 死结）；平台 V7 把角色四表改为 `(tenant_key, role_key)`
+> 并按租户复制，`execution_record` 加 `tenant_key`；根聚合 **798** 用例
+> （enterprise 55 / platform 532 / ai-core 90 / patient 21 / gateway 100）。
+> 云端 V7 已应用、enterprise 已发布，批次 2 验收 **PASS=19 FAIL=0**（含 409/503 真机）；
+> 备份 `/opt/ai-code/backup/week23-b2-20261025-062917`，部署/回滚见 `docs/deploy/week-23-batch2.md`。
 
 ---
 
@@ -863,6 +914,8 @@ platform 453 / gateway 100）。关键验证：
 - [x] 查询健康指标（`HealthMetricTool`）
 - [x] 风险分析（复用 Week 9 `PatientRiskAssessor` 规则，可解释、可单测）
 - [x] 自动生成报告（模型生成；模型不可用时降级为规则模板并显式标记 `degraded`）
+- [x] **HITL（Week 23）**：HIGH 风险报告人工确认后才写随访记忆；批准/拒绝可跨进程、可重启
+- [x] **记忆生命周期（Week 23）**：TTL / 按范围删除 / 换 embedding 模型后的向量重建
 - [x] 附加：长期记忆落库（租户 + 用户隔离）、执行记录 / 审计 / RBAC / 四后端观测全链路
 
 
@@ -918,10 +971,11 @@ platform 453 / gateway 100）。关键验证：
 
 ## Agent能力
 
-- [ ] Tool Calling
-- [ ] Memory
-- [ ] Workflow
-- [ ] Multi Agent
+- [x] Tool Calling（Week 6：Patient/Report/HealthMetric/Order 工具 + RBAC/Guardrail/观测装饰器）
+- [x] Memory（Week 7 会话记忆 + Week 21 租户/用户隔离长期记忆 + Week 23 TTL/删除/向量重建）
+- [x] Workflow（Week 9–10：State/Node/Edge/Graph + 高风险暂停/恢复）
+- [x] Multi Agent（Week 11：Supervisor + 数据/分析/报告/随访四个角色）
+- [x] Human In The Loop（Week 10 workflow 暂停/恢复 + Week 23 平台级审批任务，跨进程可重启）
 
 
 ## Java能力
@@ -934,13 +988,18 @@ platform 453 / gateway 100）。关键验证：
 
 ## 企业能力
 
-- [x] 权限（Week 13 RBAC：用户 → 角色 → Agent → Tool → 数据域，Week 16 落库）
+- [x] 权限（Week 13 RBAC：用户 → 角色 → Agent → Tool → 数据域，Week 16 落库；
+      Week 23 B2：角色四表按 `tenant_key` 隔离，每个租户一份副本）
 - [x] 安全（Week 14 Guardrail：注入拦截、输入校验、输出脱敏、Tool 参数白名单；
-      Week 22：登录/身份校验按 IP+用户名 限流，超阈值 429，默认 5 次/5 分钟）
-- [x] 审计（Week 16：AuditLogPort + audit_log 落库，4 类事件 + traceId 可追溯）
+      Week 22：登录/身份校验按 IP+用户名 限流，超阈值 429，默认 5 次/5 分钟；
+      Week 23 A1：enterprise SSO 运维端点用 `ENTERPRISE_ADMIN_TOKEN`，未配置即 403）
+- [x] 审计（Week 16：AuditLogPort + audit_log 落库 + traceId 可追溯；
+      Week 23：审批提交/决策、记忆删除/清理/重建新增 5 类事件）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
 - [x] 多租户（Week 21：`platform_tenant` + `platform_user.tenant_key`，租户停用即拒绝登录；
-      记忆按 租户+用户 隔离，隔离谓词在 SQL；enterprise ↔ platform 统一身份由平台 `/auth/verify` 提供）
+      记忆按 租户+用户 隔离，隔离谓词在 SQL；enterprise ↔ platform 统一身份由平台 `/auth/verify` 提供；
+      Week 23：记忆 TTL 过期可见性 + 按范围删除 + 向量来源标记/重建；
+      角色按租户复制 + 执行记录 `tenant_key` + SSO 映射运维解绑/重建）
 - [x] 可观测（Week 17：OTel span 树 + 调用/token 指标 + Prometheus 出口，日志与链路 traceId 单源；
       Week 18：Langfuse LLM 观测树 + 真实 token/成本 + Prompt 版本关联与托管，正文默认不出站；
       Week 19：SkyWalking 拓扑 + Java Agent 自动埋点 + 三后端关联；

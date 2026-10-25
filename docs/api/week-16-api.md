@@ -158,6 +158,11 @@
 | `LOGIN_FAILED` | 登录失败（用户不存在或密码错误） | `platform.auth` | `FAILURE` |
 | `AGENT_RUN` | 平台调度 Agent 到达终态 | `agent:{agentKey}` | `SUCCESS` / `FAILURE` |
 | `EXECUTION_READ` | 读取他人执行记录被拒 | `execution:{executionId}` | `DENIED` |
+| `APPROVAL_SUBMIT` | HIGH 风险患者分析生成人工审批任务（Week 23） | `approval:{approvalId}` | `SUCCESS` |
+| `APPROVAL_DECIDE` | 人工批准/拒绝审批任务（Week 23） | `approval:{approvalId}` | `SUCCESS` / `DENIED` |
+| `MEMORY_DELETE` | 按范围删除长期记忆（Week 23） | `memory:{memoryId}` | `SUCCESS` / `FAILURE` / `DENIED` |
+| `MEMORY_PURGE` | 手工清理过期长期记忆（Week 23，仅 admin） | `memory:expired` | `SUCCESS` / `FAILURE` |
+| `MEMORY_REBUILD` | 重建长期记忆向量（Week 23，仅 admin） | `memory:embeddings` | `SUCCESS` / `FAILURE` |
 
 约束：
 

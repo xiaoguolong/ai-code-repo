@@ -81,14 +81,36 @@ class JdbcPlatformRoleAdapterTest {
     }
 
     @Test
-    void listAllReturnsRolesSortedByKey() {
+    void listAllReturnsRolesSortedByTenantThenKey() {
         // 只断言写入的 roleKey 存在且有序，不依赖 seed 数据是否已执行
         platformRolePort.save(new PlatformRole("jdbc-zzz", "末尾角色", false, Set.of(), Set.of(), Set.of()));
         platformRolePort.save(new PlatformRole("jdbc-aaa", "开头角色", false, Set.of(), Set.of(), Set.of()));
 
         assertThat(platformRolePort.listAll())
-                .extracting(PlatformRole::roleKey)
-                .contains("jdbc-aaa", "jdbc-zzz")
+                .extracting(role -> role.tenantKey() + "|" + role.roleKey())
+                .contains("default|jdbc-aaa", "default|jdbc-zzz")
                 .isSorted();
+    }
+
+    @Test
+    void isolatesSameRoleKeyBetweenTenants() {
+        platformRolePort.save(new PlatformRole(
+                "jdbc-shared", "默认租户", false,
+                Set.of("patient-risk"), Set.of("PatientLookupTool"), Set.of("P001")));
+        platformRolePort.save(new PlatformRole(
+                "jdbc-shared", "B 租户", false,
+                Set.of("patient-analysis"), Set.of("ReportLookupTool"), Set.of("P002"),
+                "hospital-b"));
+
+        PlatformRole defaultRole = platformRolePort.findByKey("default", "jdbc-shared").orElseThrow();
+        PlatformRole bRole = platformRolePort.findByKey("hospital-b", "jdbc-shared").orElseThrow();
+
+        assertThat(defaultRole.allowedAgentKeys()).containsExactly("patient-risk");
+        assertThat(bRole.allowedAgentKeys()).containsExactly("patient-analysis");
+        assertThat(defaultRole.allowedPatientIds()).containsExactly("P001");
+        assertThat(bRole.allowedPatientIds()).containsExactly("P002");
+        // 兼容入口只读 default，不会误读 B 租户
+        assertThat(platformRolePort.findByKey("jdbc-shared").orElseThrow().displayName())
+                .isEqualTo("默认租户");
     }
 }
