@@ -89,7 +89,24 @@ class MonitoringMetricsContractTest {
                 MonitoringMetricNames.LLM_CALL_DURATION,
                 MonitoringMetricNames.LLM_TOKENS,
                 MonitoringMetricNames.LLM_COST_USD,
-                MonitoringMetricNames.TOOL_CALL_COUNT);
+                MonitoringMetricNames.TOOL_CALL_COUNT,
+                MonitoringMetricNames.APPROVAL_PENDING_COUNT);
+    }
+
+    @Test
+    @DisplayName("Gauge 的导出名与最新值（待审积压告警依赖它）")
+    void gaugeExportsLatestValueWithoutSuffix() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        MicrometerObservabilityAdapter adapter = new MicrometerObservabilityAdapter(mock(Tracer.class), registry);
+
+        adapter.recordGauge(MonitoringMetricNames.APPROVAL_PENDING_COUNT, 3.0);
+        assertThat(registry.scrape()).contains("approval_pending_count 3.0");
+
+        adapter.recordGauge(MonitoringMetricNames.APPROVAL_PENDING_COUNT, 21.0);
+        String scrape = registry.scrape();
+        assertThat(scrape).contains("approval_pending_count 21.0");
+        assertThat(scrape).doesNotContain("approval_pending_count 3.0");
+        assertThat(scrape).contains("# TYPE approval_pending_count gauge");
     }
 
     @Test

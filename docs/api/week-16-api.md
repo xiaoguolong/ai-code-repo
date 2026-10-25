@@ -163,6 +163,9 @@
 | `MEMORY_DELETE` | 按范围删除长期记忆（Week 23） | `memory:{memoryId}` | `SUCCESS` / `FAILURE` / `DENIED` |
 | `MEMORY_PURGE` | 手工清理过期长期记忆（Week 23，仅 admin） | `memory:expired` | `SUCCESS` / `FAILURE` |
 | `MEMORY_REBUILD` | 重建长期记忆向量（Week 23，仅 admin） | `memory:embeddings` | `SUCCESS` / `FAILURE` |
+| `FOLLOWUP_TASK_CREATE` | 生成随访任务（Week 24：Agent 运行或审批通过） | `follow-up:{taskId}` | `SUCCESS` / `FAILURE` |
+| `FOLLOWUP_TASK_COMPLETE` | 完成随访任务（Week 24） | `follow-up:{taskId}` | `SUCCESS` |
+| `FOLLOWUP_TASK_CANCEL` | 取消随访任务（Week 24） | `follow-up:{taskId}` | `SUCCESS` |
 
 约束：
 

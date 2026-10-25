@@ -74,6 +74,16 @@ public class PlatformPermissionChecker {
         }
     }
 
+    /** 校验随访任务归属：本人或 admin（Week 24）。 */
+    public void requireFollowUpAccess(long userId, long ownerUserId) {
+        if (isAdmin(userId)) {
+            return;
+        }
+        if (userId != ownerUserId) {
+            throw new PlatformAccessDeniedException("follow-up task access denied");
+        }
+    }
+
     /** 是否 admin 角色。 */
     public boolean isAdmin(long userId) {
         return roleOf(userId).admin();

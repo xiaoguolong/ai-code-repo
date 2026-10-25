@@ -94,6 +94,21 @@ public class JdbcPlatformApprovalAdapter implements PlatformApprovalPort {
     }
 
     @Override
+    public long countAll(ApprovalStatus status) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM platform_approval WHERE status = ?", Long.class, status.name());
+        return count == null ? 0L : count;
+    }
+
+    @Override
+    public long countByUser(long userId, ApprovalStatus status) {
+        Long count = jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM platform_approval WHERE user_id = ? AND status = ?",
+                Long.class, userId, status.name());
+        return count == null ? 0L : count;
+    }
+
+    @Override
     public boolean markDecided(
             String approvalId,
             ApprovalStatus status,

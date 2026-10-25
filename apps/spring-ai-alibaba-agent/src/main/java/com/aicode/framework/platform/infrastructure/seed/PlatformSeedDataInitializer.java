@@ -60,6 +60,14 @@ public class PlatformSeedDataInitializer implements ApplicationRunner {
                 "patient-analysis", "患者分析 Agent",
                 "Week 21 Agent 1：查患者/检查报告/健康指标 + 规则风险 + 报告 + 长期记忆",
                 AgentType.PATIENT_ANALYSIS, PlatformAgentConfig.defaults(), now));
+        agentRegistryPort.save(new PlatformAgentDefinition(
+                "operations-analysis", "运营分析 Agent",
+                "Week 24 Agent 2：窗口执行统计 + 规则异常 + 模型日报（admin 看整租户）",
+                AgentType.OPERATIONS_ANALYSIS, PlatformAgentConfig.defaults(), now));
+        agentRegistryPort.save(new PlatformAgentDefinition(
+                "followup", "随访 Agent",
+                "Week 24 Agent 4：规则随访计划 + 任务落库 + 站内提醒 + 审批联动",
+                AgentType.FOLLOW_UP, PlatformAgentConfig.defaults(), now));
     }
 
     private void seedTools() {

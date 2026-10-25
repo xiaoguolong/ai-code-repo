@@ -81,7 +81,7 @@ public class PlatformRbacSeedInitializer implements ApplicationRunner {
             if (platformRolePort.findByKey(tenantKey, "operator").isEmpty()) {
                 platformRolePort.save(new PlatformRole(
                         "operator", "运营人员", false,
-                        Set.of("patient-risk", "medical-assistant", "patient-analysis"),
+                        Set.of("patient-risk", "medical-assistant", "patient-analysis", "followup"),
                         Set.of("PatientLookupTool", "HealthMetricTool", "ReportLookupTool"),
                         operatorPatientIds(), tenantKey));
                 created++;

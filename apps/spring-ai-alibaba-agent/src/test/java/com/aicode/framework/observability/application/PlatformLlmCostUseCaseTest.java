@@ -113,6 +113,25 @@ class PlatformLlmCostUseCaseTest {
         public List<ExecutionRecord> listByUserId(long userId) {
             return records.stream().filter(r -> r.userId() == userId).toList();
         }
+
+        @Override
+        public List<ExecutionRecord> listByTenantBetween(
+                String tenantKey, Instant from, Instant to, int limit) {
+            return records.stream()
+                    .filter(r -> r.tenantKey().equals(tenantKey))
+                    .filter(r -> !r.startedAt().isBefore(from) && r.startedAt().isBefore(to))
+                    .limit(limit)
+                    .toList();
+        }
+
+        @Override
+        public List<ExecutionRecord> listByUserBetween(long userId, Instant from, Instant to, int limit) {
+            return records.stream()
+                    .filter(r -> r.userId() == userId)
+                    .filter(r -> !r.startedAt().isBefore(from) && r.startedAt().isBefore(to))
+                    .limit(limit)
+                    .toList();
+        }
     }
 
     /** 只有 ADMIN 是管理员的权限校验器（不触碰仓储）。 */

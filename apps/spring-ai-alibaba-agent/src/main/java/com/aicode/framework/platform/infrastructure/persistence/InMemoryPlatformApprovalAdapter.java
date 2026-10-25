@@ -49,6 +49,16 @@ public class InMemoryPlatformApprovalAdapter implements PlatformApprovalPort {
     }
 
     @Override
+    public long countAll(ApprovalStatus status) {
+        return count(status, approval -> true);
+    }
+
+    @Override
+    public long countByUser(long userId, ApprovalStatus status) {
+        return count(status, approval -> approval.userId() == userId);
+    }
+
+    @Override
     public boolean markDecided(
             String approvalId,
             ApprovalStatus status,
@@ -88,6 +98,16 @@ public class InMemoryPlatformApprovalAdapter implements PlatformApprovalPort {
                         .thenComparing(PlatformApproval::approvalId, Comparator.reverseOrder()))
                 .limit(limit)
                 .toList();
+    }
+
+    private long count(ApprovalStatus status, java.util.function.Predicate<PlatformApproval> predicate) {
+        if (status == null) {
+            return 0L;
+        }
+        return store.values().stream()
+                .filter(predicate)
+                .filter(approval -> approval.status() == status)
+                .count();
     }
 
     /**

@@ -17,6 +17,7 @@ import java.util.List;
  *   <tr><td>{@link #LLM_TOKENS}</td><td>llm.tokens.total</td><td>llm_tokens_total</td></tr>
  *   <tr><td>{@link #LLM_COST_USD}</td><td>llm.cost.usd</td><td>llm_cost_usd_total</td></tr>
  *   <tr><td>{@link #TOOL_CALL_COUNT}</td><td>tool.call.count</td><td>tool_call_count_total</td></tr>
+ *   <tr><td>{@link #APPROVAL_PENDING_COUNT}</td><td>approval.pending.count</td><td>approval_pending_count</td></tr>
  * </table>
  *
  * <p>映射关系由 {@code MonitoringMetricsContractTest} 用真实 Prometheus 注册表抓取文本格式锁死；
@@ -45,10 +46,13 @@ public final class MonitoringMetricNames {
     /** 工具调用次数（标签：{@code tool.name} / {@code tool.outcome}）。 */
     public static final String TOOL_CALL_COUNT = "tool.call.count";
 
+    /** 待审审批积压数（Gauge，Week 24；无标签，按全局聚合）。 */
+    public static final String APPROVAL_PENDING_COUNT = "approval.pending.count";
+
     /** 全部指标名（契约测试遍历用）。 */
     private static final List<String> ALL = List.of(
             AGENT_RUN_COUNT, AGENT_RUN_DURATION, LLM_CALL_COUNT, LLM_CALL_DURATION,
-            LLM_TOKENS, LLM_COST_USD, TOOL_CALL_COUNT);
+            LLM_TOKENS, LLM_COST_USD, TOOL_CALL_COUNT, APPROVAL_PENDING_COUNT);
 
     private MonitoringMetricNames() {
     }

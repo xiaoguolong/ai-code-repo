@@ -101,6 +101,26 @@ public class JdbcExecutionRecordAdapter implements ExecutionRecordPort {
                 SELECT_COLUMNS + " WHERE user_id = ? ORDER BY started_at DESC, id DESC", rowMapper, userId);
     }
 
+    @Override
+    public List<ExecutionRecord> listByTenantBetween(String tenantKey, Instant from, Instant to, int limit) {
+        return jdbcTemplate.query(
+                SELECT_COLUMNS + " WHERE tenant_key = ? AND started_at >= ? AND started_at < ?"
+                        + " ORDER BY started_at DESC, id DESC LIMIT ?",
+                rowMapper, tenantKey,
+                PlatformJdbcSupport.toTimestamp(from), PlatformJdbcSupport.toTimestamp(to),
+                Math.max(limit, 0));
+    }
+
+    @Override
+    public List<ExecutionRecord> listByUserBetween(long userId, Instant from, Instant to, int limit) {
+        return jdbcTemplate.query(
+                SELECT_COLUMNS + " WHERE user_id = ? AND started_at >= ? AND started_at < ?"
+                        + " ORDER BY started_at DESC, id DESC LIMIT ?",
+                rowMapper, userId,
+                PlatformJdbcSupport.toTimestamp(from), PlatformJdbcSupport.toTimestamp(to),
+                Math.max(limit, 0));
+    }
+
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
     }

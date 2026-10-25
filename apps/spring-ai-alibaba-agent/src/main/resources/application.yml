@@ -99,6 +99,35 @@ platform:
       cleanup-enabled: ${PLATFORM_MEMORY_CLEANUP_ENABLED:true}
       cleanup-cron: "${PLATFORM_MEMORY_CLEANUP_CRON:0 30 3 * * *}"
       rebuild-batch-limit: ${PLATFORM_MEMORY_REBUILD_BATCH_LIMIT:100}
+  # Week 24：Agent 2 运营分析（窗口统计 + 规则异常）。
+  # 阈值由环境变量覆盖；非法值在 PlatformOperationsProperties#thresholds() 里夹回默认值，
+  # 避免「配置写错 → 告警静默失效」。
+  operations:
+    # 单次统计最多读取的执行记录数；超出后 truncated=true，日报会明确标注
+    max-records: ${PLATFORM_OPERATIONS_MAX_RECORDS:5000}
+    default-window-days: ${PLATFORM_OPERATIONS_DEFAULT_WINDOW_DAYS:7}
+    max-window-days: ${PLATFORM_OPERATIONS_MAX_WINDOW_DAYS:30}
+    failure-rate-high: ${PLATFORM_OPERATIONS_FAILURE_RATE_HIGH:0.30}
+    failure-rate-medium: ${PLATFORM_OPERATIONS_FAILURE_RATE_MEDIUM:0.20}
+    approval-backlog: ${PLATFORM_OPERATIONS_APPROVAL_BACKLOG:20}
+    token-spike-ratio: ${PLATFORM_OPERATIONS_TOKEN_SPIKE_RATIO:2.0}
+    agent-failure-min: ${PLATFORM_OPERATIONS_AGENT_FAILURE_MIN:3}
+  # Week 24：Agent 4 随访任务（站内提醒只做查询视图，不接短信/邮件）。
+  followup:
+    default-reminder-days: ${PLATFORM_FOLLOWUP_DEFAULT_REMINDER_DAYS:7}
+    max-reminder-days: ${PLATFORM_FOLLOWUP_MAX_REMINDER_DAYS:30}
+    default-list-limit: ${PLATFORM_FOLLOWUP_DEFAULT_LIST_LIMIT:20}
+    max-list-limit: ${PLATFORM_FOLLOWUP_MAX_LIST_LIMIT:100}
+  # Week 24：审批运维（TD-02 对账 + TD-03 待办积压指标）。
+  approval:
+    pending-gauge:
+      enabled: ${PLATFORM_APPROVAL_PENDING_GAUGE_ENABLED:true}
+      interval-ms: ${PLATFORM_APPROVAL_PENDING_GAUGE_INTERVAL_MS:60000}
+      initial-delay-ms: ${PLATFORM_APPROVAL_PENDING_GAUGE_INITIAL_DELAY_MS:20000}
+    reconciliation:
+      enabled: ${PLATFORM_APPROVAL_RECONCILIATION_ENABLED:true}
+      cron: "${PLATFORM_APPROVAL_RECONCILIATION_CRON:0 */10 * * * *}"
+      limit: ${PLATFORM_APPROVAL_RECONCILIATION_LIMIT:200}
 
 # Week 21：记忆向量化（平台不做 RAG，维度与 embedding 模型保持一致）。
 # 默认 hashing 为离线确定性实现；换真模型时 provider=openai + base-url/api-key/model 均从环境变量注入。

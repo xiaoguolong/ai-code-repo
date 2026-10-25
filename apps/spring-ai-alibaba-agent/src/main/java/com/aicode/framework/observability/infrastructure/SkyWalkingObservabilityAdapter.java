@@ -124,6 +124,11 @@ public class SkyWalkingObservabilityAdapter implements AgentObservabilityPort {
     }
 
     @Override
+    public void recordGauge(String name, double value, String... tags) {
+        delegate.recordGauge(name, value, tags);
+    }
+
+    @Override
     public boolean isEnabled() {
         return delegate.isEnabled();
     }

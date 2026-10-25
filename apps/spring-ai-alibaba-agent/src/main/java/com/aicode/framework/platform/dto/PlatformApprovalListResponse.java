@@ -38,6 +38,7 @@ public record PlatformApprovalListResponse(List<PlatformApprovalResponse> items,
      * @param decidedAt       决策时间
      * @param executionStatus 执行终态
      * @param memoryId        批准时写入的记忆 ID；拒绝或写失败为 null
+     * @param followUpTaskIds 批准时生成的随访任务 ID（Week 24）
      */
     public record Decision(
             String approvalId,
@@ -47,7 +48,8 @@ public record PlatformApprovalListResponse(List<PlatformApprovalResponse> items,
             String comment,
             Instant decidedAt,
             String executionStatus,
-            String memoryId
+            String memoryId,
+            List<String> followUpTaskIds
     ) {
 
         /**
@@ -66,7 +68,8 @@ public record PlatformApprovalListResponse(List<PlatformApprovalResponse> items,
                     approval.comment(),
                     approval.decidedAt(),
                     decision.executionStatus().name(),
-                    decision.memoryId());
+                    decision.memoryId(),
+                    decision.followUpTaskIds());
         }
     }
 }

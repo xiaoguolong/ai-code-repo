@@ -12,5 +12,9 @@ public enum AgentType {
     /** Week 11 Supervisor 多 Agent */
     MEDICAL_ASSISTANT,
     /** Week 21 Agent 1：患者分析（查患者/报告/指标 + 规则风险 + 报告 + 记忆） */
-    PATIENT_ANALYSIS
+    PATIENT_ANALYSIS,
+    /** Week 24 Agent 2：运营分析（窗口统计 + 规则异常 + 日报） */
+    OPERATIONS_ANALYSIS,
+    /** Week 24 Agent 4：随访（规则计划 + 任务落库 + 站内提醒） */
+    FOLLOW_UP
 }

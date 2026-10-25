@@ -50,6 +50,23 @@ public interface PlatformApprovalPort {
     List<PlatformApproval> listAll(ApprovalStatus status, int limit);
 
     /**
+     * 统计指定状态的审批任务数（Week 24：待办积压指标 + 运营日报）。
+     *
+     * @param status 状态
+     * @return 条数，无数据返回 0
+     */
+    long countAll(ApprovalStatus status);
+
+    /**
+     * 统计某用户指定状态的审批任务数（Week 24：非 admin 的可见范围内积压）。
+     *
+     * @param userId 发起人用户 ID
+     * @param status 状态
+     * @return 条数，无数据返回 0
+     */
+    long countByUser(long userId, ApprovalStatus status);
+
+    /**
      * 原子决策：只有当前状态为 {@code PENDING} 才会更新成功。
      *
      * @param approvalId 审批任务 ID

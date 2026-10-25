@@ -84,7 +84,7 @@ class PlatformSeedIdempotencyTest {
         PlatformRole viewer = platformRolePort.findByKey("viewer").orElseThrow();
 
         assertThat(operator.allowedAgentKeys()).containsExactlyInAnyOrder(
-                "patient-risk", "medical-assistant", "patient-analysis");
+                "patient-risk", "medical-assistant", "patient-analysis", "followup");
         assertThat(operator.allowedToolKeys()).containsExactlyInAnyOrder(
                 "PatientLookupTool", "HealthMetricTool", "ReportLookupTool");
         assertThat(operator.allowedPatientIds()).hasSize(10).contains("P001", "P010");
@@ -94,7 +94,7 @@ class PlatformSeedIdempotencyTest {
         // Week 23（B2）：hospital-b 拥有自己的一份角色副本，且授权不被 default 串改。
         PlatformRole hospitalBOperator = platformRolePort.findByKey("hospital-b", "operator").orElseThrow();
         assertThat(hospitalBOperator.tenantKey()).isEqualTo("hospital-b");
-        assertThat(hospitalBOperator.allowedAgentKeys()).contains("patient-analysis");
+        assertThat(hospitalBOperator.allowedAgentKeys()).contains("patient-analysis", "followup");
         assertThat(hospitalBOperator.allowedPatientIds()).contains("P001", "P010");
     }
 
@@ -109,7 +109,8 @@ class PlatformSeedIdempotencyTest {
         metadataSeedInitializer.run(args);
 
         // Week 21：新增 patient-analysis Agent 与 ReportLookupTool
-        assertThat(agentRegistryPort.listAll()).hasSize(agents).hasSize(4);
+        // Week 24：新增 operations-analysis / followup 两个 Agent
+        assertThat(agentRegistryPort.listAll()).hasSize(agents).hasSize(6);
         assertThat(toolCatalogPort.listAll()).hasSize(tools).hasSize(3);
         assertThat(workflowRegistryPort.listAll()).hasSize(workflows).hasSize(2);
     }

@@ -58,8 +58,18 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-23/commit/target-week23-commit.log` | 主提交 `ee55466` 输出 |
 | `logs/week-23/commit/target-week23-verify-commit.log` | 验收记录提交 `723073b` 输出 |
 
-## 3. 早期日志
+## 3. 第 24 周关键日志
 
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-24/test/target-week24-full.log` | 根聚合 **885** 全绿（ai-core 90 / enterprise 55 / patient 21 / platform 619 / gateway 100），BUILD SUCCESS |
+| 同上（`09:48:48` 行） | V8 首次启动 `Successfully applied 8 migrations ... now at version v8`，后续上下文只校验 |
+| 同上（`platform` 模块段） | 本周新增 86 例：运营统计/异常/日报、随访计划/任务/状态机/提醒、审批联动、对账、Gauge |
+
+> 云端发布（V8 真库 + `cloud-accept-week24.sh`）尚未执行；执行后按
+> `docs/deploy/week-24-ops.md` 第 2–3 节补 `logs/week-24/deploy/`、`migration/`、`acceptance/`。
+
+## 4. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -69,7 +79,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 4. 维护规则
+## 5. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

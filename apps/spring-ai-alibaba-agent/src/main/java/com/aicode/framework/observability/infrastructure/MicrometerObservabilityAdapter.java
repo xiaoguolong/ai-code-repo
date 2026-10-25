@@ -11,6 +11,7 @@ import com.aicode.framework.observability.domain.SpanScope;
 import com.aicode.framework.observability.domain.TraceContextView;
 import com.aicode.framework.observability.domain.TraceDimensions;
 import com.aicode.framework.observability.domain.TraceScope;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.tracing.Span;
@@ -20,6 +21,8 @@ import org.slf4j.MDC;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 观测端口的 Micrometer 适配器（Week 17）——唯一允许出现框架类型的实现。
@@ -43,6 +46,8 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
     private final MeterRegistry meterRegistry;
     private final LangfuseContext langfuseContext;
     private final boolean langfuseEnabled;
+    /** Gauge 的值持有者：按「指标名 + 标签」复用，保证同名仪表只登记一次。 */
+    private final Map<String, AtomicReference<Double>> gauges = new ConcurrentHashMap<>();
 
     /**
      * 仅观测（不含 Langfuse 维度与类型富化）：等价于「Langfuse 关闭」的装配，供既有调用方与测试使用。
@@ -142,6 +147,34 @@ public class MicrometerObservabilityAdapter implements AgentObservabilityPort {
         }
         try {
             meterRegistry.timer(name, parsedTags(tags)).record(Duration.ofMillis(Math.max(durationMs, 0L)));
+        } catch (RuntimeException ex) {
+            // 忽略：指标登记失败不得影响业务
+        }
+    }
+
+    /**
+     * 瞬时值指标（Gauge）：同 name + tags 只登记一次，后续调用更新持有值。
+     *
+     * <p>Gauge 必须绑定到一个长期存活的对象（这里是 {@link AtomicReference}），
+     * 不能绑定业务对象——否则对象被回收后仪表会消失，或造成内存泄漏。</p>
+     */
+    @Override
+    public void recordGauge(String name, double value, String... tags) {
+        if (name == null || name.isBlank()) {
+            return;
+        }
+        try {
+            Tags parsed = parsedTags(tags);
+            String key = name + "|" + parsed;
+            AtomicReference<Double> holder = gauges.computeIfAbsent(key, ignored -> {
+                AtomicReference<Double> reference = new AtomicReference<>(0.0);
+                Gauge.builder(name, reference, ref -> {
+                    Double current = ref.get();
+                    return current == null ? 0.0 : current;
+                }).tags(parsed).register(meterRegistry);
+                return reference;
+            });
+            holder.set(value);
         } catch (RuntimeException ex) {
             // 忽略：指标登记失败不得影响业务
         }

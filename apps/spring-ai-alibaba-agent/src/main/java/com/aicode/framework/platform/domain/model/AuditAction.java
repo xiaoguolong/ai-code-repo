@@ -22,5 +22,11 @@ public enum AuditAction {
     /** 清理过期长期记忆（Week 23，仅手工触发） */
     MEMORY_PURGE,
     /** 重建长期记忆向量（Week 23） */
-    MEMORY_REBUILD
+    MEMORY_REBUILD,
+    /** 生成随访任务（Week 24，Agent 运行或审批通过） */
+    FOLLOWUP_TASK_CREATE,
+    /** 完成随访任务（Week 24） */
+    FOLLOWUP_TASK_COMPLETE,
+    /** 取消随访任务（Week 24） */
+    FOLLOWUP_TASK_CANCEL
 }

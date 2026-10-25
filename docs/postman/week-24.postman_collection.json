@@ -1,0 +1,421 @@
+{
+  "info": {
+    "name": "Week 24 - Agent 2 运营分析 + Agent 4 随访",
+    "description": "平台 8084。前置：启动平台（jdbc profile，Flyway V8 自动创建 platform_followup_task）；先执行 01/02 登录。运营日报仅 admin；随访 Agent / 任务 operator 可用。HIGH 风险用 P002，中风险用 P001，随访任务演示用 P007（operator 数据域内）。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "adminToken", "value": "" },
+    { "key": "platformToken", "value": "" },
+    { "key": "patientId", "value": "P007" },
+    { "key": "windowDays", "value": "7" },
+    { "key": "taskId", "value": "" },
+    { "key": "approvalId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - 登录 admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + SUCCESS', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().code).to.eql('SUCCESS');",
+              "});",
+              "pm.collectionVariables.set('adminToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - 登录 operator",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"operator\",\n  \"password\": \"operator123\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + SUCCESS', function () {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().code).to.eql('SUCCESS');",
+              "});",
+              "pm.collectionVariables.set('platformToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Agent 2 运营分析",
+      "item": [
+        {
+          "name": "10 - 生成运营日报（admin）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/agents/operations-analysis/runs",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "agents", "operations-analysis", "runs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": {\n    \"windowDays\": {{windowDays}},\n    \"task\": \"生成最近 7 天运营日报\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + COMPLETED', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.status).to.eql('COMPLETED');",
+                  "  const output = JSON.parse(data.outputJson);",
+                  "  pm.expect(output.reportType).to.eql('DAILY');",
+                  "  pm.expect(output.summary).to.have.property('failureRate');",
+                  "  pm.expect(output.anomalies).to.be.an('array');",
+                  "  console.log('degraded=', output.degraded, 'anomalies=', output.anomalies.length);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 - operator 调用日报应 403",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/agents/operations-analysis/runs",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "agents", "operations-analysis", "runs"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": { \"windowDays\": 7 }\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('403 FORBIDDEN', function () {",
+                  "  pm.response.to.have.status(403);",
+                  "  pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 - 窗口越界应 400",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/agents/operations-analysis/runs",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "agents", "operations-analysis", "runs"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"input\": { \"windowDays\": 0 }\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 VALIDATION_ERROR', function () {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Agent 4 随访",
+      "item": [
+        {
+          "name": "20 - 生成随访计划（operator）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/agents/followup/runs",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "agents", "followup", "runs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": {\n    \"patientId\": \"{{patientId}}\",\n    \"task\": \"生成随访计划\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + 生成任务', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const output = JSON.parse(pm.response.json().data.outputJson);",
+                  "  pm.expect(output.taskIds).to.be.an('array').that.is.not.empty;",
+                  "  pm.collectionVariables.set('taskId', output.taskIds[0]);",
+                  "  console.log('riskLevel=', output.riskLevel, 'degraded=', output.degraded);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 - 任务列表",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/followup-tasks?status=PENDING&patientId={{patientId}}&limit=20",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "followup-tasks"],
+              "query": [
+                { "key": "status", "value": "PENDING" },
+                { "key": "patientId", "value": "{{patientId}}" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + 任务数组', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.tasks).to.be.an('array');",
+                  "  if (data.tasks.length > 0) { pm.collectionVariables.set('taskId', data.tasks[0].taskId); }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 - 站内提醒（7 天）",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/followup-tasks/reminders?days=7",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "followup-tasks", "reminders"],
+              "query": [{ "key": "days", "value": "7" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + overdue/dueSoon', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.overdue).to.be.an('array');",
+                  "  pm.expect(data.dueSoon).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 - 完成任务",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/followup-tasks/{{taskId}}/complete",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "followup-tasks", "{{taskId}}", "complete"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": \"已复测 138/86\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + COMPLETED', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(pm.response.json().data.status).to.eql('COMPLETED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 - 重复完成应 409",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/followup-tasks/{{taskId}}/complete",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "followup-tasks", "{{taskId}}", "complete"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"note\": \"again\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 PLATFORM_CONFLICT', function () {",
+                  "  pm.response.to.have.status(409);",
+                  "  pm.expect(pm.response.json().code).to.eql('PLATFORM_CONFLICT');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "审批联动（HIGH → 随访任务）",
+      "item": [
+        {
+          "name": "30 - HIGH 风险患者分析（operator）",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/agents/patient-analysis/runs",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "agents", "patient-analysis", "runs"]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"input\": {\n    \"patientId\": \"P002\",\n    \"task\": \"为患者 P002 生成慢病风险分析报告\"\n  }\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + PENDING_APPROVAL', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const output = JSON.parse(pm.response.json().data.outputJson);",
+                  "  pm.expect(output.approvalStatus).to.eql('PENDING');",
+                  "  pm.collectionVariables.set('approvalId', output.approvalId);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "31 - 批准 → 写记忆 + 生成 3 条随访任务",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": {
+              "raw": "{{platformBaseUrl}}/api/v1/platform/approvals/{{approvalId}}/decision",
+              "host": ["{{platformBaseUrl}}"],
+              "path": ["api", "v1", "platform", "approvals", "{{approvalId}}", "decision"]
+            },
+            "body": { "mode": "raw", "raw": "{\n  \"approved\": true,\n  \"comment\": \"同意进入随访\"\n}" }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 + APPROVED + COMPLETED + 3 任务', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "  const data = pm.response.json().data;",
+                  "  pm.expect(data.status).to.eql('APPROVED');",
+                  "  pm.expect(data.executionStatus).to.eql('COMPLETED');",
+                  "  pm.expect(data.memoryId).to.be.a('string').that.is.not.empty;",
+                  "  pm.expect(data.followUpTaskIds).to.have.lengthOf(3);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

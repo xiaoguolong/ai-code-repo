@@ -38,6 +38,11 @@ public class NoopObservabilityAdapter implements AgentObservabilityPort {
     }
 
     @Override
+    public void recordGauge(String name, double value, String... tags) {
+        // 观测关闭：不记录
+    }
+
+    @Override
     public boolean isEnabled() {
         return false;
     }

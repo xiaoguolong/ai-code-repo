@@ -803,7 +803,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 22 | 登录限流 + 应用上云（jar/systemd）+ enterprise/SSO 真机 | docs/specs/week-22.md | notes/impl-logs/week-22.md | 已关闭（726 用例全绿；平台/网关/enterprise 云端常驻，两份验收脚本 PASS=18 / PASS=11） |
 | 23 | 患者分析 HITL + 长期记忆生命周期（V6）+ SSO 解绑/租户角色（V7） | docs/specs/week-23.md | notes/impl-logs/week-23.md | 批次 1/2 均完成：V6 云端 PASS=21；V7 云端 PASS=19；根聚合 798 全绿 |
 | 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
-| 24 | 医疗 SaaS 其余三个 Agent（运营 / 知识库 / 随访） | docs/specs/week-24-candidates.md | — | 未开始（遗留对账与建议范围见候选计划） |
+| 24 | Agent 2 运营分析 + Agent 4 随访 + TD-01/02/03 收口（V8） | docs/specs/week-24.md | notes/impl-logs/week-24.md | 已关闭（根聚合 885 全绿；V8 H2 首次 `now at version v8`；云端发布待执行） |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
@@ -820,6 +820,10 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 长期记忆生命周期（TTL / 删除 / 向量重建） | **第 23 周批次 1（已完成）** | V6 加 `expires_at` / `embedding_model`；读取过滤过期、每日清理、admin 删除/重建；详见 `docs/specs/week-23.md` 第四/五节 |
 | 患者分析 HITL（HIGH 风险人工确认） | **第 23 周批次 1（已完成）** | `platform_approval` + `PENDING_APPROVAL` / `REJECTED`；跨进程可重启；决策不调用模型 |
 | SSO 解绑 / 租户级角色 | **第 23 周批次 2（已完成并上线）** | A1 运维令牌 + B2 按租户复制角色；V7 角色四表 + 执行记录 tenant；H2/真实 PostgreSQL 均通过；409/503 真机 PASS；见 `docs/specs/week-23.md` 第十节 |
+| Agent 2 运营分析 / Agent 4 随访 | **第 24 周（已完成/测试通过）** | 窗口统计口径 + 6 条异常规则 + 日报降级；随访计划规则 + V8 任务表 + 站内提醒 + 审批联动；见 `docs/specs/week-24.md` |
+| TD-01/02/03（Grafana 口径 / 审批事务与对账 / 待办积压告警） | **第 24 周（已完成）** | 失败率分母排除待审；`@Transactional` + 10 分钟对账；`approval_pending_count` Gauge + 告警 |
+| TD-04/05（回滚演练 / 旧记忆 TTL 回填） | **第 24 周交付脚本与手册（未执行）** | `deploy/app/rollback-drill.sh`、`ttl-backfill-week24.sql`；执行记录见 `docs/deploy/week-24-ops.md` 第 7/8 节 |
+| Agent 3 知识库 | **未排期（需产品决策）** | 避免与 enterprise RAG 重复建设；形态确认后再开，见 `docs/specs/week-24.md` 第九节 |
 
 ---
 

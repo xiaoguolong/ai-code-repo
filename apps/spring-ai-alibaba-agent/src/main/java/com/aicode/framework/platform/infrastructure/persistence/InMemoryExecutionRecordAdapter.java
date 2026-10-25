@@ -5,6 +5,7 @@ import com.aicode.framework.platform.domain.port.ExecutionRecordPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
@@ -42,5 +43,35 @@ public class InMemoryExecutionRecordAdapter implements ExecutionRecordPort {
                 .filter(record -> record.userId() == userId)
                 .sorted(Comparator.comparing(ExecutionRecord::startedAt).reversed())
                 .toList();
+    }
+
+    @Override
+    public List<ExecutionRecord> listByTenantBetween(String tenantKey, Instant from, Instant to, int limit) {
+        return store.values().stream()
+                .filter(record -> record.tenantKey().equals(tenantKey))
+                .filter(record -> inWindow(record, from, to))
+                .sorted(Comparator.comparing(ExecutionRecord::startedAt).reversed())
+                .limit(Math.max(limit, 0))
+                .toList();
+    }
+
+    @Override
+    public List<ExecutionRecord> listByUserBetween(long userId, Instant from, Instant to, int limit) {
+        return store.values().stream()
+                .filter(record -> record.userId() == userId)
+                .filter(record -> inWindow(record, from, to))
+                .sorted(Comparator.comparing(ExecutionRecord::startedAt).reversed())
+                .limit(Math.max(limit, 0))
+                .toList();
+    }
+
+    private boolean inWindow(ExecutionRecord record, Instant from, Instant to) {
+        Instant startedAt = record.startedAt();
+        if (startedAt == null) {
+            return false;
+        }
+        boolean afterFrom = from == null || !startedAt.isBefore(from);
+        boolean beforeTo = to == null || startedAt.isBefore(to);
+        return afterFrom && beforeTo;
     }
 }

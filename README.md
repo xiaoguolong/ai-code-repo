@@ -899,6 +899,45 @@ Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式�
 
 ---
 
+# 第24周：Agent 2 运营分析 + Agent 4 随访 + 观测/一致性收口
+
+
+完成（2026-10-25，P0 全部）：
+
+- [x] **Agent 2 运营分析**（`operations-analysis`）：按窗口统计 `execution_record`
+      （成功/失败/待审/拒绝/token/成本）→ 6 条规则异常 → 模型日报；模型不可用降级为规则模板
+- [x] **统计口径**：成功率/失败率**分母只含 `COMPLETED + FAILED`**（待审/拒绝/运行中不进分母），
+      与 Grafana 面板同一口径；admin 统计整租户，operator 只统计自己
+- [x] **Agent 4 随访**（`followup`）：规则计划（HIGH 3 条 / MEDIUM 2 条 / LOW 1 条），
+      模型只写说明文本、不得增删任务；任务落库 `platform_followup_task`（V8）
+- [x] **随访任务 API**：列表 / 详情 / 完成 / 取消 / 站内提醒（逾期 + 未来 N 天）；
+      完成与取消走原子 `WHERE status='PENDING'`，重复操作 409，他人 403
+- [x] **审批联动**：HIGH 审批通过 → 写记忆 + 生成 3 条随访任务（`approval_id + title` 唯一索引防重）；
+      拒绝不生成；任务写失败只 WARN，不影响审批结果
+- [x] **TD-01**：Grafana 失败率分母排除 `PENDING_APPROVAL`，新增成功率曲线与「待审审批积压」面板
+- [x] **TD-02**：审批决策加 `@Transactional`（markDecided → 记忆 → 任务 → 执行终态）；
+      `ApprovalReconciliationScheduler` 每 10 分钟按审批终态补齐执行状态，消除 `APPROVED + PENDING_APPROVAL`
+- [x] **TD-03**：新增 `approval.pending.count` Gauge（每 60s 采样）+ `AiCodePendingApprovalBacklog` 告警（>20 持续 30m）
+- [x] **V8 迁移**：`platform_followup_task` + 2 普通索引 + 1 唯一索引；H2 首次启动 `now at version v8`
+- [x] 技术债说明：V8/V7 回滚演练脚本与手册（TD-04）、旧记忆 TTL 回填脚本（TD-05）已交付，**待运维窗口执行**
+
+交付：Spec `docs/specs/week-24.md` ｜ 架构 `docs/architecture/week-24-architecture.md` ｜
+接口 `docs/api/week-24-api.md` ｜ 运维手册 `docs/deploy/week-24-ops.md` ｜
+部署物 `deploy/app/rollback-drill.sh`、`deploy/app/ttl-backfill-week24.sql`、
+`deploy/app/cloud-accept-week24.sh`、`deploy/monitoring/**`（面板口径 + 2 条告警改动）｜
+实现日志 `notes/impl-logs/week-24.md` ｜
+Postman `docs/postman/week-24.postman_collection.json`
+
+实测：根聚合 **885** 用例全绿（ai-core 90 / enterprise 55 / patient 21 / platform 619 / gateway 100；
+Week 23 基线 798 → 885，新增 87）；V8 在 H2（PostgreSQL 兼容模式）首次启动
+`Successfully applied 8 migrations ... now at version v8`，后续上下文只校验不重跑。
+
+> **未做项（明确，不在本周范围）**：Agent 3 知识库（避免与 enterprise RAG 重复建设）、
+> 云端 pgvector 迁移、HIS/LIS 真实数据、短信/邮件提醒、平台用户硬删（TD-06）、
+> 租户自建角色（B3）、前端/CI。决策与触发条件见 `docs/specs/week-24.md` 第九/十二节。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 
@@ -929,11 +968,12 @@ Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式�
 # Agent 2：运营分析Agent
 
 
-完成：
+完成（Week 24 交付，平台 `operations-analysis`）：
 
-- [ ] 数据分析
-- [ ] 自动生成日报
-- [ ] 异常发现
+- [x] 数据分析（窗口内执行量 / 成功率 / 失败率 / token / 成本 / 按 Agent 分组）
+- [x] 自动生成日报（模型生成；不可用时降级规则模板并标记 `degraded`）
+- [x] 异常发现（6 条规则：失败率、待审积压、token 突增、单 Agent 失败集中、无流量）
+- [x] 租户/权限：admin 看整租户，operator 只看自己；提示词只送聚合数，不含患者明细
 
 
 ---
@@ -947,18 +987,21 @@ Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式�
 - [ ] RAG问答
 - [ ] 权限控制
 
+> 第 24 周明确**不做**：enterprise 已有 RAG，平台再建一套会出现两套知识库/两套权限。
+> 先定「平台原生 vs 包装 enterprise」形态（见 `docs/specs/week-24.md` Open Questions）。
+
 
 ---
 
 # Agent 4：随访Agent
 
 
-完成：
+完成（Week 24 交付，平台 `followup`）：
 
-- [ ] 生成随访计划
-- [ ] 创建业务任务
-- [ ] 消息提醒
-- [ ] 人工审核
+- [x] 生成随访计划（规则决定任务条目，模型只写说明；模型不可用降级模板）
+- [x] 创建业务任务（`platform_followup_task`，V8；可查询/完成/取消，重复操作 409）
+- [x] 消息提醒（**站内**：逾期 + 未来 7 天到期；未接短信/邮件，需外部网关）
+- [x] 人工审核（复用 Week 23 HITL：HIGH 批准后才生成任务；拒绝不生成；可追溯 approvalId/executionId）
 
 
 ---
@@ -999,7 +1042,8 @@ Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式�
       Week 22：登录/身份校验按 IP+用户名 限流，超阈值 429，默认 5 次/5 分钟；
       Week 23 A1：enterprise SSO 运维端点用 `ENTERPRISE_ADMIN_TOKEN`，未配置即 403）
 - [x] 审计（Week 16：AuditLogPort + audit_log 落库 + traceId 可追溯；
-      Week 23：审批提交/决策、记忆删除/清理/重建新增 5 类事件）
+      Week 23：审批提交/决策、记忆删除/清理/重建新增 5 类事件；
+      Week 24：随访任务创建/完成/取消新增 3 类事件，detail 只带标识不带患者正文）
 - [x] 日志（Week 16：traceId 全链路 + 统一访问日志 + 结构化 key=value）
 - [x] 多租户（Week 21：`platform_tenant` + `platform_user.tenant_key`，租户停用即拒绝登录；
       记忆按 租户+用户 隔离，隔离谓词在 SQL；enterprise ↔ platform 统一身份由平台 `/auth/verify` 提供；

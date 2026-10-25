@@ -74,6 +74,18 @@ public interface AgentObservabilityPort {
     void recordDuration(String name, long durationMs, String... tags);
 
     /**
+     * 瞬时值指标记录（Gauge，Week 24）。
+     *
+     * <p>用于「待审积压条数」这类没有天然计数语义、只能周期性采样的值。
+     * 同一 name + tags 只登记一次仪表，后续调用只更新值。</p>
+     *
+     * @param name  指标名，空则忽略
+     * @param value 当前值
+     * @param tags  标签键值对（交替出现），奇数个时末位忽略
+     */
+    void recordGauge(String name, double value, String... tags);
+
+    /**
      * 观测是否启用。
      *
      * @return 启用的适配器返回 true，空实现返回 false

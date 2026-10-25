@@ -57,6 +57,12 @@ public class RecordingObservabilityPort implements AgentObservabilityPort {
     }
 
     @Override
+    public void recordGauge(String name, double value, String... tags) {
+        calls.add("recordGauge:" + name + "=" + value);
+        delegate.recordGauge(name, value, tags);
+    }
+
+    @Override
     public boolean isEnabled() {
         return true;
     }

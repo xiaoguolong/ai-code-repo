@@ -26,7 +26,8 @@ class PlatformRbacPermissionUpgradeInitializerTest {
 
         PlatformRole operator = roles.findByKey("operator").orElseThrow();
         assertThat(operator.allowedAgentKeys())
-                .containsExactlyInAnyOrder("patient-risk", "medical-assistant", "patient-analysis");
+                .containsExactlyInAnyOrder(
+                        "patient-risk", "medical-assistant", "patient-analysis", "followup");
         assertThat(operator.allowedToolKeys())
                 .containsExactlyInAnyOrder("PatientLookupTool", "HealthMetricTool", "ReportLookupTool");
         assertThat(operator.allowedPatientIds()).containsExactly("P001");
@@ -41,7 +42,7 @@ class PlatformRbacPermissionUpgradeInitializerTest {
         new PlatformRbacPermissionUpgradeInitializer(roles).run(new DefaultApplicationArguments());
 
         PlatformRole operator = roles.findByKey("operator").orElseThrow();
-        assertThat(operator.allowedAgentKeys()).containsExactly("patient-analysis");
+        assertThat(operator.allowedAgentKeys()).containsExactlyInAnyOrder("patient-analysis", "followup");
         assertThat(operator.allowedToolKeys()).containsExactly("ReportLookupTool");
     }
 

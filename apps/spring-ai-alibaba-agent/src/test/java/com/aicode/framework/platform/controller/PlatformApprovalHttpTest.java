@@ -128,6 +128,7 @@ class PlatformApprovalHttpTest {
                 .andExpect(jsonPath("$.data.status").value("APPROVED"))
                 .andExpect(jsonPath("$.data.executionStatus").value("COMPLETED"))
                 .andExpect(jsonPath("$.data.memoryId").isNotEmpty())
+                .andExpect(jsonPath("$.data.followUpTaskIds", org.hamcrest.Matchers.hasSize(3)))
                 .andReturn();
         String memoryId = objectMapper.readTree(decision.getResponse().getContentAsString())
                 .path("data").path("memoryId").asText();
