@@ -32,7 +32,9 @@ logs/
 │   ├── acceptance/      # week24 / week25 / 三 Agent 回归
 │   └── diagnose/        # 验收脚本与指标抓取缺陷的定位证据
 ├── week-27/
-│   └── test/            # 第 27 周新增用例 / platform 全量 / 根聚合（971 用例 + V10 首次迁移）
+│   ├── test/            # 第 27 周新增用例 / platform 全量 / 根聚合（971 用例 + V10 首次迁移）
+│   ├── deploy/          # 巡检、备份、enterprise/platform 发布
+│   └── acceptance/      # 对账/提醒/问答/指标、配置恢复、终检
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -126,9 +128,17 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-27/test/target-week27-enterprise-tests.log` | enterprise 内部知识库 **15** 全绿（含按企业用户列库、参数互斥） |
 | `logs/week-27/test/target-week27-platform-full2.log` | platform 全量 **690** 全绿（Week 26 基线 648，+42）；首次 V10 迁移 |
 | `logs/week-27/test/target-week27-full.log` | 根聚合 **971** 全绿（Week 26 基线 924，+47） |
+| `logs/week-27/deploy/target-week27-precheck.log` | 变更前：平台 v9、无 V10 对象、绑定 1 条、无待审、令牌一致 |
+| `logs/week-27/deploy/target-week27-backup.log` | 备份 `week27-20261025-145732`（171MB，两库 dump 非空） |
+| `logs/week-27/deploy/target-week27-deploy-enterprise.log` | enterprise 14:59:15 发布，401 健康判据通过 |
+| `logs/week-27/deploy/target-week27-deploy-platform.log` | platform 15:01:32 发布，health 200 |
+| `logs/week-27/acceptance/target-week27-accept.log` | 对账 `updated=1/failed=0`、提醒视图、问答 `hitCount=2/citations=2`、指标（PASS=28） |
+| `logs/week-27/acceptance/target-week27-reminder-metrics-check.log` | 15:04:00 提醒 `count=1` + 审计 + 指标 =1，审批仍 PENDING |
+| `logs/week-27/acceptance/target-week27-cleanup-restore.log` | `created_at` 复原、临时 cron 移除、`.env` 与备份一致 |
+| `logs/week-27/acceptance/target-week27-postcheck.log` | 终检 **PASS=29 FAIL=0** |
 
-> 云端 V10 尚未发布；发布后按 `docs/specs/week-27.md` 第四/五节补 `logs/week-27/deploy/`
-> 与 `logs/week-27/acceptance/`（对账一次 + 超时提醒一次）。
+> 云端已于 2026-10-25 执行完成；过程与回滚见 `docs/deploy/week-27-ops.md`。
+> 第 27 周没有单独的 migration 日志：V10 在 platform 发布日志中（`now at version v10`）。
 
 ## 7. 早期日志
 | 目录 | 内容 |

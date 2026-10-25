@@ -235,8 +235,9 @@ flowchart LR
       ai-core 90 / patient 21 / gateway 100）。
 - [x] **文档**：Spec / 架构 / 接口 / 实现日志 / README / 日志索引同步。
 
-> 云端发布与真机验收**尚未执行**（无运维窗口）：发布平台 jar 后 Flyway 自动应用 V10，
-> 再按第 2.2/2.4 节手动触发一次对账与一次超时提醒即可复核。
+> 云端发布与真机验收已于 **2026-10-25** 执行完成（enterprise 14:59:15 → platform 15:01:32，
+> V10 15:01:27）；备份 `/opt/ai-code/backup/week27-20261025-145732`，终检 **PASS=29 FAIL=0**。
+> 过程与证据见 `docs/deploy/week-27-ops.md` 与 `notes/impl-logs/week-27.md` 第 12 节。
 
 ### 4.1 交付结果（2026-10-25）
 
@@ -248,7 +249,10 @@ flowchart LR
 | V10（H2） | 首次 `applied 10 migrations ... now at version v10`；重启 `validated 10 migrations` |
 | 对账语义 | 13 个用例：改名 / 删库不删行 / 失败不改状态 / 新库不绑定 / 租户隔离 / 审计 / 指标 |
 | 提醒语义 | 9 个用例：阈值 / 冷却 / 不自动拒绝 / admin 全量 / 单条失败不中断 |
-| 云端 V10 | **未执行**：发布平台 jar 后自动应用，按第 2 节验证列/表/端点 |
+| 云端发布 | enterprise 14:59:15 / platform 15:01:32；V10 `now at version v10`（15:01:27） |
+| 云端对账 | `groups=1 / checked=1 / updated=1 / failed=0` → 绑定 `ACTIVE`；问答 `hitCount=2 / citations=2` |
+| 云端提醒 | 回填 30h 待审 → `reminder_count=1`（15:04:00）、审计 `APPROVAL_REMIND`、指标 `=1`、审批仍 `PENDING` |
+| 云端终检 | **PASS=29 FAIL=0**（服务/迁移/对账/提醒证据/指标/配置恢复/资源） |
 
 ## 五、风险与回滚
 

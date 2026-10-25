@@ -19,13 +19,14 @@
 - 对账用例（按「租户 + 企业归属人」分组）、每日调度、admin 手动端点、按企业用户列库的 enterprise 端点；
 - 审批提醒用例（阈值/冷却/单次上限）、每小时调度、站内视图端点、审计 `APPROVAL_REMIND`；
 - 5 个指标 + 直方图配置 + 指标契约测试；
-- 42 个 platform 用例 + 5 个 enterprise 用例。
+- 42 个 platform 用例 + 5 个 enterprise 用例；
+- **云端发布与真机验收**：enterprise 14:59:15 → platform 15:01:32（V10 15:01:27），
+  对账 / 提醒 / 问答 / 指标 / 配置恢复终检 **PASS=29 FAIL=0**。
 
 **没做（明确）**：
 
 - 科室级知识库授权（`platform_role_knowledge`）、平台用户停用 TD-06、SSE、日报导出、HIS/LIS；
-- 审批自动拒绝/自动升级；对账自动新增/删除绑定；
-- 云端发布与真机验收（**未执行**，步骤见第 10 节）。
+- 审批自动拒绝/自动升级；对账自动新增/删除绑定；指标告警规则（下周按噪声加）。
 
 ## 3. 增量架构
 
@@ -138,6 +139,7 @@ management.metrics.distribution.maximum-expected-value.knowledge.search.duration
 | H2 迁移 | 首次 `Successfully applied 10 migrations ... now at version v10`；重启 `validated 10 migrations` |
 | 超 200 行类 | 本周边界内 0 个（见第 7 节） |
 | 禁用/跳过用例 | 0（未使用 `@Disabled`） |
+| 云端终检 | **PASS=29 FAIL=0**（服务 / V10 对象 / 对账 / 提醒证据 / 指标 / 配置恢复 / 资源） |
 
 > 根聚合分布：ai-core 90 / enterprise 70 / patient 21 / platform 690 / gateway 100 = **971**。
 
@@ -151,15 +153,19 @@ management.metrics.distribution.maximum-expected-value.knowledge.search.duration
 | 根聚合（971） | `logs/week-27/test/target-week27-full.log` |
 | 首次 V10 迁移 | platform 全量日志 `Successfully applied 10 migrations ... now at version v10` |
 | 接口示例 | `docs/postman/week-27.postman_collection.json`（8 个请求） |
-
-**未执行**：云端 V10 发布、真实 enterprise 对账、真实审批提醒。原因：本周无运维窗口，
-且本地 H2/单测已覆盖语义；步骤与验收点见 `docs/specs/week-27.md` 第四/五节与第 10 节。
+| 云端巡检 | `logs/week-27/deploy/target-week27-precheck.log` |
+| 云端备份 | `logs/week-27/deploy/target-week27-backup.log`（`/opt/ai-code/backup/week27-20261025-145732`） |
+| 云端发布 | `logs/week-27/deploy/target-week27-deploy-{enterprise,platform}.log` |
+| 云端验收 | `logs/week-27/acceptance/target-week27-accept.log`（PASS=28，1 处脚本断言误判） |
+| 提醒/指标证据 | `logs/week-27/acceptance/target-week27-reminder-metrics-check.log` |
+| 配置恢复 | `logs/week-27/acceptance/target-week27-cleanup-restore.log` |
+| 云端终检 | `logs/week-27/acceptance/target-week27-postcheck.log`（**PASS=29 FAIL=0**） |
 
 ## 10. 风险与下周输入
 
 | # | 风险 / 待办 | 影响 | 下一步 |
 |---|-------------|------|--------|
-| 1 | 云端未应用 V10 | 新端点/新列在云端不存在 | 发布平台 jar（Flyway 自动 V10），发布后核对 `sync_status` 列与提醒表 |
+| 1 | 云端已应用 V10（15:01:27） | — | 已解决；回滚用 `/opt/ai-code/backup/week27-20261025-145732/{platform,enterprise}-app.jar` + `deploy-app.ps1 -Rollback` |
 | 2 | 调度对账默认每日 02:15 | 企业侧改名最长 1 天可见 | 需要更快可改 cron；或让 admin 手动对账 |
 | 3 | `MISSING` 绑定需要人工清理 | 长期残留会让运营困惑 | 观察一周；若量大再加「批量清理」端点 |
 | 4 | 提醒只覆盖站内查询 | 不主动推送 | 前端接入后加轮询/WebSocket；短信/邮件等供应商 |
@@ -180,11 +186,49 @@ management.metrics.distribution.maximum-expected-value.knowledge.search.duration
 | 提醒去重 | 每次都发 / 冷却窗口 | **12h 冷却** | 兼顾不遗漏与不刷屏；视图始终可查 |
 | 指标标签 | 租户/知识库 ID / 只 outcome | **只 outcome/result** | 避免序列随租户/知识库数膨胀 |
 
-## 12. 本周未发现「只在真实环境暴露」的缺陷
+## 12. 云端发布与真机验收（2026-10-25）
 
-Week 26 之前的每周真机都会抓出若干环境缺陷；本周未部署，因此没有这一类证据。
-本地唯一需要修的是两处**测试断言**（无标签 Counter 的导出名不带 `{}`、审批响应 DTO 不暴露
-`decidedBy`），不是生产缺陷，已修正并全量复跑。
+### 12.1 顺序与结果
 
-> 下周（Week 28）建议：TD-06 平台用户停用 + P2 类拆分；云端 V10 发布与对账/提醒真机验收
-> 作为周初第一件事，避免「代码已就绪、云端未执行」再次堆积。
+| 步骤 | 时间（CST） | 结果 |
+|------|-------------|------|
+| 只读巡检 | 14:57:08 | 平台 v9 / enterprise 1..7；绑定 1；无待审；两侧令牌一致；无 V10 |
+| 备份 | 14:57:32 | `/opt/ai-code/backup/week27-20261025-145732`（171M，两库 dump 非空） |
+| 发布 enterprise | 14:59:15 | `/api/v1/auth/me` 401；按企业用户列库 200、缺参 400 |
+| 发布 platform | 15:01:32 | health 200；V10 于 15:01:27 `now at version v10` |
+| 手动对账 | 15:03:27 | `groups=1 / checked=1 / updated=1 / failed=0`；绑定 `UNKNOWN → ACTIVE` |
+| 超时提醒 | 15:04:00 | 回填 30h 待审 → `reminder_count=1`、审计 `APPROVAL_REMIND`、指标 =1、审批仍 `PENDING` |
+| 知识库问答 | 15:03 / 15:06 | `COMPLETED / hitCount=2 / citations=2`（两次） |
+| 终检 | 15:08 | **PASS=29 FAIL=0** |
+
+备份同时包含两个旧 jar 与 `.env`；`app.jar.prev` 也保留，回滚只需
+`.\tools\deploy-app.ps1 -Target platform -Rollback`（enterprise 同理），或从备份目录取 jar。
+
+### 12.2 真机抓出的 3 个脚本/环境问题（非产品缺陷）
+
+1. **`.env` 不能当 shell 脚本 source**：临时把提醒 cron 改成 `0 */1 * * * *` 写进 `.env` 后，
+   验收脚本 `source .env` 时把 `*/1` 当命令执行（`*/1: No such file or directory`），
+   `set -e` 下直接中断。`.env` 是 Spring 的 properties 源，不是 shell；
+   临时改 cron 应走 systemd drop-in/环境变量，或在 source 前剥离该行（本次已恢复 `.env` 并校验与备份一致）。
+2. **Bash `EUID` 是只读变量**：检查脚本用 `EUID` 接企业用户 ID 失败，改用 `ENT_UID`。
+3. **`pipefail` + `grep -q` 的 SIGPIPE**：`echo 139KB 的 scrape | grep -q` 会让 grep 提前退出、
+   上游收到 SIGPIPE，管道返回 141，指标断言随机失败（与 Week 26 同款）。
+   修复：改 bash 模式匹配 / 直接 grep 文件，并给 scrape 加 3 次重试（`curl --max-time 30`）。
+
+另：Micrometer 计数器随进程重启归零属正常；终检前重新跑了一次对账 + 问答生成指标
+（`knowledge_search_duration/hit_count/reconcile`），提醒计数器以重启前
+`target-week27-reminder-metrics-check.log` 为证（DB 行与审计仍在）。
+
+### 12.3 最终生产状态
+
+- 三个服务 `active`，health 200 / enterprise 401；Flyway `v10`；
+  `sync_status` / `last_synced_at` 列、`platform_approval_reminder` 表与外键存在；
+- 绑定 `ACTIVE` 且 `lastSyncedAt` 非空；超时提醒行 `count=1`、审计 1 条、审批仍 `PENDING`；
+- 演示用 P002 待审审批保留（`created_at` 已复原为 15:03:44，未超时），可直接在审批页决策；
+- `.env` 与备份逐字节一致，临时 cron 已移除；可用内存 > 500MB、根盘 < 90%。
+
+### 12.4 下周输入
+
+- 加 2 条 Prometheus 规则（对账 failed 连续、MISSING 持续 > 0），按真实噪声调；
+- `MISSING` 批量清理 / `unbound` 明细仍等运营反馈；
+- Week 28 主题：TD-06 平台用户停用 + P2 类拆分。

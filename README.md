@@ -1041,7 +1041,8 @@ template1 collation 未刷新、宿主机无 psql 导致演练脚本不可用、
 
 交付：Spec `docs/specs/week-27.md` ｜ 架构 `docs/architecture/week-27-architecture.md` ｜
 接口 `docs/api/week-27-api.md` ｜ 实现日志 `notes/impl-logs/week-27.md` ｜
-Postman `docs/postman/week-27.postman_collection.json` ｜ 迁移 `V10__platform_knowledge_sync_and_approval_reminder.sql`
+Postman `docs/postman/week-27.postman_collection.json` ｜ 迁移 `V10__platform_knowledge_sync_and_approval_reminder.sql` ｜
+云端脚本 `deploy/app/cloud-week27-{precheck,backup}.sh`、`cloud-accept-week27.sh`、`cloud-week27-postcheck.sh`
 
 实测：根聚合 **971** 用例全绿（Week 26 基线 924；platform 648→**690**，
 enterprise 65→**70**，ai-core 90 / patient 21 / gateway 100 不变）；
@@ -1049,10 +1050,14 @@ H2 首次启动 `Successfully applied 10 migrations ... now at version v10`，�
 新增 47 个用例：对账 13、审批提醒 9、JDBC 适配器 7、HTTP 契约 5、检索工具 3、知识库用例 2、
 调度与指标契约 3（platform 42）+ enterprise 5（按企业用户列库 / 参数互斥）。
 
-> **云端发布待执行**（本周代码/迁移已就绪，未在腾讯云执行）：发布平台 jar 后 Flyway 会应用 V10；
-> 建议发布后依次验证 `sync_status` 列/`platform_approval_reminder` 表、手动对账一次、
-> 回填一条 24h 前待审再查 `GET /approvals/reminders`，步骤见 `docs/api/week-27-api.md` 与
-> `docs/specs/week-27.md` 第四节。
+> **云端已于 2026-10-25 发布并真机验收通过**：enterprise 14:59:15 → platform 15:01:32
+> （V10 于 15:01:27 应用），备份 `/opt/ai-code/backup/week27-20261025-145732`（171MB，两库 dump 非空）。
+> 真实结果：手动对账 `groups=1 / checked=1 / updated=1 / failed=0` → 绑定 `ACTIVE`；
+> 知识库问答 `COMPLETED / hitCount=2 / citations=2`；超时提醒 `reminder_count=1`、
+> 审计 `APPROVAL_REMIND`、指标 `approval_reminder_count_total=1`，审批仍 `PENDING`；
+> 终检 **PASS=29 FAIL=0**（服务/迁移/对账/提醒证据/指标/配置恢复/资源）。
+> 证据见 `logs/week-27/deploy|acceptance/`（本地 gitignore）与
+> `docs/deploy/week-27-ops.md`。
 
 > **明确不做**：科室级知识库授权（P1 #2）、平台用户停用 TD-06、SSE、日报导出、HIS/LIS 真实数据源；
 > 审批**不**自动拒绝/升级；对账**不**自动新增/删除绑定。触发条件见 `docs/specs/week-27.md` 第 1.2 节。
