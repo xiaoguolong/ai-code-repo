@@ -30,7 +30,10 @@ login() {
 
 echo "=== 1) 健康检查 ==="
 [ "$(code --max-time 5 "$PLATFORM/actuator/health")" = "200" ] && ok "平台 health 200" || bad "平台 health 异常"
-[ "$(code --max-time 5 "$ENTERPRISE/actuator/health")" = "200" ] && ok "enterprise health 200" || bad "enterprise health 异常"
+# enterprise 没有引 actuator（/actuator/health 会落到全局异常处理返回 500），
+# 用「未登录访问 /api/v1/auth/me 返回 401」判定进程已在监听 —— 与 remote-deploy.sh 的判据一致。
+ENT_CODE="$(code --max-time 5 "$ENTERPRISE/api/v1/auth/me")"
+[ "$ENT_CODE" = "401" ] && ok "enterprise 已在监听（auth/me 401）" || bad "enterprise auth/me=$ENT_CODE（期望 401）"
 
 ADMIN_TOKEN="$(login admin admin123)"
 OPERATOR_TOKEN="$(login operator operator123)"
@@ -103,10 +106,14 @@ DENY="$(code -X POST "$PLATFORM/api/v1/platform/agents/knowledge-qa/runs" \
 
 echo
 echo "=== 7) 观测 ==="
-PROM="$(curl -s "$PLATFORM/actuator/prometheus")"
-echo "$PROM" | grep -q 'tool_call_count_total' && ok "tool.call 指标存在" || bad "缺 tool_call_count_total"
-echo "$PROM" | grep -q 'agent_run_count_total{.*knowledge-qa' && ok "knowledge-qa 指标已出现" \
-  || echo "INFO  knowledge-qa 指标尚未出现（需要一次成功/失败的 Agent 运行；上面已跑过一次）"
+# 同 week24：脚本开了 pipefail，大响应（约 270KB）走 `| grep -q` 会因 grep 提前退出
+# 触发 printf/echo 的 SIGPIPE(141)，把「指标存在」误判为缺失。改为落临时文件再 grep。
+PROM_FILE="$(mktemp)"
+curl -s --max-time 15 "$PLATFORM/actuator/prometheus" > "$PROM_FILE"
+grep -q 'tool_call_count_total' "$PROM_FILE" && ok "tool.call 指标存在" || bad "缺 tool_call_count_total"
+grep -q 'agent_run_count_total{.*knowledge-qa' "$PROM_FILE" && ok "knowledge-qa 指标已出现" \
+  || { echo "INFO  knowledge-qa 指标尚未出现（需要一次成功/失败的 Agent 运行；上面已跑过一次）"; grep 'agent_run_count_total' "$PROM_FILE" | head -3; }
+rm -f "$PROM_FILE"
 
 echo
 echo "=== 结果：PASS=$PASS FAIL=$FAIL ==="

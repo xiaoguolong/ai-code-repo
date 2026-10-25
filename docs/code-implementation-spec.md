@@ -293,6 +293,18 @@ spring:
 
 单测的 `application-test.yml` 必须与生产同口径（`baseline-version: 0`），否则测试通过而真库失败。
 
+> **`.env` 是 properties 源，不做 relaxed binding（Week 26 真机）**：模块 `.env` 由
+> `spring.config.import: optional:file:.env[.properties]` 加载，键是**字面量**。
+> `SPRING_DATASOURCE_URL` 这类能生效，是因为 yml 里写的是占位符 `${SPRING_DATASOURCE_URL:}`；
+> 若某个 `spring.*` 属性在 yml 里没有占位符，只写环境变量风格的键**不会生效**。
+> 所以「希望被 `.env` 覆盖」的属性一律写成 `xxx: ${ENV_KEY:默认值}`；例如
+> `spring.flyway.out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}`。
+>
+> **乱序迁移**：先用历史表核对（`SELECT version FROM flyway_schema_history_<模块> ORDER BY installed_rank`）。
+> 若已应用版本 > 待应用版本（例如历史为 `1,2,3,4,5,7` 而 V6 尚未应用），必须显式
+> `out-of-order=true`，否则启动即 `Validate failed: Detected resolved migration not applied to database`。
+> 补完立即关闭开关并重启，确认只 `validated N migrations`。
+
 #### 3.7.3 脚本命名与不可变性
 
 - 命名：`V<序号>__<小写下划线描述>.sql`（如 `V2__platform_execution_record.sql`）。
@@ -308,6 +320,12 @@ spring:
 3. 查历史表确认**没有被跳过的版本**：应为 `v0 BASELINE` + `v1` + `v2` + …，若只看到 `v1 BASELINE` 说明 V1 被跳过；
 4. **重启一次**，确认只做校验不重跑迁移，且 seed 幂等（行数不变）；
 5. 确认未污染同库其它应用的对象（它们的历史表行数不变）。
+
+> **换 PostgreSQL 基座镜像后必须刷新排序规则（Week 26 真机）**：容器镜像从 Debian 13 换到 Debian 12
+> （glibc 2.41 → 2.36）后，`pg_database.datcollversion` 与运行库不一致，连接告警且 `CREATE DATABASE`
+> 会因 **template1** 不匹配直接失败。处理：对每个库（含 `template1`）执行
+> `ALTER DATABASE <db> REFRESH COLLATION VERSION`，业务库再 `REINDEX DATABASE`；
+> 最后用「建库 → 删库」冒烟。演练库/临时库同理。
 
 #### 3.7.5 往已有环境的库上叠加新模块（pull 新代码后必查）
 
@@ -804,8 +822,8 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 23 | 患者分析 HITL + 长期记忆生命周期（V6）+ SSO 解绑/租户角色（V7） | docs/specs/week-23.md | notes/impl-logs/week-23.md | 批次 1/2 均完成：V6 云端 PASS=21；V7 云端 PASS=19；根聚合 798 全绿 |
 | 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
 | 24 | Agent 2 运营分析 + Agent 4 随访 + TD-01/02/03 收口（V8） | docs/specs/week-24.md | notes/impl-logs/week-24.md | 已关闭（根聚合 885 全绿；V8 H2 首次 `now at version v8`；云端发布待执行） |
-| 25 | 知识库 Agent 3 薄接入（包装 enterprise RAG，V9） | docs/specs/week-25.md | notes/impl-logs/week-25.md | 已关闭（根聚合 924 全绿；V9 H2 首次 `now at version v9`；云端 pgvector 与发布待执行） |
-| 26 | 上线收口周（pgvector/V6、V8/V9 真库、发布验收、TD-04/05） | docs/specs/week-26-candidates.md | — | 未开始（P0 只做已就绪项的线上执行，不写新功能） |
+| 25 | 知识库 Agent 3 薄接入（包装 enterprise RAG，V9） | docs/specs/week-25.md | notes/impl-logs/week-25.md | 已关闭（根聚合 924 全绿；V9 H2 首次 `now at version v9`；云端 pgvector 与发布已在第 26 周完成） |
+| 26 | 上线收口周（pgvector/V6、V8/V9 真库、发布验收、TD-04/05） | docs/specs/week-26.md | notes/impl-logs/week-26.md | 已关闭（924 全绿；pgvector 0.8.7 + V6 乱序补跑；V8/V9 真库；week24 23/0、week25 13/0、回归 8/0；演练 RTO≈2s；TTL null=0） |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
@@ -824,8 +842,9 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | SSO 解绑 / 租户级角色 | **第 23 周批次 2（已完成并上线）** | A1 运维令牌 + B2 按租户复制角色；V7 角色四表 + 执行记录 tenant；H2/真实 PostgreSQL 均通过；409/503 真机 PASS；见 `docs/specs/week-23.md` 第十节 |
 | Agent 2 运营分析 / Agent 4 随访 | **第 24 周（已完成/测试通过）** | 窗口统计口径 + 6 条异常规则 + 日报降级；随访计划规则 + V8 任务表 + 站内提醒 + 审批联动；见 `docs/specs/week-24.md` |
 | TD-01/02/03（Grafana 口径 / 审批事务与对账 / 待办积压告警） | **第 24 周（已完成）** | 失败率分母排除待审；`@Transactional` + 10 分钟对账；`approval_pending_count` Gauge + 告警 |
-| TD-04/05（回滚演练 / 旧记忆 TTL 回填） | **第 24 周交付脚本与手册（未执行）** | `deploy/app/rollback-drill.sh`、`ttl-backfill-week24.sql`；执行记录见 `docs/deploy/week-24-ops.md` 第 7/8 节 |
-| Agent 3 知识库 | **第 25 周（已完成代码与测试，待云端 pgvector）** | 包装 enterprise RAG：enterprise 内部只读检索端点 + 平台 V9 绑定 + `KnowledgeSearchTool` + `knowledge-qa` Agent（平台生成带引用答案）；pgvector 安装与 V6 补跑见 `docs/deploy/week-25-knowledge.md` |
+| TD-04/05（回滚演练 / 旧记忆 TTL 回填） | **第 26 周（已执行）** | 演练走容器版 `deploy/app/cloud-week26-drill.sh`（宿主机无 psql），两库 RTO≈2s；TTL 回填 `null=0`；记录见 `docs/deploy/week-26-closeout.md` 第 7/8 节 |
+| Agent 3 知识库 | **第 26 周（云端已可用）** | 包装 enterprise RAG：内部只读检索端点 + 平台 V9 绑定 + `KnowledgeSearchTool` + `knowledge-qa`（平台生成带引用答案）；pg16 换 pgvector 镜像、补 V6、真实问答 PASS；见 `docs/deploy/week-26-closeout.md` |
+| 云端 pgvector / V6 跳过 | **第 26 周（已完成）** | 官方 `pgvector/pgvector:pg16` + 同数据卷；换基座后必须刷新 collation（**含 template1**）；V6 需 `spring.flyway.out-of-order` 占位符（`.env` 是 properties 源，不做 relaxed binding） |
 
 ---
 

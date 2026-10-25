@@ -25,6 +25,12 @@ logs/
 │   └── test/            # 第 24 周根聚合测试（885 用例 + V8 首次迁移）
 ├── week-25/
 │   └── test/            # 第 25 周模块/根聚合测试（924 用例 + V9 首次迁移）
+├── week-26/
+│   ├── test/            # 收口前后根聚合 + 打包
+│   ├── migration/       # 巡检/备份/pgvector 切换/collation/V6/V8V9/演练/TTL/最终状态
+│   ├── deploy/          # 配置对齐、两模块发布、演示数据、故障现场
+│   ├── acceptance/      # week24 / week25 / 三 Agent 回归
+│   └── diagnose/        # 验收脚本与指标抓取缺陷的定位证据
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -80,10 +86,37 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-25/test/target-week25-full.log` | 根聚合 **924** 全绿（ai-core 90 / enterprise 65 / patient 21 / platform 648 / gateway 100），BUILD SUCCESS |
 | 同上（`10:27:42` 行） | V9 首次启动 `Successfully applied 9 migrations ... now at version v9` |
 
-> 云端 pgvector、V6 补跑与 `cloud-accept-week25.sh` 尚未执行；执行后补
-> `logs/week-25/deploy/`、`acceptance/`（步骤见 `docs/deploy/week-25-knowledge.md`）。
+> 云端 pgvector、V6 补跑与 `cloud-accept-week25.sh` 已在**第 26 周**执行完成，证据见下一节。
 
-## 5. 早期日志
+## 5. 第 26 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-26/test/target-week26-baseline.log` | 变更前基线（924 全绿；首次因沙箱 ACL 失败，属环境问题） |
+| `logs/week-26/test/target-week26-final.log` | 收口后根聚合 **924** 全绿，BUILD SUCCESS |
+| `logs/week-26/test/target-week26-package*.log` | enterprise / platform 打包成功 |
+| `logs/week-26/migration/target-week26-precheck*.log` | 变更前巡检：Flyway `1–7`、V6 跳过、无 pgvector、无令牌 |
+| `logs/week-26/migration/target-week26-backup.log` | 两库 dump + jar + .env 备份（170MB） |
+| `logs/week-26/migration/target-week26-pgvector-switch.log` | 换 `pgvector/pgvector:pg16`，数据行数不变，`CREATE EXTENSION` → 0.8.7 |
+| `logs/week-26/migration/target-week26-collation-fix.log` + `...template-collation.log` | 4 库刷新 + REINDEX；补刷 `template1` 后建库冒烟通过 |
+| `logs/week-26/migration/target-week26-v6-check.log` | V6 `[out of order]` 应用成功；`document_chunk` + hnsw；重启只校验 |
+| `logs/week-26/migration/target-week26-v8v9-check.log` | 平台 `applied 2 migrations ... now at version v9`；V8/V9 表与索引 |
+| `logs/week-26/deploy/target-week26-env.log` | 两侧令牌对齐（sha256 指纹）、Flyway/向量存储配置 |
+| `logs/week-26/deploy/target-week26-deploy-enterprise*.log` | 第一次发布失败并自动回滚；补 `out-of-order` 后发布成功 |
+| `logs/week-26/deploy/target-week26-deploy-platform.log` | 平台发布成功（健康 200） |
+| `logs/week-26/deploy/target-week26-seed.log` | 企业侧 `kb=1 doc=1 chunk=2`、1024 维 |
+| `logs/week-26/acceptance/target-week26-accept-week24c.log` | week24 验收 **PASS=23 FAIL=0**（修复后） |
+| `logs/week-26/acceptance/target-week26-accept-week25.log` | week25 验收 **PASS=13 FAIL=0**（hitCount=2、citations=2） |
+| `logs/week-26/acceptance/target-week26-regression.log` | 三 Agent + 404/429 回归 **PASS=8 FAIL=0** |
+| `logs/week-26/migration/target-week26-drill*.log` | TD-04 演练：两库 PASS，生产行数不变，RTO=2s |
+| `logs/week-26/migration/target-week26-ttl-backfill.log` | TD-05：5 行 NULL → 90 天，`null=0` |
+| `logs/week-26/migration/target-week26-final-state.log` | 收口后服务/迁移/数据/配置/资源快照 |
+| `logs/week-26/diagnose/target-week26-probe-*.log` | 4 个脚本缺陷的定位证据（pipefail/SIGPIPE、double-parse、指标、模板库） |
+
+> 归档约定：`logs/week-26/{test,migration,deploy,acceptance,diagnose}/`。
+> 本周日志含一次**数据库密码误打印**，该行已在本机替换为 `***REDACTED***`；`logs/` 不入库。
+
+## 6. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -93,7 +126,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 6. 维护规则
+## 7. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

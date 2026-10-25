@@ -103,9 +103,10 @@ if [ -n "$APPROVAL_ID" ]; then
   [ "$(field "$DEC" "d['data']['status']")" = "APPROVED" ] && ok "批准成功" || bad "批准失败"
   [ "$(field "$DEC" "d['data']['executionStatus']")" = "COMPLETED" ] && ok "执行 COMPLETED" || bad "执行状态异常"
   [ -n "$(field "$DEC" "d['data']['memoryId']")" ] && ok "写入记忆" || bad "未写记忆"
-  FT_COUNT="$(field "$DEC" "d['data']['followUpTaskIds']" | \
-    python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d))" 2>/dev/null)"
-  [ "${FT_COUNT:-0}" = "3" ] && ok "生成 3 条随访任务" || bad "随访任务数=$FT_COUNT"
+  # 注意：field 输出的是 Python repr（单引号），不能直接再喂给 json.load；
+  # 必须从原始响应体里取数组长度（Week 26 真机暴露的脚本缺陷）。
+  FT_COUNT="$(printf '%s' "$DEC" | python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d['data'].get('followUpTaskIds') or []))" 2>/dev/null)"
+  [ "${FT_COUNT:-0}" = "3" ] && ok "生成 3 条随访任务" || bad "随访任务数=${FT_COUNT:-0}"
   DUP="$(code -X POST "$BASE/api/v1/platform/approvals/$APPROVAL_ID/decision" \
     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{"approved":true}')"
   [ "$DUP" = "409" ] && ok "重复决策 409" || bad "重复决策=$DUP"
@@ -115,11 +116,22 @@ fi
 
 echo
 echo "=== 5) 观测（TD-03 Gauge）==="
-METRICS="$(curl -s "$BASE/actuator/prometheus")"
-echo "$METRICS" | grep -q '^approval_pending_count' && ok "approval_pending_count 已暴露" || bad "缺少 approval_pending_count"
-echo "$METRICS" | grep -q '^approval_pending_count' && \
-  echo "INFO  $(echo "$METRICS" | grep '^approval_pending_count' | head -1)"
-echo "$METRICS" | grep -q 'agent_run_count_total' && ok "agent_run_count_total 仍在" || bad "既有指标丢失"
+# 注意 1：抓取可能瞬时失败（响应 270KB + 同时在跑模型），失败重试一次并打印字节数。
+# 注意 2：**不能**用 `printf '%s' "$METRICS" | grep -q` —— 脚本开头开了 pipefail，
+#         grep -q 命中即退出会让 printf 收到 SIGPIPE(141)，管道整体被判失败，
+#         于是「指标明明存在」也会报 FAIL。Week 26 真机踩过（响应 > 64KB 管道缓冲时必现）。
+METRICS="$(curl -s --max-time 15 "$BASE/actuator/prometheus")"
+PROM_FILE="$(mktemp)"
+printf '%s' "$METRICS" > "$PROM_FILE"
+if ! grep -q '^agent_run_count_total' "$PROM_FILE"; then
+  sleep 2
+  curl -s --max-time 15 "$BASE/actuator/prometheus" > "$PROM_FILE"
+fi
+echo "INFO  prometheus bytes=$(wc -c < "$PROM_FILE")"
+grep -q '^approval_pending_count' "$PROM_FILE" && ok "approval_pending_count 已暴露" || bad "缺少 approval_pending_count"
+grep '^approval_pending_count' "$PROM_FILE" | head -1 | sed 's/^/INFO  /'
+grep -q '^agent_run_count_total' "$PROM_FILE" && ok "agent_run_count_total 仍在" || bad "既有指标丢失"
+rm -f "$PROM_FILE"
 
 echo
 echo "=== 结果：PASS=$PASS FAIL=$FAIL ==="

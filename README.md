@@ -964,12 +964,55 @@ Postman `docs/postman/week-25.postman_collection.json`
 实测：根聚合 **924** 用例全绿（ai-core 90 / enterprise 65 / patient 21 / platform 648 / gateway 100；
 Week 24 基线 885 → 924，新增 39）；V9 在 H2 首次启动 `now at version v9`。
 
-> **pgvector 前置（未在云端执行）**：云端 enterprise 库在 Week 22 跳过了 V6，`document_chunk` 目前
-> 不存在；代码已就绪，但检索会显式 502。按 `docs/deploy/week-25-knowledge.md` 装扩展 → 补 V6 →
-> 重新入库后，跑 `cloud-accept-week25.sh` 完成验收。过渡期可用 `RAG_VECTOR_STORE=memory` 仅联调（重启即丢）。
+> **pgvector 前置（已于第 26 周完成）**：云端 enterprise 库在 Week 22 跳过 V6，`document_chunk` 当时不存在。
+> 第 26 周已把 pg16 容器切到官方 pgvector 镜像、建 `vector` 扩展、补跑 V6，并重新入库演示文档；
+> `cloud-accept-week25.sh` 真机 **PASS=13 FAIL=0**。
 >
 > **后续周计划**：第 24/25 周「已就绪未执行」的发布、pgvector/V6、V8/V9 真库、TD-04/TD-05 已统一收敛到
-> [`docs/specs/week-26-candidates.md`](docs/specs/week-26-candidates.md)（第 26 周=上线收口周，不写新功能）。
+> [`docs/specs/week-26-candidates.md`](docs/specs/week-26-candidates.md)，并已在第 26 周执行完成。
+
+---
+
+# 第26周：上线收口（pgvector/V6 + V8/V9 真库 + 发布验收 + TD-04/05）
+
+
+完成（2026-10-25，**执行周：不写新业务功能**）：
+
+- [x] **pgvector**：pg16 容器由 `postgres:16` 切到官方 `pgvector/pgvector:pg16`（同数据卷、同网络/端口/env，
+      失败自动回滚旧镜像）；`CREATE EXTENSION vector` → **0.8.7**；旧数据行数不变
+- [x] **排序规则**：换基座镜像后 glibc 2.41→2.36，四个库 + **template1** 全部
+      `REFRESH COLLATION VERSION` + `REINDEX`（漏 template1 会让建库直接失败）
+- [x] **V6 真库**：`SPRING_FLYWAY_LOCATIONS` 恢复两目录 + 允许乱序 → `now at version v6`，
+      `document_chunk` + hnsw 索引就绪；重启只 `validated 7 migrations`
+- [x] **V8/V9 真库**：平台发布后 `applied 2 migrations ... now at version v9`；
+      `platform_followup_task` / `platform_knowledge_binding` 与唯一索引存在
+- [x] **内部令牌**：两侧 `ENTERPRISE_INTERNAL_TOKEN` / `PLATFORM_KNOWLEDGE_INTERNAL_TOKEN` 对齐（只记 sha256 指纹）
+- [x] **知识库真实问答**：企业侧 SSO admin 建库 + 入文档（2 切片、1024 维、真实 embedding）→
+      平台导入绑定 → `knowledge-qa` **COMPLETED**、`hitCount=2`、**citations=2**、`degraded=false`
+- [x] **验收全绿**：`cloud-accept-week24.sh` **PASS=23 FAIL=0**；`cloud-accept-week25.sh` **PASS=13 FAIL=0**；
+      三 Agent 回归 **PASS=8 FAIL=0**（patient-analysis / followup / knowledge-qa；限流第 6 次 429、未绑定 404）
+- [x] **TD-04 回滚演练（容器版）**：平台库/企业库恢复到 `*_drill` 均 PASS，生产 `platform_user` 前后一致，**RTO≈2s**
+- [x] **TD-05 旧记忆 TTL 回填**：5 条 `NULL` → `created_at+90d`，`null=0 / with_ttl=9`
+- [x] **配置缺陷修复（唯一代码改动）**：enterprise Flyway 增加
+      `out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}` —— `.env` 是 properties 源、不做 relaxed binding，
+      只写环境变量风格键不会生效
+
+交付：Spec `docs/specs/week-26.md` ｜ 运维手册 `docs/deploy/week-26-closeout.md` ｜
+脚本 `deploy/app/cloud-week26-{backup,pgvector,env,seed-knowledge,regression,drill,ttl-backfill}.sh` ｜
+验收脚本（修复）`deploy/app/cloud-accept-week24.sh`、`cloud-accept-week25.sh` ｜
+实现日志 `notes/impl-logs/week-26.md`
+
+实测：根聚合 **924** 用例全绿（Week 25 基线不变）；最终状态
+`platform active / enterprise active / gateway active`，
+迁移 `platform 1..9`、`enterprise 1,2,3,4,5,7,6`，`memory=9 / approval=6 / followup_task=17 / knowledge_binding=1`，
+内存可用 3.1GB。
+真机抓出并修复 **8 个只在真实环境暴露的问题**（properties 不做 relaxed binding、回滚只回 jar 不回 `.env`、
+`pipefail` + `grep -q` 大响应 SIGPIPE 假失败、Python repr 二次解析、enterprise 无 actuator 却按 actuator 判定、
+template1 collation 未刷新、宿主机无 psql 导致演练脚本不可用、巡检脚本打印密码），
+详见 `notes/impl-logs/week-26.md` 第 9 节。
+
+> **明确不做（本周范围外）**：新功能/新表/新依赖；知识库绑定对账、科室级授权、SSE、审批超时提醒
+> 等 P1/P2 项留待第 27 周及以后，见 `docs/specs/week-26-candidates.md` 第 2/3 节。
 
 ---
 

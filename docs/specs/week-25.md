@@ -187,7 +187,8 @@ flowchart LR
 - [x] **HTTP**：admin 导入 → operator 列表/问答 200 → 未绑定 404 → viewer 403 →
       operator 删除 403 → admin 删除 200 → 未登录 401（`PlatformKnowledgeHttpTest` 6）
 - [x] **V9（H2）**：首次启动 `Successfully applied 9 migrations ... now at version v9`；后续只校验
-- [ ] **V9（真实 PostgreSQL）**：**未执行**——与 pgvector/V6 一起安排运维窗口（见 `docs/deploy/week-25-knowledge.md`）
+- [x] **V9（真实 PostgreSQL）**：已于第 26 周执行（`now at version v9`；pgvector 0.8.7 + V6 补跑），
+      见 `docs/specs/week-26.md` 与 `notes/impl-logs/week-26.md`
 - [x] **零回退**：第 1–24 周用例全绿；根聚合 885 → **924**
 - [x] **文档**：Spec/架构/API/Postman/运维手册/实现日志/README/索引同步
 
@@ -199,13 +200,15 @@ flowchart LR
 | 平台模块测试 | **648**（Week 24 为 619，本周 +29） |
 | 根聚合测试 | **924**，Failures 0 / Errors 0，`BUILD SUCCESS` |
 | V9（H2） | `Successfully applied 9 migrations ... now at version v9` |
-| V9（PostgreSQL） | **未执行**（待运维窗口；pgvector 安装步骤与回滚见部署手册） |
+| V9（PostgreSQL） | 第 26 周已执行：`now at version v9`（pgvector 0.8.7 + V6 乱序补跑；`cloud-accept-week25.sh` PASS=13） |
 | 密钥 | 未新增真实令牌；`.env.example` 只给占位符；两侧令牌必须一致 |
 | 分层 | enterprise 内部端点只读、不调模型；平台领域无 HTTP 类型；SQL 只在适配器 |
 | 已知边界 | 依赖 enterprise 在线、绑定是快照、租户内全可见、云端 pgvector 未装 |
+| 云端执行 | 第 26 周完成：pgvector 0.8.7、V6 乱序补跑、两侧令牌对齐、真实问答 `hitCount=2 / citations=2` |
 
-> **未执行项已排期**：pgvector/V6、第 24/25 周发布、V8/V9 真库、TD-04/TD-05 统一收敛到
-> [`week-26-candidates.md`](week-26-candidates.md)（第 26 周 = 上线收口周）。
+> **后续**：pgvector/V6、第 24/25 周发布、V8/V9 真库、TD-04/TD-05 已在
+> [`week-26-candidates.md`](week-26-candidates.md) 收敛，并已由 [`week-26.md`](week-26.md) 执行完成。
+> 遗留的绑定对账、科室级授权等 P1/P2 项留待第 27 周及以后。
 
 ## 九、Open Questions
 

@@ -21,6 +21,11 @@ spring:
     # 默认仍是两个目录（行为不变）；某环境缺扩展时设
     #   SPRING_FLYWAY_LOCATIONS=classpath:db/migration
     locations: ${SPRING_FLYWAY_LOCATIONS:classpath:db/migration,classpath:db/postgresql}
+    # Week 26：云端 V6 曾被跳过、V7 已先行应用，补跑 V6 属于「乱序迁移」，
+    # 必须显式允许，否则启动即 Validate failed（Detected resolved migration not applied: 6）。
+    # 同样必须用占位符：.env 由 config.import 作为 properties 源加载，**不做 relaxed binding**，
+    # 写成 SPRING_FLYWAY_OUT_OF_ORDER 这个键不会被绑定到 spring.flyway.out-of-order（真机踩过）。
+    out-of-order: ${SPRING_FLYWAY_OUT_OF_ORDER:false}
     baseline-on-migrate: true
   servlet:
     multipart:
