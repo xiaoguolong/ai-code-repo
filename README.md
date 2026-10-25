@@ -1063,8 +1063,8 @@ H2 首次启动 `Successfully applied 10 migrations ... now at version v10`，�
 > 审批**不**自动拒绝/升级；对账**不**自动新增/删除绑定。触发条件见 `docs/specs/week-27.md` 第 1.2 节。
 
 > **后续排期（2026-10-25 定）**：第 28 周 TD-06 平台用户停用 + P2 类拆分；
-> **第 29 周最小可用前端**（本仓库 `apps/web`，Vue3 + Element Plus；平台 8 页 + 可选企业知识库页；
-> 同域 nginx；不做 SSE），计划见 `docs/specs/week-29-candidates.md`；科室授权 / SSE / 导出 / HIS-LIS / 前端 CI 顺延到第 30 周及以后。
+> **第 29 周最小可用前端**（本仓库 `apps/web`，Vue3 + **Ant Design Vue**；平台 8 页；
+> 企业知识库页与 SSE 顺延 30+；同域 nginx），计划见 `docs/specs/week-29-candidates.md`；科室授权 / SSE / 导出 / HIS-LIS / 前端 CI 顺延到第 30 周及以后。
 
 ---
 

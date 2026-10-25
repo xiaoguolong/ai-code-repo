@@ -232,5 +232,6 @@ management.metrics.distribution.maximum-expected-value.knowledge.search.duration
 - 加 2 条 Prometheus 规则（对账 failed 连续、MISSING 持续 > 0），按真实噪声调；
 - `MISSING` 批量清理 / `unbound` 明细仍等运营反馈；
 - Week 28 主题：TD-06 平台用户停用 + P2 类拆分；
-- **Week 29 主题：最小可用前端**（已定；平台 8 页 + 可选企业知识库页，同域 nginx；不做 SSE），
-  计划见 `docs/specs/week-29-candidates.md`；SSE/科室授权/导出/HIS-LIS 顺延 30+。
+- **Week 29 主题：最小可用前端**（已定；平台 8 页，不含企业页；`apps/web` + Vue3 + Ant Design Vue；
+  同域 nginx），计划见 `docs/specs/week-29-candidates.md`；
+  企业页/SSE/科室授权/导出/HIS-LIS 顺延 30+。
