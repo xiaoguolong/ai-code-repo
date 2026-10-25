@@ -35,6 +35,10 @@ public class PlatformRbacPermissionUpgradeInitializer implements ApplicationRunn
     /** 第 24 周新增给 operator 的授权：Agent 4 随访。 */
     static final Set<String> WEEK_24_AGENTS = Set.of("followup");
 
+    /** 第 25 周新增给 operator 的授权：Agent 3 知识库问答 + 检索工具。 */
+    static final Set<String> WEEK_25_AGENTS = Set.of("knowledge-qa");
+    static final Set<String> WEEK_25_TOOLS = Set.of("KnowledgeSearchTool");
+
     private final PlatformRolePort rolePort;
 
     public PlatformRbacPermissionUpgradeInitializer(PlatformRolePort rolePort) {
@@ -51,8 +55,9 @@ public class PlatformRbacPermissionUpgradeInitializer implements ApplicationRunn
     private void upgrade(PlatformRole role) {
         Set<String> existingAgents = role.allowedAgentKeys() == null ? Set.of() : role.allowedAgentKeys();
         Set<String> existingTools = role.allowedToolKeys() == null ? Set.of() : role.allowedToolKeys();
-        Set<String> agents = union(union(existingAgents, WEEK_21_AGENTS), WEEK_24_AGENTS);
-        Set<String> tools = union(existingTools, WEEK_21_TOOLS);
+        Set<String> agents = union(union(union(existingAgents, WEEK_21_AGENTS), WEEK_24_AGENTS),
+                WEEK_25_AGENTS);
+        Set<String> tools = union(union(existingTools, WEEK_21_TOOLS), WEEK_25_TOOLS);
         if (agents.equals(existingAgents) && tools.equals(existingTools)) {
             return;
         }

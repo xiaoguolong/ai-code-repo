@@ -10,6 +10,7 @@ import com.aicode.core.infrastructure.config.LlmProperties;
 import com.aicode.core.infrastructure.config.RagProperties;
 import com.aicode.enterprise.application.ChatRuntimeConfig;
 import com.aicode.enterprise.application.RagRuntimeConfig;
+import com.aicode.enterprise.infrastructure.internal.InternalProperties;
 import com.aicode.enterprise.infrastructure.sso.AdminProperties;
 import com.aicode.enterprise.infrastructure.sso.SsoProperties;
 import org.mybatis.spring.annotation.MapperScan;
@@ -24,7 +25,8 @@ import java.time.Clock;
  * 模型/Prompt/Embedding/向量/OCR/文件/鉴权等横切装配已收敛到 ai-core 的 {@code AiCoreConfiguration}。
  */
 @Configuration
-@EnableConfigurationProperties({ChatAppProperties.class, SsoProperties.class, AdminProperties.class})
+@EnableConfigurationProperties({
+        ChatAppProperties.class, SsoProperties.class, AdminProperties.class, InternalProperties.class})
 @MapperScan("com.aicode.enterprise.infrastructure.persistence.mapper")
 public class AppConfiguration {
 

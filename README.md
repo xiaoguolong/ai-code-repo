@@ -932,9 +932,41 @@ Postman `docs/postman/week-24.postman_collection.json`
 Week 23 基线 798 → 885，新增 87）；V8 在 H2（PostgreSQL 兼容模式）首次启动
 `Successfully applied 8 migrations ... now at version v8`，后续上下文只校验不重跑。
 
-> **未做项（明确，不在本周范围）**：Agent 3 知识库（避免与 enterprise RAG 重复建设）、
-> 云端 pgvector 迁移、HIS/LIS 真实数据、短信/邮件提醒、平台用户硬删（TD-06）、
+> **未做项（明确，不在本周范围）**：Agent 3 知识库（避免与 enterprise RAG 重复建设；已在第 25 周以
+> 「包装 enterprise RAG」落地）、云端 pgvector 迁移、HIS/LIS 真实数据、短信/邮件提醒、平台用户硬删（TD-06）、
 > 租户自建角色（B3）、前端/CI。决策与触发条件见 `docs/specs/week-24.md` 第九/十二节。
+
+---
+
+# 第25周：知识库 Agent 3（平台包装 enterprise RAG）
+
+
+完成（2026-10-25）：
+
+- [x] **enterprise 只读内部端点**：`GET /api/v1/internal/knowledge/bases`、
+      `POST /api/v1/internal/knowledge/search`；`X-Internal-Token` 守卫、未配置即 403（fail closed）
+- [x] **只代理检索、不代理问答**：切片回到平台，答案由平台模型生成——
+      保住 Guardrail / 审计 / 执行记录 / 成本归属（enterprise 问答接口会自己调模型、写自己的账）
+- [x] **平台知识库绑定（V9）**：`platform_knowledge_binding`（租户 + 企业知识库 + 企业归属人）；
+      导入幂等、租户隔离、admin 管理；`enterpriseUserId` 用管理员 SSO 映射快照，不要求逐用户映射
+- [x] **Agent 3（`knowledge-qa`）**：`KnowledgeSearchTool`（RBAC + Guardrail 参数白名单 + `tool.call` 观测）
+      → `RagContextAssembler` 组装上下文 → 平台模型 → **逐条引用**（documentId + 切片号 + 相似度）
+- [x] **安全语义**：未绑定 404（不调模型）；0 命中直接返回「未检索到」；模型不可用降级为原文摘录
+      （`degraded=true`）；enterprise 不可用/pgvector 缺失显式 502，**不伪装成「没有相关内容」**
+- [x] **权限**：viewer 403；operator 需 `knowledge-qa` + `KnowledgeSearchTool` 授权；绑定导入/删除仅 admin
+- [x] **RBAC/seed/Guardrail**：新增 Agent 与工具授权（含老库增量升级）、参数键白名单
+
+交付：Spec `docs/specs/week-25.md` ｜ 架构 `docs/architecture/week-25-architecture.md` ｜
+接口 `docs/api/week-25-api.md` ｜ 部署手册 `docs/deploy/week-25-knowledge.md` ｜
+验收脚本 `deploy/app/cloud-accept-week25.sh` ｜ 实现日志 `notes/impl-logs/week-25.md` ｜
+Postman `docs/postman/week-25.postman_collection.json`
+
+实测：根聚合 **924** 用例全绿（ai-core 90 / enterprise 65 / patient 21 / platform 648 / gateway 100；
+Week 24 基线 885 → 924，新增 39）；V9 在 H2 首次启动 `now at version v9`。
+
+> **pgvector 前置（未在云端执行）**：云端 enterprise 库在 Week 22 跳过了 V6，`document_chunk` 目前
+> 不存在；代码已就绪，但检索会显式 502。按 `docs/deploy/week-25-knowledge.md` 装扩展 → 补 V6 →
+> 重新入库后，跑 `cloud-accept-week25.sh` 完成验收。过渡期可用 `RAG_VECTOR_STORE=memory` 仅联调（重启即丢）。
 
 ---
 
@@ -981,14 +1013,12 @@ Week 23 基线 798 → 885，新增 87）；V8 在 H2（PostgreSQL 兼容模式�
 # Agent 3：知识库Agent
 
 
-完成：
+完成（Week 25 交付，平台 `knowledge-qa`）：
 
-- [ ] 医疗文档管理
-- [ ] RAG问答
-- [ ] 权限控制
-
-> 第 24 周明确**不做**：enterprise 已有 RAG，平台再建一套会出现两套知识库/两套权限。
-> 先定「平台原生 vs 包装 enterprise」形态（见 `docs/specs/week-24.md` Open Questions）。
+- [x] 医疗文档管理（**复用 enterprise**：上传/解析/OCR/切片/向量，平台不重复建设）
+- [x] RAG问答（平台检索 enterprise 切片 → 平台模型生成**带引用**答案；0 命中不调模型、模型失败降级摘录）
+- [x] 权限控制（租户绑定 V9 + Agent/Tool RBAC + Guardrail 参数白名单 + 租户隔离双重校验）
+- [x] 审计/可观测（走平台执行记录、`agent.run` / `tool.call`、审计与指标）
 
 
 ---
@@ -1011,10 +1041,10 @@ Week 23 基线 798 → 885，新增 87）；V8 在 H2（PostgreSQL 兼容模式�
 
 ## AI基础
 
-- [ ] LLM
-- [ ] Prompt
-- [ ] Embedding
-- [ ] RAG
+- [x] LLM
+- [x] Prompt
+- [x] Embedding
+- [x] RAG（Week 3 自建 pgvector 知识库；Week 25 平台以「包装 enterprise RAG + 平台生成引用答案」接入 Agent）
 
 
 ## Agent能力

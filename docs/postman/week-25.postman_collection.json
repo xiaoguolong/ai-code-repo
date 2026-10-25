@@ -1,0 +1,279 @@
+{
+  "info": {
+    "name": "Week 25 - 知识库 Agent 3（包装 enterprise RAG）",
+    "description": "平台 8084 + enterprise 8081。前置：两侧内部令牌一致、enterprise 已装 pgvector 并补跑 V6、admin 已完成 SSO 建链且企业账号下有知识库。先执行 01/02/03 登录，再按 10→15 顺序执行。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "enterpriseBaseUrl", "value": "http://127.0.0.1:8081" },
+    { "key": "adminToken", "value": "" },
+    { "key": "platformToken", "value": "" },
+    { "key": "viewerToken", "value": "" },
+    { "key": "knowledgeBaseId", "value": "" },
+    { "key": "bindingId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - 登录 admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": { "mode": "raw", "raw": "{\"username\":\"admin\",\"password\":\"admin123\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - 登录 operator",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": { "mode": "raw", "raw": "{\"username\":\"operator\",\"password\":\"operator123\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('platformToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - 登录 viewer",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": { "mode": "raw", "raw": "{\"username\":\"viewer\",\"password\":\"viewer123\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('viewerToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - 导入知识库（admin）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings/import",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings", "import"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 至少一条绑定', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json().data;",
+              "  pm.expect(data.items).to.be.an('array').that.is.not.empty;",
+              "  pm.collectionVariables.set('bindingId', data.items[0].bindingId);",
+              "  pm.collectionVariables.set('knowledgeBaseId', data.items[0].knowledgeBaseId);",
+              "  console.log('imported=', data.imported, 'updated=', data.updated);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - 列出本租户绑定（operator）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{platformToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + 非空', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json().data;",
+              "  pm.expect(data.total).to.be.at.least(1);",
+              "  pm.collectionVariables.set('bindingId', data.items[0].bindingId);",
+              "  pm.collectionVariables.set('knowledgeBaseId', data.items[0].knowledgeBaseId);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - 知识库问答（operator）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/knowledge-qa/runs",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "knowledge-qa", "runs"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": {\n    \"knowledgeBaseId\": {{knowledgeBaseId}},\n    \"question\": \"这份资料里最关键的随访要求是什么？\"\n  }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + COMPLETED + 带引用', function () {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json().data;",
+              "  pm.expect(data.status).to.eql('COMPLETED');",
+              "  const output = JSON.parse(data.outputJson);",
+              "  pm.expect(output.answer).to.be.a('string').that.is.not.empty;",
+              "  pm.expect(output.citations).to.be.an('array');",
+              "  console.log('hitCount=', output.hitCount, 'degraded=', output.degraded);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - 未绑定知识库 404",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{platformToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/knowledge-qa/runs",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "knowledge-qa", "runs"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": { \"knowledgeBaseId\": 999999, \"question\": \"q\" }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('404 PLATFORM_NOT_FOUND', function () {",
+              "  pm.response.to.have.status(404);",
+              "  pm.expect(pm.response.json().code).to.eql('PLATFORM_NOT_FOUND');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - viewer 调问答 403",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{viewerToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/knowledge-qa/runs",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "knowledge-qa", "runs"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"input\": { \"knowledgeBaseId\": {{knowledgeBaseId}}, \"question\": \"q\" }\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('403 FORBIDDEN', function () {",
+              "  pm.response.to.have.status(403);",
+              "  pm.expect(pm.response.json().code).to.eql('FORBIDDEN');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - 删除绑定（admin，可选）",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings/{{bindingId}}",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings", "{{bindingId}}"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

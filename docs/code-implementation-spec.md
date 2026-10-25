@@ -804,6 +804,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 23 | 患者分析 HITL + 长期记忆生命周期（V6）+ SSO 解绑/租户角色（V7） | docs/specs/week-23.md | notes/impl-logs/week-23.md | 批次 1/2 均完成：V6 云端 PASS=21；V7 云端 PASS=19；根聚合 798 全绿 |
 | 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
 | 24 | Agent 2 运营分析 + Agent 4 随访 + TD-01/02/03 收口（V8） | docs/specs/week-24.md | notes/impl-logs/week-24.md | 已关闭（根聚合 885 全绿；V8 H2 首次 `now at version v8`；云端发布待执行） |
+| 25 | 知识库 Agent 3 薄接入（包装 enterprise RAG，V9） | docs/specs/week-25.md | notes/impl-logs/week-25.md | 已关闭（根聚合 924 全绿；V9 H2 首次 `now at version v9`；云端 pgvector 与发布待执行） |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
@@ -823,7 +824,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | Agent 2 运营分析 / Agent 4 随访 | **第 24 周（已完成/测试通过）** | 窗口统计口径 + 6 条异常规则 + 日报降级；随访计划规则 + V8 任务表 + 站内提醒 + 审批联动；见 `docs/specs/week-24.md` |
 | TD-01/02/03（Grafana 口径 / 审批事务与对账 / 待办积压告警） | **第 24 周（已完成）** | 失败率分母排除待审；`@Transactional` + 10 分钟对账；`approval_pending_count` Gauge + 告警 |
 | TD-04/05（回滚演练 / 旧记忆 TTL 回填） | **第 24 周交付脚本与手册（未执行）** | `deploy/app/rollback-drill.sh`、`ttl-backfill-week24.sql`；执行记录见 `docs/deploy/week-24-ops.md` 第 7/8 节 |
-| Agent 3 知识库 | **未排期（需产品决策）** | 避免与 enterprise RAG 重复建设；形态确认后再开，见 `docs/specs/week-24.md` 第九节 |
+| Agent 3 知识库 | **第 25 周（已完成代码与测试，待云端 pgvector）** | 包装 enterprise RAG：enterprise 内部只读检索端点 + 平台 V9 绑定 + `KnowledgeSearchTool` + `knowledge-qa` Agent（平台生成带引用答案）；pgvector 安装与 V6 补跑见 `docs/deploy/week-25-knowledge.md` |
 
 ---
 

@@ -24,7 +24,8 @@ import java.time.Clock;
         PlatformMemoryLifecycleProperties.class,
         PlatformOperationsProperties.class,
         PlatformFollowUpProperties.class,
-        PlatformApprovalProperties.class
+        PlatformApprovalProperties.class,
+        PlatformKnowledgeProperties.class
 })
 public class PlatformConfiguration {
 

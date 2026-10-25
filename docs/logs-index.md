@@ -21,6 +21,10 @@ logs/
 │   ├── migration/       # 迁移前巡检、迁移后版本/角色/tenant 校验
 │   ├── acceptance/      # 云端 HITL / 批次 2 / 回归验收
 │   └── commit/          # 提交输出
+├── week-24/
+│   └── test/            # 第 24 周根聚合测试（885 用例 + V8 首次迁移）
+├── week-25/
+│   └── test/            # 第 25 周模块/根聚合测试（924 用例 + V9 首次迁移）
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -69,7 +73,17 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 云端发布（V8 真库 + `cloud-accept-week24.sh`）尚未执行；执行后按
 > `docs/deploy/week-24-ops.md` 第 2–3 节补 `logs/week-24/deploy/`、`migration/`、`acceptance/`。
 
-## 4. 早期日志
+## 4. 第 25 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-25/test/target-week25-full.log` | 根聚合 **924** 全绿（ai-core 90 / enterprise 65 / patient 21 / platform 648 / gateway 100），BUILD SUCCESS |
+| 同上（`10:27:42` 行） | V9 首次启动 `Successfully applied 9 migrations ... now at version v9` |
+
+> 云端 pgvector、V6 补跑与 `cloud-accept-week25.sh` 尚未执行；执行后补
+> `logs/week-25/deploy/`、`acceptance/`（步骤见 `docs/deploy/week-25-knowledge.md`）。
+
+## 5. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -79,7 +93,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 5. 维护规则
+## 6. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

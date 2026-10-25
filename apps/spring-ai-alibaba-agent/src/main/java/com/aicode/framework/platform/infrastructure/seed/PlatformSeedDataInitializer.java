@@ -68,6 +68,10 @@ public class PlatformSeedDataInitializer implements ApplicationRunner {
                 "followup", "随访 Agent",
                 "Week 24 Agent 4：规则随访计划 + 任务落库 + 站内提醒 + 审批联动",
                 AgentType.FOLLOW_UP, PlatformAgentConfig.defaults(), now));
+        agentRegistryPort.save(new PlatformAgentDefinition(
+                "knowledge-qa", "知识库问答 Agent",
+                "Week 25 Agent 3：检索租户绑定的企业知识库 + 平台生成带引用的答案",
+                AgentType.KNOWLEDGE_QA, PlatformAgentConfig.defaults(), now));
     }
 
     private void seedTools() {
@@ -78,6 +82,9 @@ public class PlatformSeedDataInitializer implements ApplicationRunner {
                 "HealthMetricTool", "HealthMetricTool", "按患者编号查询健康指标", true, now));
         toolCatalogPort.save(new PlatformToolDefinition(
                 "ReportLookupTool", "ReportLookupTool", "按患者编号查询检查/检验报告列表", true, now));
+        toolCatalogPort.save(new PlatformToolDefinition(
+                "KnowledgeSearchTool", "KnowledgeSearchTool",
+                "在租户绑定的企业知识库中检索相关切片（Week 25，只读）", true, now));
     }
 
     private void seedWorkflows() {

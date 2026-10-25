@@ -13,6 +13,10 @@ import com.aicode.framework.followup.domain.model.FollowUpPlanItem;
 import com.aicode.framework.followup.domain.model.FollowUpPlanResult;
 import com.aicode.framework.followup.domain.model.FollowUpStep;
 import com.aicode.framework.followup.domain.model.FollowUpTask;
+import com.aicode.framework.knowledge.application.KnowledgeQaUseCase;
+import com.aicode.framework.knowledge.domain.model.KnowledgeAnswer;
+import com.aicode.framework.knowledge.domain.model.KnowledgeCitation;
+import com.aicode.framework.knowledge.domain.model.KnowledgeStep;
 import com.aicode.framework.multiagent.application.MedicalAssistantUseCase;
 import com.aicode.framework.multiagent.domain.model.MedicalAssistantResult;
 import com.aicode.framework.operations.application.OperationsAnalysisUseCase;
@@ -56,6 +60,7 @@ public class PlatformAgentRunner {
     private final PlatformRunScopePort runScopePort;
     private final OperationsAnalysisUseCase operationsAnalysisUseCase;
     private final FollowUpTaskUseCase followUpTaskUseCase;
+    private final KnowledgeQaUseCase knowledgeQaUseCase;
 
     /**
      * 兼容 Week 8–20 的三参构造器（不含患者分析能力，供既有单测使用）。
@@ -70,11 +75,11 @@ public class PlatformAgentRunner {
             MedicalAssistantUseCase medicalAssistantUseCase
     ) {
         this(frameworkAgentUseCase, patientRiskUseCase, medicalAssistantUseCase,
-                null, PlatformRunScopePort.NONE, null, null);
+                null, PlatformRunScopePort.NONE, null, null, null);
     }
 
     /**
-     * 兼容 Week 21–23 的五参构造器（不含运营分析/随访，供既有单测使用）。
+     * 兼容 Week 21–23 的五参构造器（不含运营分析/随访/知识库，供既有单测使用）。
      *
      * @param frameworkAgentUseCase   Week 8 ReAct
      * @param patientRiskUseCase      Week 9-10 Workflow
@@ -90,7 +95,7 @@ public class PlatformAgentRunner {
             PlatformRunScopePort runScopePort
     ) {
         this(frameworkAgentUseCase, patientRiskUseCase, medicalAssistantUseCase,
-                patientAnalysisUseCase, runScopePort, null, null);
+                patientAnalysisUseCase, runScopePort, null, null, null);
     }
 
     /**
@@ -106,6 +111,7 @@ public class PlatformAgentRunner {
      * @param runScopePort             当前 Run 访问范围
      * @param operationsAnalysisUseCase Week 24 运营分析
      * @param followUpTaskUseCase      Week 24 随访任务
+     * @param knowledgeQaUseCase       Week 25 知识库问答
      */
     @Autowired
     public PlatformAgentRunner(
@@ -115,7 +121,8 @@ public class PlatformAgentRunner {
             PatientAnalysisUseCase patientAnalysisUseCase,
             PlatformRunScopePort runScopePort,
             OperationsAnalysisUseCase operationsAnalysisUseCase,
-            FollowUpTaskUseCase followUpTaskUseCase
+            FollowUpTaskUseCase followUpTaskUseCase,
+            KnowledgeQaUseCase knowledgeQaUseCase
     ) {
         this.frameworkAgentUseCase = frameworkAgentUseCase;
         this.patientRiskUseCase = patientRiskUseCase;
@@ -124,6 +131,7 @@ public class PlatformAgentRunner {
         this.runScopePort = runScopePort;
         this.operationsAnalysisUseCase = operationsAnalysisUseCase;
         this.followUpTaskUseCase = followUpTaskUseCase;
+        this.knowledgeQaUseCase = knowledgeQaUseCase;
     }
 
     /**
@@ -142,6 +150,7 @@ public class PlatformAgentRunner {
             case PATIENT_ANALYSIS -> runPatientAnalysis(input);
             case OPERATIONS_ANALYSIS -> runOperationsAnalysis(input);
             case FOLLOW_UP -> runFollowUp(input);
+            case KNOWLEDGE_QA -> runKnowledgeQa(input);
         };
     }
 
@@ -287,6 +296,61 @@ public class PlatformAgentRunner {
         return output;
     }
 
+    /**
+     * Agent 3（Week 25）：知识库问答。
+     *
+     * <p>知识库是租户资源，必须有 Platform Run 范围（租户+用户）才能查绑定；
+     * 没有范围说明是直连 Run，直接显式失败而不是猜一个租户。</p>
+     */
+    private PlatformRunOutput runKnowledgeQa(Map<String, Object> input) {
+        if (knowledgeQaUseCase == null) {
+            throw new IllegalStateException("knowledge qa use case is not configured");
+        }
+        long knowledgeBaseId = requireLong(input, "knowledgeBaseId");
+        String question = requireString(input, "question");
+        PlatformMemoryScope scope = runScopePort.currentScope()
+                .orElseThrow(() -> new IllegalStateException("knowledge qa requires platform run scope"));
+        KnowledgeAnswer answer = knowledgeQaUseCase.run(scope.userId(), knowledgeBaseId, question);
+
+        Map<String, Object> output = toOutput(answer);
+        String task = optionalString(input, "task");
+        output.put("task", task == null ? "知识库问答：" + question : task);
+        return new PlatformRunOutput(output, answer.usage(), answer.model());
+    }
+
+    private Map<String, Object> toOutput(KnowledgeAnswer answer) {
+        List<Map<String, Object>> citations = new ArrayList<>();
+        for (KnowledgeCitation citation : answer.citations()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("documentId", citation.documentId());
+            item.put("documentName", citation.documentName());
+            item.put("chunkIndex", citation.chunkIndex());
+            item.put("content", citation.content());
+            item.put("score", citation.score());
+            citations.add(item);
+        }
+        List<Map<String, Object>> steps = new ArrayList<>();
+        for (KnowledgeStep step : answer.steps()) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("stepNo", step.stepNo());
+            item.put("step", step.step());
+            item.put("summary", step.summary());
+            steps.add(item);
+        }
+
+        Map<String, Object> output = new LinkedHashMap<>();
+        output.put("knowledgeBaseId", answer.knowledgeBaseId());
+        output.put("knowledgeBaseName", answer.knowledgeBaseName());
+        output.put("question", answer.question());
+        output.put("answer", answer.answer());
+        output.put("citations", citations);
+        output.put("hitCount", answer.hitCount());
+        output.put("degraded", answer.degraded());
+        output.put("steps", steps);
+        output.put("totalSteps", steps.size());
+        return output;
+    }
+
     private Map<String, Object> toOutput(OperationsDailyReport report) {
         OperationsSummary summary = report.summary();
         Map<String, Object> summaryMap = new LinkedHashMap<>();
@@ -427,6 +491,30 @@ public class PlatformAgentRunner {
             return Integer.parseInt(value.toString().trim());
         } catch (NumberFormatException ex) {
             throw new InvalidChatRequestException(key + " must be an integer");
+        }
+    }
+
+    /**
+     * 必填长整数入参（Agent 3 的 knowledgeBaseId）：接受 Number 或数字字符串。
+     *
+     * @param input 入参
+     * @param key   键
+     * @return 正数
+     */
+    private long requireLong(Map<String, Object> input, String key) {
+        Object value = input == null ? null : input.get(key);
+        if (value == null || value.toString().trim().isEmpty()) {
+            throw new InvalidChatRequestException(key + " must not be blank");
+        }
+        try {
+            long parsed = value instanceof Number number
+                    ? number.longValue() : Long.parseLong(value.toString().trim());
+            if (parsed <= 0) {
+                throw new InvalidChatRequestException(key + " must be positive");
+            }
+            return parsed;
+        } catch (NumberFormatException ex) {
+            throw new InvalidChatRequestException(key + " must be a number");
         }
     }
 }

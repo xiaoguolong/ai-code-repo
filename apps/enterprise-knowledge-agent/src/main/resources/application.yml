@@ -103,4 +103,8 @@ sso:
 enterprise:
   admin:
     token: ${ENTERPRISE_ADMIN_TOKEN:}
+  # Week 25：平台侧内部只读端点（检索/知识库清单）。
+  # 必须与平台 .env 的 PLATFORM_KNOWLEDGE_INTERNAL_TOKEN 一致；未配置时内部端点一律 403。
+  internal:
+    token: ${ENTERPRISE_INTERNAL_TOKEN:}
 

@@ -128,6 +128,16 @@ platform:
       enabled: ${PLATFORM_APPROVAL_RECONCILIATION_ENABLED:true}
       cron: "${PLATFORM_APPROVAL_RECONCILIATION_CRON:0 */10 * * * *}"
       limit: ${PLATFORM_APPROVAL_RECONCILIATION_LIMIT:200}
+  # Week 25：知识库 Agent 3（平台不存正文，检索走 enterprise 内部只读端点）。
+  # internal-token 必须与 enterprise 的 ENTERPRISE_INTERNAL_TOKEN 一致；未配置时检索显式失败。
+  knowledge:
+    enabled: ${PLATFORM_KNOWLEDGE_ENABLED:true}
+    base-url: ${PLATFORM_KNOWLEDGE_BASE_URL:http://127.0.0.1:8081}
+    internal-token: ${PLATFORM_KNOWLEDGE_INTERNAL_TOKEN:}
+    timeout-ms: ${PLATFORM_KNOWLEDGE_TIMEOUT_MS:5000}
+    default-top-k: ${PLATFORM_KNOWLEDGE_DEFAULT_TOP_K:4}
+    max-top-k: ${PLATFORM_KNOWLEDGE_MAX_TOP_K:10}
+    max-question-chars: ${PLATFORM_KNOWLEDGE_MAX_QUESTION_CHARS:4000}
 
 # Week 21：记忆向量化（平台不做 RAG，维度与 embedding 模型保持一致）。
 # 默认 hashing 为离线确定性实现；换真模型时 provider=openai + base-url/api-key/model 均从环境变量注入。
@@ -276,6 +286,10 @@ guardrail:
   allowed-tool-argument-keys:
     - patientId
     - task
+    # Week 25：知识库检索工具的参数（平台侧工具链会校验参数键白名单）
+    - knowledgeBaseId
+    - query
+    - topK
 
 # Agent / Workflow / Platform 关键步骤日志（控制台可 grep "[platform]" "[multi-agent]" "[workflow]" "[framework-agent]"）
 # 日志格式强制带 traceId（%X{traceId}），与响应头 X-Trace-Id 一致，便于全链路排查。
