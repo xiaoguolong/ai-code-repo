@@ -5,12 +5,14 @@ describe('permissions', () => {
   it('admin sees user management', () => {
     const menu = menuForRole('admin');
     expect(menu.map((item) => item.key)).toContain('/users');
+    expect(menu.map((item) => item.key)).toContain('/ent/knowledge');
     expect(menu.map((item) => item.key)).toContain('/agents/patient-analysis');
   });
 
-  it('operator does not see user management but can run agents', () => {
+  it('operator does not see user management or enterprise KB', () => {
     const menu = menuForRole('operator');
     expect(menu.map((item) => item.key)).not.toContain('/users');
+    expect(menu.map((item) => item.key)).not.toContain('/ent/knowledge');
     expect(canRunAgents('operator')).toBe(true);
     expect(runDeniedReason('operator')).toBeNull();
   });

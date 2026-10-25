@@ -27,7 +27,7 @@ export default defineConfig({
         target: platformTarget,
         changeOrigin: false
       },
-      '/ent': {
+      '/ent/api': {
         target: enterpriseTarget,
         changeOrigin: false,
         rewrite: (path) => path.replace(/^\/ent/, '')

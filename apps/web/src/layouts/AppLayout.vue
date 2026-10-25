@@ -7,6 +7,7 @@ import {
   BellOutlined,
   BookOutlined,
   CheckSquareOutlined,
+  CloudServerOutlined,
   DashboardOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
@@ -51,6 +52,7 @@ const iconMap: Record<string, unknown> = {
   '/approvals': AuditOutlined,
   '/followups': CheckSquareOutlined,
   '/knowledge': DatabaseOutlined,
+  '/ent/knowledge': CloudServerOutlined,
   '/users': TeamOutlined
 };
 

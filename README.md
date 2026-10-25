@@ -1127,10 +1127,38 @@ H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，�
 后端本周未改 Java，沿用 Week 28 根聚合 **990** 全绿。截图见 `logs/week-29/`。
 
 > **入口**：`http://<server.conf 的 HOST>/`（HTTP，未上 TLS/域名）。登录后按角色看到不同菜单；
-> 企业知识库页与 SSE 未做，第 30 周补。
+> 企业知识库页第 30 周已补；SSE 仍在 ADR 顺延。
 
-> **明确不做**：企业知识库管理页、SSE 流式、TLS/域名、前端 CI/E2E 矩阵；token 存 sessionStorage
+> **明确不做**：SSE 流式、TLS/域名、前端 CI/E2E 矩阵；token 存 sessionStorage
 > （XSS 风险已登记，生产可换 HttpOnly Cookie）。
+
+---
+
+# 第30周：企业知识库页 + 前端 CI/冒烟
+
+完成（2026-10-25）：
+
+- [x] **企业知识库页** `/ent/knowledge`（仅 admin）：企业登录（SSO）→ 建库 → 纯文本入库 →
+      文档列表/删除；企业 token 独立存 `aicode_enterprise_token`，走 **`satoken` 头**，
+      401 只清企业会话，不影响平台登录
+- [x] **前端一键 CI** `tools/web-ci.ps1`：install（可跳过）→ typecheck → Vitest → build →
+      可选 Playwright 冒烟；PowerShell 5.1/7 均可，失败即退出
+- [x] **企业页冒烟**：建 `smoke-*` 临时库 → 入库 → 列文档 → 删文档 → 删库，
+      `finally` 清理；**PASS=9 FAIL=0**（含企业 401 隔离/平台会话仍在），既有库/文档未动（仍 1 库 / 1 文档）
+- [x] **平台回归**：部署版 **PASS=8 FAIL=0**（含 viewer 直访企业页被拦回工作台）
+- [x] **nginx 修复**：`/ent/` 曾把 SPA 路由也反代导致 500；改为只代理 `/ent/api/`，
+      `/ent/knowledge` 走静态 fallback；云端 `/ent/knowledge` 200
+- [x] **SSE ADR**：`docs/adr/0001-sse-deferred.md`（`ChatModelPort` 同步，真流式需新契约+适配器+SSE 端点+reader，顺延第 31 周）
+
+交付：Spec `docs/specs/week-30.md` ｜ 架构 `docs/architecture/week-30-architecture.md` ｜
+接口 `docs/api/week-30-api.md` ｜ 实现日志 `notes/impl-logs/week-30.md` ｜ CI `tools/web-ci.ps1`
+
+实测：CI typecheck 0 / Vitest 11 / build 成功；企业页 **9/9**；平台 **8/8**；云端入口 200。
+后端本周无 Java 改动，沿用 Week 28 根聚合 **990**。
+
+> **入口**：`http://HOST/ent/knowledge`（admin；企业账号同平台 SSO）。
+
+> **明确不做**：SSE、PDF/OCR 页面、知识库编辑/切片预览、租户级授权、TLS/域名、CI 平台接入。
 
 ---
 

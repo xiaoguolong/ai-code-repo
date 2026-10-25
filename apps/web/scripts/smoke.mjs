@@ -88,6 +88,9 @@ record('viewer 菜单不含用户管理', viewerMenu === 0);
 await viewer.goto(`${BASE}/agents/patient-analysis`, { waitUntil: 'domcontentloaded' });
 await viewer.waitForURL(`${BASE}/`, { timeout: 15000 });
 record('viewer 直访 Agent 路由被拦截', true);
+await viewer.goto(`${BASE}/ent/knowledge`, { waitUntil: 'domcontentloaded' });
+await viewer.waitForURL(`${BASE}/`, { timeout: 15000 });
+record('viewer 直访企业知识库被拦截', true);
 await viewer.screenshot({ path: `${LOG_DIR}/smoke-06-viewer.png`, fullPage: true });
 
 await viewerContext.close();

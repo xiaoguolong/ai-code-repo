@@ -17,6 +17,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { key: '/approvals', label: '审批' },
   { key: '/followups', label: '随访任务' },
   { key: '/knowledge', label: '知识库' },
+  { key: '/ent/knowledge', label: '企业知识库', roles: ['admin'] },
   { key: '/users', label: '用户管理', roles: ['admin'] }
 ];
 

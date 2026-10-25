@@ -56,6 +56,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '知识库' }
       },
       {
+        path: 'ent/knowledge',
+        name: 'enterprise-knowledge',
+        component: () => import('@/views/EnterpriseKnowledgeView.vue'),
+        meta: { title: '企业知识库', roles: ['admin'] }
+      },
+      {
         path: 'users',
         name: 'users',
         component: () => import('@/views/UsersView.vue'),

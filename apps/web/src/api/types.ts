@@ -1,4 +1,4 @@
-/** 后端统一响应信封（docs/api/week-16-api.md） */
+/** 鍚庣缁熶竴鍝嶅簲淇″皝锛坉ocs/api/week-16-api.md锛?*/
 export interface ApiEnvelope<T> {
   code: string;
   message: string;
@@ -223,4 +223,36 @@ export interface PlatformUserItem {
 export interface PlatformUserList {
   total: number;
   items: PlatformUserItem[];
+}
+
+/* ---------- enterprise锛圵eek 30锛岀嫭绔?token锛歴atoken锛?---------- */
+
+export interface EnterpriseUser {
+  id: number;
+  username: string;
+}
+
+export interface EnterpriseLoginResponse {
+  token: string;
+  user: EnterpriseUser;
+}
+
+export interface EnterpriseKnowledgeBase {
+  id: number;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+
+export interface EnterpriseDocument {
+  documentId: string;
+  name: string;
+  chunkCount: number;
+  createdAt: string;
+}
+
+export interface EnterpriseIngestResult {
+  documentId: string;
+  name: string;
+  chunkCount: number;
 }

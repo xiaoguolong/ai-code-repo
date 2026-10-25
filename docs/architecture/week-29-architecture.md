@@ -8,7 +8,7 @@
 flowchart LR
     B["浏览器"] -->|"http://HOST/"| N["nginx 1.18<br/>/opt/ai-code/web"]
     N -->|"/api/ 反代"| P["平台 8084"]
-    N -.->|"/ent/（第30周）"| E["enterprise 8081"]
+    N -.->|"/ent/api/（第30周）"| E["enterprise 8081"]
     N --> S["静态 dist<br/>index.html + assets"]
     P --> DB[("PostgreSQL")]
 ```

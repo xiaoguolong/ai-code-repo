@@ -41,6 +41,10 @@ logs/
 │   └── acceptance/      # 停用/恢复/重启 seed/审计
 ├── week-29/             # 前端构建/单测/UI 冒烟/nginx 安装/部署
 │   └── deployed/        # 云端部署版冒烟截图
+├── week-30/
+│   ├── ci/              # tools/web-ci.ps1 日志
+│   ├── enterprise/      # 企业页冒烟与截图
+│   └── platform/        # 平台部署版回归
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -176,7 +180,21 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 云端入口 `http://HOST/` 实测 200；仅 HTTP，TLS/域名未做。
 > 后端本周未改 Java，沿用 Week 28 根聚合 **990**。
 
-## 9. 早期日志
+## 9. 第 30 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-30/ci-console.log`、`ci/web-ci-*.log` | 一键 CI：typecheck 0 / Vitest 11 / build 成功 |
+| `logs/week-30/ui-smoke-enterprise.log` | 企业页 **PASS=9 FAIL=0**（建库/入库/删文档/删库/401 隔离） |
+| `logs/week-30/enterprise/enterprise-page.png` | 企业知识库页布局 |
+| `logs/week-30/ui-smoke-platform.log` | 平台部署版回归 **PASS=8 FAIL=0**（含 viewer 企业页拦截） |
+| `logs/week-30/target-week30-deploy-web.log` | 企业页构建部署、平台 health 200 |
+| `logs/week-30/target-week30-nginx-reload.log` | nginx 改为只代理 `/ent/api/` |
+
+> 企业冒烟临时库已清理（既有库 1 / 文档 1 未变）；云端 `/ent/knowledge` 200。
+> 后端本周无 Java 改动，沿用 Week 28 根聚合 **990**。
+
+## 10. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -186,7 +204,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 10. 维护规则
+## 11. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

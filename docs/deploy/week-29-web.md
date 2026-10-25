@@ -10,7 +10,7 @@
 浏览器 → http://HOST:80 → nginx
                          ├── /        /opt/ai-code/web（SPA，try_files 回 index.html）
                          ├── /api/    → 127.0.0.1:8084（保留前缀）
-                         └── /ent/    → 127.0.0.1:8081（去前缀，第 30 周用）
+                         └── /ent/api/ → 127.0.0.1:8081（去前缀；/ent/knowledge 走静态 SPA）
 ```
 
 - 静态产物来自 `apps/web/dist`；上一版保留 `/opt/ai-code/web.prev`。
@@ -84,5 +84,5 @@ node apps/web/scripts/smoke.mjs
 
 - **仅 HTTP**：未上 TLS/域名；正式对外需加证书与 301。
 - 未做前端 CI：手工 build + tar + scp；CI 触发条件（多环境/多人）另排。
-- `/ent` 已配好但第 29 周页面不使用，第 30 周企业知识库页直接复用。
+- `/ent/api` 反代与 `/ent/knowledge` 静态路由已由第 30 周企业页复用；只代理 API，SPA 路由走 fallback。
 - nginx 1.18（Ubuntu 22.04 源）；静态 assets 缓存 7 天，index no-store。
