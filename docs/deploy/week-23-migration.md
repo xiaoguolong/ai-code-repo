@@ -213,4 +213,4 @@ systemctl start ai-code-platform
 | 审计 | `APPROVAL_SUBMIT=1`、`APPROVAL_DECIDE=1`、`MEMORY_DELETE=1`、`MEMORY_PURGE=1`、`MEMORY_REBUILD=1` |
 | 资源 | 迁移后 available≈1.71 GB、swap 0 MB、disk 42% |
 
-> 验收脚本日志：`target-week23-cloud-accept.log`；迁移前/后巡检：`target-week23-cloud-precheck*.log`。
+> 验收脚本日志：`logs/week-23/acceptance/target-week23-cloud-accept.log`；迁移前/后巡检：`logs/week-23/migration/target-week23-cloud-precheck*.log`。

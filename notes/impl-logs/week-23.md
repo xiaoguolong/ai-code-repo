@@ -164,7 +164,7 @@ ai-core 90 / enterprise 37 / patient 21 / platform 529 / gateway 100
 
 ### 9.1 H2 首次应用 V6
 
-`target-week23-full.log`：
+`logs/week-23/test/target-week23-full.log`：
 
 ```text
 Migrating schema "public" to version "6 - platform memory lifecycle and approval"
@@ -206,7 +206,7 @@ Schema "public" is up to date. No migration necessary.
 | 审计 | `APPROVAL_SUBMIT=1`、`APPROVAL_DECIDE=1`、`MEMORY_DELETE=1`、`MEMORY_PURGE=1`、`MEMORY_REBUILD=1` |
 | 资源 | available≈1.71 GB、swap 0 MB、disk 42% |
 
-证据：`target-week23-cloud-accept.log`、`target-week23-cloud-precheck-after3.log`、`target-week23-deploy.log`。
+证据：`logs/week-23/acceptance/target-week23-cloud-accept.log`、`logs/week-23/migration/target-week23-cloud-precheck-after3.log`、`logs/week-23/deploy/target-week23-deploy.log`。
 
 ### 9.4 环境插曲（非代码）
 
@@ -325,7 +325,7 @@ detail:  ai-core 90 / enterprise 55 / patient 21 / platform 532 / gateway 100
 H2:      Successfully applied 7 migrations ... now at version v7
 ```
 
-日志：`target-week23-verify-local.log`。
+日志：`logs/week-23/test/target-week23-verify-local.log`。
 
 ### 14.2 云端只读巡检
 
@@ -334,7 +334,7 @@ H2:      Successfully applied 7 migrations ... now at version v7
 - `cloud-week23-b2-check.sh`：default 3 角色 / hospital-b 3 角色；operator 授权两租户各 3 项；
   执行记录 14 条全部 default，tenant 与 user 不一致数 **0**
 
-日志：`target-week23-verify-precheck.log`、`target-week23-verify-b2check.log`。
+日志：`logs/week-23/migration/target-week23-verify-precheck.log`、`logs/week-23/migration/target-week23-verify-b2check.log`。
 
 ### 14.3 云端功能验收
 
@@ -343,7 +343,7 @@ H2:      Successfully applied 7 migrations ... now at version v7
 | `cloud-accept-week23.sh` | **PASS=21 FAIL=0** | P002 **1807 tokens**；待审不写记忆；批准写记忆 `52fff16e…`；重复 409；删除成功；重建 scanned=0 |
 | `cloud-accept-week23-b2.sh` | **PASS=19 FAIL=0** | 无/错令牌 403、有令牌 200；hospital-b 角色；tenantKey=default；探针建链/解绑删本地用户；**409**；**503**；恢复后 200 |
 
-日志：`target-week23-verify-hitl.log`、`target-week23-verify-b2accept.log`。
+日志：`logs/week-23/acceptance/target-week23-verify-hitl.log`、`logs/week-23/acceptance/target-week23-verify-b2accept.log`。
 
 ### 14.4 收尾状态
 
