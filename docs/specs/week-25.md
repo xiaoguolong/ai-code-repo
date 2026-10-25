@@ -204,6 +204,9 @@ flowchart LR
 | 分层 | enterprise 内部端点只读、不调模型；平台领域无 HTTP 类型；SQL 只在适配器 |
 | 已知边界 | 依赖 enterprise 在线、绑定是快照、租户内全可见、云端 pgvector 未装 |
 
+> **未执行项已排期**：pgvector/V6、第 24/25 周发布、V8/V9 真库、TD-04/TD-05 统一收敛到
+> [`week-26-candidates.md`](week-26-candidates.md)（第 26 周 = 上线收口周）。
+
 ## 九、Open Questions
 
 - 知识库**自动同步**（企业侧改名/删除）→ 当前按导入快照；后续加定时对账或 webhook；

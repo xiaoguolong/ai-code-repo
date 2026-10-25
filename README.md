@@ -967,6 +967,9 @@ Week 24 基线 885 → 924，新增 39）；V9 在 H2 首次启动 `now at versi
 > **pgvector 前置（未在云端执行）**：云端 enterprise 库在 Week 22 跳过了 V6，`document_chunk` 目前
 > 不存在；代码已就绪，但检索会显式 502。按 `docs/deploy/week-25-knowledge.md` 装扩展 → 补 V6 →
 > 重新入库后，跑 `cloud-accept-week25.sh` 完成验收。过渡期可用 `RAG_VECTOR_STORE=memory` 仅联调（重启即丢）。
+>
+> **后续周计划**：第 24/25 周「已就绪未执行」的发布、pgvector/V6、V8/V9 真库、TD-04/TD-05 已统一收敛到
+> [`docs/specs/week-26-candidates.md`](docs/specs/week-26-candidates.md)（第 26 周=上线收口周，不写新功能）。
 
 ---
 

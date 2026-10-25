@@ -123,6 +123,9 @@ Successfully applied 9 migrations ... now at version v9
 | 5 | 依赖 enterprise 在线 | 无熔断/缓存；中断即 502（有意，不缓存医疗答案） |
 | 6 | 引用正文出站 | 已过 Guardrail 输出脱敏；如需更严格可只回传摘要 |
 
+> 第 1、2 项（pgvector、云端发布）与第 24 周遗留（V8 验收、TD-04/TD-05）已统一排入
+> [`docs/specs/week-26-candidates.md`](../../docs/specs/week-26-candidates.md) 的 P0 上线收口周。
+
 ## 11. ADR
 
 | 决策 | 选项 | 选择 | 理由 |

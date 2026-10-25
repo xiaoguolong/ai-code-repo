@@ -805,6 +805,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
 | 24 | Agent 2 运营分析 + Agent 4 随访 + TD-01/02/03 收口（V8） | docs/specs/week-24.md | notes/impl-logs/week-24.md | 已关闭（根聚合 885 全绿；V8 H2 首次 `now at version v8`；云端发布待执行） |
 | 25 | 知识库 Agent 3 薄接入（包装 enterprise RAG，V9） | docs/specs/week-25.md | notes/impl-logs/week-25.md | 已关闭（根聚合 924 全绿；V9 H2 首次 `now at version v9`；云端 pgvector 与发布待执行） |
+| 26 | 上线收口周（pgvector/V6、V8/V9 真库、发布验收、TD-04/05） | docs/specs/week-26-candidates.md | — | 未开始（P0 只做已就绪项的线上执行，不写新功能） |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
