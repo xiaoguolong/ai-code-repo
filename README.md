@@ -893,6 +893,9 @@ Week 22 基线 726 → 777，新增 51）；V6 在 H2（PostgreSQL 兼容模式�
 > （enterprise 55 / platform 532 / ai-core 90 / patient 21 / gateway 100）。
 > 云端 V7 已应用、enterprise 已发布，批次 2 验收 **PASS=19 FAIL=0**（含 409/503 真机）；
 > 备份 `/opt/ai-code/backup/week23-b2-20261025-062917`，部署/回滚见 `docs/deploy/week-23-batch2.md`。
+>
+> **第 24 周候选计划**：[week-24-candidates.md](docs/specs/week-24-candidates.md)
+> （Agent 2/3/4、pgvector/HIS-LIS 按需项、23 周遗留与建议范围）。
 
 ---
 

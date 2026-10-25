@@ -803,7 +803,7 @@ ai-core 的依赖按「是否所有 app 都真实需要」分成两类，禁止�
 | 22 | 登录限流 + 应用上云（jar/systemd）+ enterprise/SSO 真机 | docs/specs/week-22.md | notes/impl-logs/week-22.md | 已关闭（726 用例全绿；平台/网关/enterprise 云端常驻，两份验收脚本 PASS=18 / PASS=11） |
 | 23 | 患者分析 HITL + 长期记忆生命周期（V6）+ SSO 解绑/租户角色（V7） | docs/specs/week-23.md | notes/impl-logs/week-23.md | 批次 1/2 均完成：V6 云端 PASS=21；V7 云端 PASS=19；根聚合 798 全绿 |
 | 23 | SSO 解绑 + 租户级角色 / 执行记录租户维度 + SSO 409/503 真机 | docs/specs/week-23.md（第十节） | notes/impl-logs/week-23.md（第 13 节） | 批次 2：A1+B2 已实现/测试/上线；409/503 真机 PASS |
-| 24 | 医疗 SaaS 其余三个 Agent（运营 / 知识库 / 随访） | | | 未开始 |
+| 24 | 医疗 SaaS 其余三个 Agent（运营 / 知识库 / 随访） | docs/specs/week-24-candidates.md | — | 未开始（遗留对账与建议范围见候选计划） |
 
 每周关闭时把本表状态改为「进行中 / 已关闭」，并补上文件路径。
 
