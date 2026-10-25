@@ -350,3 +350,20 @@ H2:      Successfully applied 7 migrations ... now at version v7
 503 用例停/启平台后已恢复：`ai-code-platform active`、`ai-code-enterprise active`、`health=200`。
 验收产生的 P002 记忆已由脚本删除；新增 1 条已批准审批记录留作审计样本。
 
+## 15. 上线后内存调优（2026-10-25 08:38）
+
+云端 4C8G 可用内存降到约 1.0–1.7 GB。按「业务不动、先停非业务观测」处理：
+
+- 停 `langfuse-web` + `langfuse-worker`（释放约 1.58 GB，数据卷保留）；
+- SkyWalking OAP `-Xmx1024M → 768M`，UI `256M → 192M`；
+- platform `LANGFUSE_ENABLED=false` 并重启，消除对已停 Langfuse 的 OTLP 重试；
+- 业务 JVM / pg16 / redis72 未动。
+
+结果：`available` **1641 MB → 3349 MB**，`used` 5504 MB → 3792 MB；platform/gateway 200、
+enterprise `/auth/me` 401（正常）、SkyWalking UI 200。OAP RSS 仍约 1.0 GB（768M 堆 + 非堆），
+但峰值已被 768M 封顶。
+
+脚本与恢复步骤见 `docs/deploy/cloud-memory-tuning.md`；日志见
+`logs/week-23/deploy/target-week23-memory-tune.log` 与 `...-langfuse-off.log`。
+
+

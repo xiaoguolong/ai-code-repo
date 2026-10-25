@@ -874,7 +874,7 @@ platform 453 / gateway 100）。关键验证：
 交付：Spec `docs/specs/week-23.md` ｜ 架构 `docs/architecture/week-23-architecture.md` ｜
 接口 `docs/api/week-23-api.md` ｜ 迁移手册 `docs/deploy/week-23-migration.md` ｜
 云端验收脚本 `deploy/app/cloud-accept-week23.sh` ｜ 实现日志 `notes/impl-logs/week-23.md` ｜
-日志归档索引 `docs/logs-index.md` ｜
+日志归档索引 `docs/logs-index.md` ｜ 内存调优记录 `docs/deploy/cloud-memory-tuning.md` ｜
 Postman `docs/postman/week-23.postman_collection.json`
 
 实测：根聚合 **777** 用例全绿（ai-core 90 / enterprise 37 / patient 21 / platform 529 / gateway 100；

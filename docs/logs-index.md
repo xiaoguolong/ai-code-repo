@@ -44,6 +44,8 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-23/deploy/target-week23-b2-deploy-platform.log` | 云端 V7 平台发布 |
 | `logs/week-23/deploy/target-week23-b2-deploy-enterprise.log` | enterprise 批次 2 发布 |
 | `logs/week-23/deploy/target-week23-b2-backup.log` | V7 前角色四表/执行记录/用户/历史表备份 |
+| `logs/week-23/deploy/target-week23-memory-tune.log` | 停 Langfuse web/worker + 降 OAP/UI 堆的前后内存对比 |
+| `logs/week-23/deploy/target-week23-memory-tune-langfuse-off.log` | platform 关闭 Langfuse 导出并重启 |
 | `logs/week-23/migration/target-week23-cloud-precheck-after3.log` | V6 后：5 条记忆、向量来源、审批/审计 |
 | `logs/week-23/migration/target-week23-b2-check.log` | V7 后：default/hospital-b 各 3 角色、执行 tenant 一致 |
 | `logs/week-23/migration/target-week23-verify-precheck.log` | 上线后只读巡检（V7 + 资源） |
