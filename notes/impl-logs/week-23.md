@@ -311,3 +311,42 @@ Schema "public" is up to date. No migration necessary.
 | 2 | `deleteLocalUser=false` 后 409 | 有意保留（同名可能是两个人）；文档明确要求运维选 `true` 才能重新开户 |
 | 3 | 旧执行记录 tenant 回填 | V7 按 `user_id` 回填；用户被删/异常的记录保持 default |
 | 4 | 跨租户 admin 视野 | admin 仍可看全部租户；B2 只隔离角色副本，不改变 admin 的平台级语义 |
+
+## 14. 上线后回归验收（2026-10-25 08:15–08:21）
+
+用户要求复跑一遍验证；以下是本次实测结果，不是引用历史记录。
+
+### 14.1 本地
+
+```text
+command: powershell -NoProfile -ExecutionPolicy Bypass -File .\run-maven-jdk17.ps1 test
+result:  Tests run: 798, Failures: 0, Errors: 0, Skipped: 0, BUILD SUCCESS
+detail:  ai-core 90 / enterprise 55 / patient 21 / platform 532 / gateway 100
+H2:      Successfully applied 7 migrations ... now at version v7
+```
+
+日志：`target-week23-verify-local.log`。
+
+### 14.2 云端只读巡检
+
+- `cloud-week23-precheck.sh`：平台/网关/enterprise active，health 200；Flyway v1–v7 全 success；
+  `platform_approval` 存在；记忆 5 条、向量来源统一 `openai:qwen3.7-text-embedding-flash:1024`
+- `cloud-week23-b2-check.sh`：default 3 角色 / hospital-b 3 角色；operator 授权两租户各 3 项；
+  执行记录 14 条全部 default，tenant 与 user 不一致数 **0**
+
+日志：`target-week23-verify-precheck.log`、`target-week23-verify-b2check.log`。
+
+### 14.3 云端功能验收
+
+| 脚本 | 结果 | 关键数据 |
+|------|------|----------|
+| `cloud-accept-week23.sh` | **PASS=21 FAIL=0** | P002 **1807 tokens**；待审不写记忆；批准写记忆 `52fff16e…`；重复 409；删除成功；重建 scanned=0 |
+| `cloud-accept-week23-b2.sh` | **PASS=19 FAIL=0** | 无/错令牌 403、有令牌 200；hospital-b 角色；tenantKey=default；探针建链/解绑删本地用户；**409**；**503**；恢复后 200 |
+
+日志：`target-week23-verify-hitl.log`、`target-week23-verify-b2accept.log`。
+
+### 14.4 收尾状态
+
+503 用例停/启平台后已恢复：`ai-code-platform active`、`ai-code-enterprise active`、`health=200`。
+验收产生的 P002 记忆已由脚本删除；新增 1 条已批准审批记录留作审计样本。
+
