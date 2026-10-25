@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,14 +32,16 @@ class PlatformAuthUseCaseTest {
     private AuthTokenPort authTokenPort;
 
     private InMemoryPlatformUserAdapter users;
+    private InMemoryAuditLogAdapter audit;
     private PasswordHasher passwordHasher;
     private PlatformAuthUseCase useCase;
 
     @BeforeEach
     void setUp() {
         users = new InMemoryPlatformUserAdapter();
+        audit = new InMemoryAuditLogAdapter();
         passwordHasher = new SaTokenMd5PasswordHasher(new AuthProperties("test-salt"));
-        useCase = new PlatformAuthUseCase(users, passwordHasher, authTokenPort, new InMemoryAuditLogAdapter());
+        useCase = new PlatformAuthUseCase(users, passwordHasher, authTokenPort, audit);
 
         InMemoryPlatformRoleAdapter roles = new InMemoryPlatformRoleAdapter();
         roles.save(new PlatformRole("operator", "Operator", false,
@@ -62,6 +65,42 @@ class PlatformAuthUseCaseTest {
     @Test
     void rejectsInvalidPassword() {
         assertThatThrownBy(() -> useCase.login(new PlatformLoginCommand("operator", "wrong")))
+                .isInstanceOf(AuthenticationException.class);
+    }
+
+    @Test
+    void rejectsDisabledUserOnLoginAndVerifyWithoutLeakingState() {
+        users.updateDisabledAt(2L, Instant.parse("2026-10-25T07:30:00Z"));
+
+        assertThatThrownBy(() -> useCase.login(new PlatformLoginCommand("operator", "operator123")))
+                .isInstanceOf(AuthenticationException.class)
+                .hasMessage("invalid credentials");
+        assertThatThrownBy(() -> useCase.verify(new PlatformLoginCommand("operator", "operator123")))
+                .isInstanceOf(AuthenticationException.class)
+                .hasMessage("invalid credentials");
+        assertThat(audit.listAll())
+                .hasSize(2)
+                .allSatisfy(entry -> {
+                    assertThat(entry.action().name()).isEqualTo("LOGIN_FAILED");
+                    assertThat(entry.detail()).contains("disabled=true");
+                });
+    }
+
+    @Test
+    void meRejectsDisabledUser() {
+        users.updateDisabledAt(2L, Instant.parse("2026-10-25T07:30:00Z"));
+
+        assertThatThrownBy(() -> useCase.me(2L))
+                .isInstanceOf(AuthenticationException.class);
+    }
+
+    @Test
+    void seedStyleSaveDoesNotReenableDisabledUser() {
+        users.updateDisabledAt(2L, Instant.parse("2026-10-25T07:30:00Z"));
+        users.save(new PlatformUser(2L, "operator", users.findById(2L).orElseThrow().passwordHash(), "operator"));
+
+        assertThat(users.findById(2L).orElseThrow().disabled()).isTrue();
+        assertThatThrownBy(() -> useCase.login(new PlatformLoginCommand("operator", "operator123")))
                 .isInstanceOf(AuthenticationException.class);
     }
 }

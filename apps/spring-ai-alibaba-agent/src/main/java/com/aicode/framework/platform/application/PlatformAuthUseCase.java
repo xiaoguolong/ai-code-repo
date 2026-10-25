@@ -144,6 +144,10 @@ public class PlatformAuthUseCase {
      */
     public PlatformMeView me(long userId) {
         PlatformUser user = getUser(userId);
+        if (user.disabled()) {
+            // 防御：即使会话没被踢干净，也不让停用用户继续读 /auth/me
+            throw new AuthenticationException("invalid credentials");
+        }
         String tenantName = tenantPort.findByKey(user.tenantKey())
                 .map(PlatformTenant::displayName)
                 .orElse(user.tenantKey());
@@ -158,6 +162,13 @@ public class PlatformAuthUseCase {
             // detail 只记用户名，绝不记密码；traceId 取自当前请求 MDC，便于与访问日志串联
             audit(AuditLogEntry.of(0L, AuditAction.LOGIN_FAILED, AUTH_RESOURCE,
                     AuditResult.FAILURE, TraceIds.current(), "username=" + username));
+            throw new AuthenticationException("invalid credentials");
+        }
+        if (user.disabled()) {
+            // 停用按「凭据无效」处理：不暴露账号状态，避免离职账号被探测
+            audit(AuditLogEntry.of(0L, AuditAction.LOGIN_FAILED, AUTH_RESOURCE,
+                    AuditResult.FAILURE, TraceIds.current(),
+                    "username=" + username + " disabled=true"));
             throw new AuthenticationException("invalid credentials");
         }
         if (!tenantPort.isActive(user.tenantKey())) {

@@ -35,6 +35,8 @@ logs/
 │   ├── test/            # 第 27 周新增用例 / platform 全量 / 根聚合（971 用例 + V10 首次迁移）
 │   ├── deploy/          # 巡检、备份、enterprise/platform 发布
 │   └── acceptance/      # 对账/提醒/问答/指标、配置恢复、终检
+├── week-28/
+│   └── test/            # 第 28 周 platform 全量 / 根聚合（990 用例 + V11 首次迁移）
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -140,7 +142,17 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 云端已于 2026-10-25 执行完成；过程与回滚见 `docs/deploy/week-27-ops.md`。
 > 第 27 周没有单独的 migration 日志：V10 在 platform 发布日志中（`now at version v10`）。
 
-## 7. 早期日志
+## 7. 第 28 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-28/test/target-week28-platform-full.log` | platform **709** 全绿（Week 27 基线 690，+19）；首次 V11 迁移 |
+| `logs/week-28/test/target-week28-full.log` | 根聚合 **990** 全绿（Week 27 基线 971，+19） |
+
+> 云端 V11 尚未发布；发布后按 `docs/specs/week-28.md` 第 2/4 节补停用/恢复真机记录
+> （停用 → 旧 token 401 → 恢复 → 重启不被 seed 覆盖）。
+
+## 8. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -150,7 +162,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 8. 维护规则
+## 9. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

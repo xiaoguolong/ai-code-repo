@@ -168,6 +168,8 @@
 | `FOLLOWUP_TASK_CANCEL` | 取消随访任务（Week 24） | `follow-up:{taskId}` | `SUCCESS` |
 | `KNOWLEDGE_RECONCILE` | 手动对账知识库绑定（Week 27，仅 admin） | `knowledge-binding:reconcile` | `SUCCESS` |
 | `APPROVAL_REMIND` | 审批待办超时提醒（Week 27，系统调度） | `approval:{approvalId}` | `SUCCESS` |
+| `USER_DISABLE` | 停用平台用户（Week 28，仅 admin） | `user:{userId}` | `SUCCESS` |
+| `USER_ENABLE` | 恢复平台用户（Week 28，仅 admin） | `user:{userId}` | `SUCCESS` |
 
 约束：
 

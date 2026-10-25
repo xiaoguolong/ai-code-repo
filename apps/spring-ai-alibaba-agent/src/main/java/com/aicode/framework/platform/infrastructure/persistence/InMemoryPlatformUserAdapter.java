@@ -5,11 +5,16 @@ import com.aicode.framework.platform.domain.port.PlatformUserPort;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 进程内平台用户存储（Week 13 V1，Week 16 起仅在 {@code platform.persistence.mode=memory} 生效）。
+ * 进程内平台用户存储（Week 13；Week 28 加停用状态）。
+ *
+ * <p>{@link #save} 会保留已有 {@code disabledAt}，与 JDBC 适配器语义一致（seed 不能复活停用用户）。</p>
  */
 @Component
 @ConditionalOnProperty(name = "platform.persistence.mode", havingValue = "memory")
@@ -33,8 +38,31 @@ public class InMemoryPlatformUserAdapter implements PlatformUserPort {
 
     @Override
     public void save(PlatformUser user) {
-        byId.put(user.id(), user);
-        byUsername.put(user.username(), user);
+        PlatformUser existing = byId.get(user.id());
+        PlatformUser merged = existing == null ? user : user.withDisabledAt(existing.disabledAt());
+        if (existing != null && !existing.username().equals(merged.username())) {
+            byUsername.remove(existing.username());
+        }
+        byId.put(merged.id(), merged);
+        byUsername.put(merged.username(), merged);
+    }
+
+    @Override
+    public List<PlatformUser> listAll() {
+        return byId.values().stream()
+                .sorted(Comparator.comparingLong(PlatformUser::id))
+                .toList();
+    }
+
+    @Override
+    public boolean updateDisabledAt(long userId, Instant disabledAt) {
+        PlatformUser updated = byId.computeIfPresent(userId,
+                (id, existing) -> existing.withDisabledAt(disabledAt));
+        if (updated == null) {
+            return false;
+        }
+        byUsername.put(updated.username(), updated);
+        return true;
     }
 
     /** seed 是否已写入。 */

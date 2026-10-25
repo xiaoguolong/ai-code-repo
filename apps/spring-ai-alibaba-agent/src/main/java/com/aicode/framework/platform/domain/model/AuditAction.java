@@ -32,5 +32,9 @@ public enum AuditAction {
     /** 手动对账知识库绑定（Week 27，仅 admin） */
     KNOWLEDGE_RECONCILE,
     /** 审批待办超时提醒（Week 27，系统调度） */
-    APPROVAL_REMIND
+    APPROVAL_REMIND,
+    /** 停用平台用户（Week 28，仅 admin） */
+    USER_DISABLE,
+    /** 恢复平台用户（Week 28，仅 admin） */
+    USER_ENABLE
 }

@@ -1062,9 +1062,43 @@ H2 首次启动 `Successfully applied 10 migrations ... now at version v10`，�
 > **明确不做**：科室级知识库授权（P1 #2）、平台用户停用 TD-06、SSE、日报导出、HIS/LIS 真实数据源；
 > 审批**不**自动拒绝/升级；对账**不**自动新增/删除绑定。触发条件见 `docs/specs/week-27.md` 第 1.2 节。
 
-> **后续排期（2026-10-25 定）**：第 28 周 TD-06 平台用户停用 + P2 类拆分；
+> **排期进展（2026-10-25）**：第 28 周已完成（TD-06 + 三个大类拆分）；
 > **第 29 周最小可用前端**（本仓库 `apps/web`，Vue3 + **Ant Design Vue**；平台 8 页；
-> 企业知识库页与 SSE 顺延 30+；同域 nginx），计划见 `docs/specs/week-29-candidates.md`；科室授权 / SSE / 导出 / HIS-LIS / 前端 CI 顺延到第 30 周及以后。
+> 企业知识库页与 SSE 顺延 30+；同域 nginx），计划见 `docs/specs/week-29-candidates.md`；
+> 科室授权 / SSE / 导出 / HIS-LIS / 前端 CI 顺延到第 30 周及以后。
+
+---
+
+# 第28周：用户生命周期与结构（TD-06 停用 + 三个大类拆分）
+
+完成（2026-10-25）：
+
+- [x] **TD-06 停用/恢复**：V11 `platform_user.disabled_at`（不删行）；登录与 SSO `/verify` 统一 401
+      （文案与密码错误一致，不暴露停用）；`/auth/me` 再做 disabled 防御；停用时踢出该用户全部平台会话；
+      admin `GET /users`、`POST /users/{id}/disable|enable`；审计 `USER_DISABLE` / `USER_ENABLE`
+- [x] **安全约束**：禁止停用自己（防唯一 admin 自锁）；重复停用/恢复幂等且不重复审计；
+      停用/恢复只写 `disabled_at`，历史执行/审批/随访/记忆/审计保留
+- [x] **seed 安全**：`save` 不覆盖 `disabled_at`（JDBC 与内存同语义），重启 seed 不会复活停用用户
+- [x] **拆 `PlatformExecutionUseCase`（431 → 118 行）**：`PlatformExecutionRunner`（编排）+
+      `Recorder`（记录工厂）+ `Observability`（埋点）+ `PendingApproval`（待审落库）+ `QueryUseCase`（查询）
+- [x] **拆 `FollowUpTaskUseCase`（290 → 151 行）**：`FollowUpTaskFactory`（生成/审批联动）+
+      `FollowUpTaskQueryUseCase`（列表/详情/提醒）；Action 用例仍通过 `requireTask` 复用
+- [x] **拆 `PlatformMemoryUseCase`（241 → 122 行）**：`PlatformMemoryWriteUseCase`（TTL/向量来源）+
+      `PlatformMemoryQueryUseCase`（范围/检索）；`save/list/resolveScope` 公共 API 与控制器不变
+
+交付：Spec `docs/specs/week-28.md` ｜ 架构 `docs/architecture/week-28-architecture.md` ｜
+接口 `docs/api/week-28-api.md` ｜ 实现日志 `notes/impl-logs/week-28.md` ｜
+迁移 `V11__platform_user_disable.sql`
+
+实测：根聚合 **990** 用例全绿（Week 27 基线 971；platform 690→**709**，+19；
+enterprise 70 / patient 21 / ai-core 90 / gateway 100 不变）；
+H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，重启只校验。
+
+> **云端 V11 待发布**：发布平台 jar 后 Flyway 自动应用；重点复核「停用 → 旧 token 401 → 恢复可登录」
+> 与「重启后停用状态不被 seed 覆盖」。步骤见 `docs/specs/week-28.md` 第四节。
+
+> **明确不做**：用户硬删 / `sso_user_link` 级联；gateway 与 enterprise 已签发会话的跨进程吊销
+> （平台会话已踢出，其它入口等 TTL）；用户管理页面（第 29 周前端）；租户管理员自助停用。
 
 ---
 

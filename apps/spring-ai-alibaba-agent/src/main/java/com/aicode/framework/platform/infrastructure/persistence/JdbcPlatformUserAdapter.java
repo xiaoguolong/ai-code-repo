@@ -10,14 +10,15 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 平台用户落库适配器（Week 16，替换 Week 13 内存实现；Week 21 增加 {@code tenant_key}）。
+ * 平台用户落库适配器（Week 16；Week 21 加 {@code tenant_key}；Week 28 加 {@code disabled_at}）。
  *
- * <p>表结构见 {@code db/migration/V1__platform_rbac.sql} 与 {@code V4__platform_tenant.sql}；
- * {@link #save} 语义为「不存在则插入，存在则覆盖」，与内存实现保持一致，便于 seed 重复执行。</p>
+ * <p>表结构见 V1/V4/V11。{@link #save} 语义为「不存在则插入，存在则覆盖身份字段」，
+ * 但**绝不覆盖 {@code disabled_at}**：启动 seed 重跑不能把停用用户复活。</p>
  */
 @Component
 @ConditionalOnClass(name = "org.springframework.jdbc.core.JdbcTemplate")
@@ -25,7 +26,7 @@ import java.util.Optional;
 public class JdbcPlatformUserAdapter implements PlatformUserPort {
 
     private static final String SELECT_COLUMNS =
-            "SELECT id, username, password_hash, role_key, tenant_key FROM platform_user";
+            "SELECT id, username, password_hash, role_key, tenant_key, disabled_at FROM platform_user";
 
     private final JdbcTemplate jdbcTemplate;
     private final RowMapper<PlatformUser> rowMapper = new PlatformUserRowMapper();
@@ -59,11 +60,24 @@ public class JdbcPlatformUserAdapter implements PlatformUserPort {
                 """, user.username(), user.passwordHash(), user.roleKey(), user.tenantKey(), user.id());
         if (updated == 0) {
             jdbcTemplate.update("""
-                    INSERT INTO platform_user (id, username, password_hash, role_key, tenant_key, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO platform_user (id, username, password_hash, role_key, tenant_key, created_at, disabled_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """, user.id(), user.username(), user.passwordHash(), user.roleKey(), user.tenantKey(),
-                    PlatformJdbcSupport.toTimestamp(java.time.Instant.now()));
+                    PlatformJdbcSupport.toTimestamp(Instant.now()),
+                    PlatformJdbcSupport.toTimestamp(user.disabledAt()));
         }
+    }
+
+    @Override
+    public List<PlatformUser> listAll() {
+        return jdbcTemplate.query(SELECT_COLUMNS + " ORDER BY id ASC", rowMapper);
+    }
+
+    @Override
+    public boolean updateDisabledAt(long userId, Instant disabledAt) {
+        return jdbcTemplate.update(
+                "UPDATE platform_user SET disabled_at = ? WHERE id = ?",
+                PlatformJdbcSupport.toTimestamp(disabledAt), userId) > 0;
     }
 
     /**
@@ -78,7 +92,8 @@ public class JdbcPlatformUserAdapter implements PlatformUserPort {
                     rs.getString("username"),
                     rs.getString("password_hash"),
                     rs.getString("role_key"),
-                    rs.getString("tenant_key"));
+                    rs.getString("tenant_key"),
+                    PlatformJdbcSupport.toInstant(rs.getTimestamp("disabled_at")));
         }
     }
 }
