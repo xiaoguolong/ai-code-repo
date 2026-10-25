@@ -166,10 +166,13 @@
 | `FOLLOWUP_TASK_CREATE` | 生成随访任务（Week 24：Agent 运行或审批通过） | `follow-up:{taskId}` | `SUCCESS` / `FAILURE` |
 | `FOLLOWUP_TASK_COMPLETE` | 完成随访任务（Week 24） | `follow-up:{taskId}` | `SUCCESS` |
 | `FOLLOWUP_TASK_CANCEL` | 取消随访任务（Week 24） | `follow-up:{taskId}` | `SUCCESS` |
+| `KNOWLEDGE_RECONCILE` | 手动对账知识库绑定（Week 27，仅 admin） | `knowledge-binding:reconcile` | `SUCCESS` |
+| `APPROVAL_REMIND` | 审批待办超时提醒（Week 27，系统调度） | `approval:{approvalId}` | `SUCCESS` |
 
 约束：
 
-- 字段为 `userId / action / resource / result / traceId / detail / createdAt`；`userId` 未知（登录失败）记 0。
+- 字段为 `userId / action / resource / result / traceId / detail / createdAt`；`userId` 未知（登录失败）
+  或系统调度（Week 27 提醒）记 0。
 - **禁止**写入密码、token、API Key、完整 Prompt 或患者隐私正文；`detail` 只放标识与错误摘要，超 512 字符截断。
 - 审计写失败不得影响主流程（调用方 try/catch + WARN 日志）。
 - 新增 action 必须同步本表、`AuditAction` 枚举与测试。

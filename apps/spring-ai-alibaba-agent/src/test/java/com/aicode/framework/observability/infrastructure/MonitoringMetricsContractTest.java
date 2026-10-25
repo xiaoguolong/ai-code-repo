@@ -90,7 +90,37 @@ class MonitoringMetricsContractTest {
                 MonitoringMetricNames.LLM_TOKENS,
                 MonitoringMetricNames.LLM_COST_USD,
                 MonitoringMetricNames.TOOL_CALL_COUNT,
-                MonitoringMetricNames.APPROVAL_PENDING_COUNT);
+                MonitoringMetricNames.APPROVAL_PENDING_COUNT,
+                MonitoringMetricNames.APPROVAL_REMINDER_COUNT,
+                MonitoringMetricNames.KNOWLEDGE_SEARCH_DURATION,
+                MonitoringMetricNames.KNOWLEDGE_HIT_COUNT,
+                MonitoringMetricNames.KNOWLEDGE_RECONCILE_COUNT,
+                MonitoringMetricNames.KNOWLEDGE_BINDING_MISSING_COUNT);
+    }
+
+    @Test
+    @DisplayName("Week 27 知识库/提醒指标的导出名（Grafana 面板依赖）")
+    void knowledgeAndReminderMetricsExportNames() {
+        PrometheusMeterRegistry registry = new PrometheusMeterRegistry(PrometheusConfig.DEFAULT);
+        MicrometerObservabilityAdapter adapter = new MicrometerObservabilityAdapter(mock(Tracer.class), registry);
+
+        adapter.recordDuration(MonitoringMetricNames.KNOWLEDGE_SEARCH_DURATION, 120L,
+                ObservabilityAttributes.KNOWLEDGE_OUTCOME, "SUCCESS");
+        adapter.recordCounter(MonitoringMetricNames.KNOWLEDGE_HIT_COUNT, 2.0);
+        adapter.recordCounter(MonitoringMetricNames.KNOWLEDGE_RECONCILE_COUNT, 1.0,
+                ObservabilityAttributes.KNOWLEDGE_RESULT, "missing");
+        adapter.recordGauge(MonitoringMetricNames.KNOWLEDGE_BINDING_MISSING_COUNT, 1.0);
+        adapter.recordCounter(MonitoringMetricNames.APPROVAL_REMINDER_COUNT, 1.0);
+
+        String scrape = registry.scrape();
+
+        assertThat(scrape).contains("knowledge_search_duration_seconds_count{");
+        assertThat(scrape).contains("knowledge_outcome=\"SUCCESS\"");
+        assertThat(scrape).contains("knowledge_hit_count_total 2.0");
+        assertThat(scrape).contains("knowledge_reconcile_count_total{");
+        assertThat(scrape).contains("knowledge_result=\"missing\"");
+        assertThat(scrape).contains("knowledge_binding_missing_count 1.0");
+        assertThat(scrape).contains("approval_reminder_count_total 1.0");
     }
 
     @Test

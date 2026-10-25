@@ -69,22 +69,48 @@ public class EnterpriseKnowledgeSearchAdapter implements KnowledgeSearchPort {
                     .header(HEADER_NAME, properties.getInternalToken())
                     .retrieve()
                     .body(String.class);
-            JsonNode data = dataOf(body);
-            List<KnowledgeBaseCatalogEntry> entries = new ArrayList<>();
-            for (JsonNode item : data.path("bases")) {
-                entries.add(new KnowledgeBaseCatalogEntry(
-                        item.path("knowledgeBaseId").asLong(),
-                        item.path("name").asText(""),
-                        item.path("description").asText(""),
-                        item.path("documentCount").asInt(0)));
-            }
-            return new KnowledgeBaseCatalog(data.path("enterpriseUserId").asLong(), entries);
+            return catalogOf(body);
         } catch (RestClientResponseException ex) {
             throw new ToolExecutionException(
                     "knowledge service rejected list-bases: " + ex.getStatusCode().value(), ex);
         } catch (RestClientException ex) {
             throw new ToolExecutionException("knowledge service unavailable: list-bases", ex);
         }
+    }
+
+    @Override
+    public KnowledgeBaseCatalog listBasesByEnterpriseUser(long enterpriseUserId) {
+        ensureConfigured();
+        try {
+            String body = restClient.get()
+                    .uri(builder -> builder.path("/api/v1/internal/knowledge/bases")
+                            .queryParam("enterpriseUserId", enterpriseUserId)
+                            .build())
+                    .header(HEADER_NAME, properties.getInternalToken())
+                    .retrieve()
+                    .body(String.class);
+            return catalogOf(body);
+        } catch (RestClientResponseException ex) {
+            throw new ToolExecutionException(
+                    "knowledge service rejected list-bases by enterprise user: "
+                            + ex.getStatusCode().value(), ex);
+        } catch (RestClientException ex) {
+            throw new ToolExecutionException(
+                    "knowledge service unavailable: list-bases by enterprise user", ex);
+        }
+    }
+
+    private KnowledgeBaseCatalog catalogOf(String body) {
+        JsonNode data = dataOf(body);
+        List<KnowledgeBaseCatalogEntry> entries = new ArrayList<>();
+        for (JsonNode item : data.path("bases")) {
+            entries.add(new KnowledgeBaseCatalogEntry(
+                    item.path("knowledgeBaseId").asLong(),
+                    item.path("name").asText(""),
+                    item.path("description").asText(""),
+                    item.path("documentCount").asInt(0)));
+        }
+        return new KnowledgeBaseCatalog(data.path("enterpriseUserId").asLong(), entries);
     }
 
     @Override

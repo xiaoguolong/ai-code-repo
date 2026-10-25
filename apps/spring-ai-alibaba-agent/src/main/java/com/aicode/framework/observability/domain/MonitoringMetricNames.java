@@ -18,6 +18,11 @@ import java.util.List;
  *   <tr><td>{@link #LLM_COST_USD}</td><td>llm.cost.usd</td><td>llm_cost_usd_total</td></tr>
  *   <tr><td>{@link #TOOL_CALL_COUNT}</td><td>tool.call.count</td><td>tool_call_count_total</td></tr>
  *   <tr><td>{@link #APPROVAL_PENDING_COUNT}</td><td>approval.pending.count</td><td>approval_pending_count</td></tr>
+ *   <tr><td>{@link #APPROVAL_REMINDER_COUNT}</td><td>approval.reminder.count</td><td>approval_reminder_count_total</td></tr>
+ *   <tr><td>{@link #KNOWLEDGE_SEARCH_DURATION}</td><td>knowledge.search.duration</td><td>knowledge_search_duration_seconds_*</td></tr>
+ *   <tr><td>{@link #KNOWLEDGE_HIT_COUNT}</td><td>knowledge.hit.count</td><td>knowledge_hit_count_total</td></tr>
+ *   <tr><td>{@link #KNOWLEDGE_RECONCILE_COUNT}</td><td>knowledge.reconcile.count</td><td>knowledge_reconcile_count_total</td></tr>
+ *   <tr><td>{@link #KNOWLEDGE_BINDING_MISSING_COUNT}</td><td>knowledge.binding.missing.count</td><td>knowledge_binding_missing_count</td></tr>
  * </table>
  *
  * <p>映射关系由 {@code MonitoringMetricsContractTest} 用真实 Prometheus 注册表抓取文本格式锁死；
@@ -49,10 +54,27 @@ public final class MonitoringMetricNames {
     /** 待审审批积压数（Gauge，Week 24；无标签，按全局聚合）。 */
     public static final String APPROVAL_PENDING_COUNT = "approval.pending.count";
 
+    /** 审批超时提醒下发次数（Counter，Week 27；无标签）。 */
+    public static final String APPROVAL_REMINDER_COUNT = "approval.reminder.count";
+
+    /** 平台侧知识库检索耗时（Timer，Week 27；标签：{@code knowledge.outcome}）。 */
+    public static final String KNOWLEDGE_SEARCH_DURATION = "knowledge.search.duration";
+
+    /** 知识库检索累计命中切片数（Counter，Week 27；无标签，amount = 本次命中数）。 */
+    public static final String KNOWLEDGE_HIT_COUNT = "knowledge.hit.count";
+
+    /** 知识库绑定对账结果计数（Counter，Week 27；标签：{@code knowledge.result}）。 */
+    public static final String KNOWLEDGE_RECONCILE_COUNT = "knowledge.reconcile.count";
+
+    /** 企业侧已删除的绑定数（Gauge，Week 27；无标签）。 */
+    public static final String KNOWLEDGE_BINDING_MISSING_COUNT = "knowledge.binding.missing.count";
+
     /** 全部指标名（契约测试遍历用）。 */
     private static final List<String> ALL = List.of(
             AGENT_RUN_COUNT, AGENT_RUN_DURATION, LLM_CALL_COUNT, LLM_CALL_DURATION,
-            LLM_TOKENS, LLM_COST_USD, TOOL_CALL_COUNT, APPROVAL_PENDING_COUNT);
+            LLM_TOKENS, LLM_COST_USD, TOOL_CALL_COUNT, APPROVAL_PENDING_COUNT,
+            APPROVAL_REMINDER_COUNT, KNOWLEDGE_SEARCH_DURATION, KNOWLEDGE_HIT_COUNT,
+            KNOWLEDGE_RECONCILE_COUNT, KNOWLEDGE_BINDING_MISSING_COUNT);
 
     private MonitoringMetricNames() {
     }

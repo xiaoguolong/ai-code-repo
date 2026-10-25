@@ -1,0 +1,228 @@
+{
+  "info": {
+    "name": "Week 27 - 知识库运营化（对账 + 审批超时提醒）",
+    "description": "平台 8084 + enterprise 8081。前置：两侧内部令牌一致；admin 已完成 SSO 建链且企业账号下有知识库。按 01→06 执行；提醒接口需要一条超过 24h 的待审任务（可用 SQL 回填 created_at，见 docs/api/week-27-api.md 第 3 节）。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "enterpriseBaseUrl", "value": "http://127.0.0.1:8081" },
+    { "key": "internalToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "operatorToken", "value": "" },
+    { "key": "enterpriseUserId", "value": "" },
+    { "key": "knowledgeBaseId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "01 - 登录 admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": { "mode": "raw", "raw": "{\"username\":\"admin\",\"password\":\"admin123\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - 登录 operator",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": { "mode": "raw", "raw": "{\"username\":\"operator\",\"password\":\"operator123\"}" }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('operatorToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - 导入知识库绑定（admin）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings/import",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings", "import"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + ACTIVE', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json().data;",
+              "  pm.expect(data.items[0].syncStatus).to.eql('ACTIVE');",
+              "});",
+              "pm.collectionVariables.set('enterpriseUserId', pm.response.json().data.enterpriseUserId);",
+              "pm.collectionVariables.set('knowledgeBaseId', pm.response.json().data.items[0].knowledgeBaseId);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - enterprise 清单（按企业用户，对账用）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "X-Internal-Token", "value": "{{internalToken}}" }],
+        "url": {
+          "raw": "{{enterpriseBaseUrl}}/api/v1/internal/knowledge/bases?enterpriseUserId={{enterpriseUserId}}",
+          "host": ["{{enterpriseBaseUrl}}"],
+          "path": ["api", "v1", "internal", "knowledge", "bases"],
+          "query": [{ "key": "enterpriseUserId", "value": "{{enterpriseUserId}}" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('200', () => pm.response.to.have.status(200));"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - 手动对账（admin，本租户）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings/reconcile",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings", "reconcile"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + FAIL=0', () => {",
+              "  pm.response.to.have.status(200);",
+              "  const data = pm.response.json().data;",
+              "  pm.expect(data.failed).to.eql(0);",
+              "  pm.expect(data.checked).to.be.at.least(1);",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - 绑定列表（operator，含 syncStatus）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{operatorToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/knowledge-bindings",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "knowledge-bindings"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('200 + syncStatus', () => pm.response.json().data.items[0].syncStatus !== undefined);"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - 知识库问答（operator）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{operatorToken}}" },
+          { "key": "Content-Type", "value": "application/json" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/knowledge-qa/runs",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "knowledge-qa", "runs"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"input\":{\"knowledgeBaseId\":{{knowledgeBaseId}},\"question\":\"糖尿病患者的随访频率是多少？\"}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + citations', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.text()).to.include('citations');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - 审批超时提醒（admin）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/approvals/reminders?limit=20",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "approvals", "reminders"],
+          "query": [{ "key": "limit", "value": "20" }]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + thresholdHours=24', () => {",
+              "  pm.response.to.have.status(200);",
+              "  pm.expect(pm.response.json().data.thresholdHours).to.eql(24);",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

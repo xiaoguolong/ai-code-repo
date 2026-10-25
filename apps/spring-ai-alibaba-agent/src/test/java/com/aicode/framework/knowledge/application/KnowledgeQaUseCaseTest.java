@@ -6,6 +6,7 @@ import com.aicode.framework.knowledge.domain.KnowledgeQaAgent;
 import com.aicode.framework.knowledge.domain.model.KnowledgeAnswer;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
 import com.aicode.framework.platform.domain.model.KnowledgeBinding;
+import com.aicode.framework.platform.domain.model.KnowledgeBindingSyncStatus;
 import com.aicode.framework.platform.domain.model.PlatformMemoryScope;
 import com.aicode.framework.platform.domain.port.PlatformRunScopePort;
 import com.aicode.framework.platform.infrastructure.config.PlatformKnowledgeProperties;
@@ -75,6 +76,16 @@ class KnowledgeQaUseCaseTest {
     }
 
     @Test
+    void missingBindingIsNotFoundBeforeCallingModel() {
+        bindingPort.save(binding(true).markMissing(Instant.parse("2026-10-26T00:00:00Z")));
+
+        assertThatThrownBy(() -> useCase.run(USER_ID, KB_ID, "q"))
+                .isInstanceOf(PlatformNotFoundException.class)
+                .hasMessageContaining("removed on enterprise side");
+        verifyNoInteractions(agent);
+    }
+
+    @Test
     void validatesInputs() {
         assertThatThrownBy(() -> useCase.run(USER_ID, null, "q"))
                 .isInstanceOf(InvalidChatRequestException.class);
@@ -106,7 +117,8 @@ class KnowledgeQaUseCaseTest {
 
     private KnowledgeBinding binding(boolean enabled) {
         Instant now = Instant.parse("2026-10-25T10:00:00Z");
-        return new KnowledgeBinding("b-1", "default", 7L, KB_ID, "慢病指南", "内部", enabled, 1L, now, now);
+        return new KnowledgeBinding("b-1", "default", 7L, KB_ID, "慢病指南", "内部", enabled, 1L, now, now,
+                KnowledgeBindingSyncStatus.ACTIVE, now);
     }
 
     private KnowledgeAnswer answer() {

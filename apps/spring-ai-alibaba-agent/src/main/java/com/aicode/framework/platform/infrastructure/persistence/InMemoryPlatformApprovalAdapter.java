@@ -24,6 +24,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class InMemoryPlatformApprovalAdapter implements PlatformApprovalPort {
 
     private final ConcurrentHashMap<String, PlatformApproval> store = new ConcurrentHashMap<>();
+    /** 提醒记账（Week 27）：approvalId → 提醒次数 / 最近提醒时间。 */
+    private final ConcurrentHashMap<String, ReminderState> reminders = new ConcurrentHashMap<>();
 
     @Override
     public void save(PlatformApproval approval) {
@@ -56,6 +58,60 @@ public class InMemoryPlatformApprovalAdapter implements PlatformApprovalPort {
     @Override
     public long countByUser(long userId, ApprovalStatus status) {
         return count(status, approval -> approval.userId() == userId);
+    }
+
+    @Override
+    public List<PlatformApproval> listPendingCreatedBefore(long userId, Instant createdBefore, int limit) {
+        return pendingBefore(createdBefore, limit, approval -> approval.userId() == userId);
+    }
+
+    @Override
+    public List<PlatformApproval> listAllPendingCreatedBefore(Instant createdBefore, int limit) {
+        return pendingBefore(createdBefore, limit, approval -> true);
+    }
+
+    @Override
+    public List<PlatformApproval> listRemindable(
+            Instant createdBefore,
+            Instant remindedBefore,
+            int limit
+    ) {
+        return pendingBefore(createdBefore, limit, approval -> {
+            ReminderState state = reminders.get(approval.approvalId());
+            return state == null || !state.lastRemindedAt().isAfter(remindedBefore);
+        });
+    }
+
+    @Override
+    public void markReminded(String approvalId, Instant remindedAt) {
+        if (approvalId == null || approvalId.isBlank() || remindedAt == null) {
+            return;
+        }
+        String id = approvalId.trim();
+        if (!store.containsKey(id)) {
+            return;
+        }
+        reminders.merge(id, new ReminderState(1, remindedAt),
+                (existing, incoming) -> new ReminderState(
+                        existing.count() + 1, incoming.lastRemindedAt()));
+    }
+
+    private List<PlatformApproval> pendingBefore(
+            Instant createdBefore,
+            int limit,
+            java.util.function.Predicate<PlatformApproval> predicate
+    ) {
+        if (createdBefore == null || limit <= 0) {
+            return List.of();
+        }
+        return store.values().stream()
+                .filter(predicate)
+                .filter(PlatformApproval::pending)
+                .filter(approval -> !approval.createdAt().isAfter(createdBefore))
+                .sorted(Comparator.comparing(PlatformApproval::createdAt)
+                        .thenComparing(PlatformApproval::approvalId))
+                .limit(limit)
+                .toList();
     }
 
     @Override
@@ -115,5 +171,14 @@ public class InMemoryPlatformApprovalAdapter implements PlatformApprovalPort {
      */
     public int size() {
         return store.size();
+    }
+
+    /**
+     * 提醒记账状态（Week 27）。
+     *
+     * @param count          已提醒次数
+     * @param lastRemindedAt 最近提醒时间
+     */
+    private record ReminderState(int count, Instant lastRemindedAt) {
     }
 }

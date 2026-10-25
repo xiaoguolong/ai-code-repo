@@ -6,6 +6,7 @@ import com.aicode.framework.knowledge.domain.port.KnowledgeSearchPort;
 import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
 import com.aicode.framework.platform.domain.model.KnowledgeBinding;
+import com.aicode.framework.platform.domain.model.KnowledgeBindingSyncStatus;
 import com.aicode.framework.platform.domain.model.PlatformRole;
 import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.service.PlatformPermissionChecker;
@@ -91,6 +92,15 @@ class KnowledgeBindingUseCaseTest {
 
         assertThat(bindingPort.findByTenantAndKnowledgeBase("default", 11L).orElseThrow().name())
                 .isEqualTo("新名");
+    }
+
+    @Test
+    void importMarksBindingsActiveAndSynced() {
+        adminImports();
+
+        KnowledgeBinding binding = bindingPort.findByTenantAndKnowledgeBase("default", 11L).orElseThrow();
+        assertThat(binding.syncStatus()).isEqualTo(KnowledgeBindingSyncStatus.ACTIVE);
+        assertThat(binding.lastSyncedAt()).isEqualTo(NOW);
     }
 
     @Test

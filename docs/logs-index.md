@@ -31,6 +31,8 @@ logs/
 │   ├── deploy/          # 配置对齐、两模块发布、演示数据、故障现场
 │   ├── acceptance/      # week24 / week25 / 三 Agent 回归
 │   └── diagnose/        # 验收脚本与指标抓取缺陷的定位证据
+├── week-27/
+│   └── test/            # 第 27 周新增用例 / platform 全量 / 根聚合（971 用例 + V10 首次迁移）
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -116,7 +118,19 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 归档约定：`logs/week-26/{test,migration,deploy,acceptance,diagnose}/`。
 > 本周日志含一次**数据库密码误打印**，该行已在本机替换为 `***REDACTED***`；`logs/` 不入库。
 
-## 6. 早期日志
+## 6. 第 27 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-27/test/target-week27-new-tests.log` | 新增用例过滤集 **69** 全绿（对账/提醒/指标/工具/知识库） |
+| `logs/week-27/test/target-week27-enterprise-tests.log` | enterprise 内部知识库 **15** 全绿（含按企业用户列库、参数互斥） |
+| `logs/week-27/test/target-week27-platform-full2.log` | platform 全量 **690** 全绿（Week 26 基线 648，+42）；首次 V10 迁移 |
+| `logs/week-27/test/target-week27-full.log` | 根聚合 **971** 全绿（Week 26 基线 924，+47） |
+
+> 云端 V10 尚未发布；发布后按 `docs/specs/week-27.md` 第四/五节补 `logs/week-27/deploy/`
+> 与 `logs/week-27/acceptance/`（对账一次 + 超时提醒一次）。
+
+## 7. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -126,7 +140,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 7. 维护规则
+## 8. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

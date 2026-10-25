@@ -1,23 +1,39 @@
 package com.aicode.framework.platform.domain.port;
 
 import com.aicode.framework.platform.domain.model.KnowledgeBinding;
+import com.aicode.framework.platform.domain.model.KnowledgeBindingSyncStatus;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 知识库绑定端口（Week 25）。
+ * 知识库绑定端口（Week 25，Week 27 加对账支持）。
  *
- * <p>所有查询都必须带 {@code tenant_key}：绑定是租户级资源，不接受跨租户读取。</p>
+ * <p>所有租户维度查询都必须带 {@code tenant_key}：绑定是租户级资源，不接受跨租户读取。
+ * 仅 {@link #listAll()} 与 {@link #countBySyncStatus} 是运维/调度用途，不向普通请求暴露。</p>
  */
 public interface KnowledgeBindingPort {
 
     /**
-     * 保存（按 bindingId 覆盖写）。
+     * 保存（按 bindingId 覆盖写，含元数据与同步状态）。
      *
      * @param binding 绑定
      */
     void save(KnowledgeBinding binding);
+
+    /**
+     * 只更新同步状态与最近对账时间，<b>不改</b>名称/描述/{@code updatedAt}。
+     *
+     * <p>对账时元数据没变也要留下「今天检查过」的证据，但不应把 {@code updatedAt}
+     * 变成每日一次的心跳。由对账用例在元数据无变化 / 标记 MISSING 时调用。</p>
+     *
+     * @param bindingId  绑定 ID
+     * @param syncStatus 新状态
+     * @param syncedAt   对账时间
+     * @return true = 更新了一条
+     */
+    boolean updateSyncState(String bindingId, KnowledgeBindingSyncStatus syncStatus, Instant syncedAt);
 
     /**
      * 按租户 + 知识库查绑定。
@@ -43,6 +59,21 @@ public interface KnowledgeBindingPort {
      * @return 按创建时间倒序的绑定，无数据返回空列表
      */
     List<KnowledgeBinding> listByTenant(String tenantKey);
+
+    /**
+     * 列出全部租户的绑定（仅调度对账使用）。
+     *
+     * @return 按租户 + 创建时间倒序的绑定，无数据返回空列表
+     */
+    List<KnowledgeBinding> listAll();
+
+    /**
+     * 统计某同步状态的绑定数（对账 Gauge 用，全局口径）。
+     *
+     * @param syncStatus 同步状态
+     * @return 条数，无数据返回 0
+     */
+    long countBySyncStatus(KnowledgeBindingSyncStatus syncStatus);
 
     /**
      * 删除绑定（带租户谓词）。

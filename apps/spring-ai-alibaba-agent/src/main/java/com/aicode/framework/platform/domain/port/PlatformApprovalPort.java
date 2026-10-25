@@ -82,4 +82,47 @@ public interface PlatformApprovalPort {
             long decidedBy,
             String comment,
             Instant decidedAt);
+
+    /**
+     * 列出某用户「创建时间早于 cutoff」的待审任务（Week 27 站内超时视图用）。
+     *
+     * <p>按创建时间升序（最久的排前面），只返回 {@code PENDING}。</p>
+     *
+     * @param userId        发起人
+     * @param createdBefore 创建时间上界（不含之后创建的）
+     * @param limit         条数上限
+     * @return 任务列表，无数据返回空列表
+     */
+    List<PlatformApproval> listPendingCreatedBefore(long userId, Instant createdBefore, int limit);
+
+    /**
+     * 列出全部用户「创建时间早于 cutoff」的待审任务（admin 站内视图用）。
+     *
+     * @param createdBefore 创建时间上界
+     * @param limit         条数上限
+     * @return 任务列表，无数据返回空列表
+     */
+    List<PlatformApproval> listAllPendingCreatedBefore(Instant createdBefore, int limit);
+
+    /**
+     * 列出需要提醒的待审任务（Week 27 调度用）：
+     * {@code PENDING}、创建时间早于 {@code createdBefore}，且从未提醒或
+     * 最近提醒时间不晚于 {@code remindedBefore}（冷却窗口）。
+     *
+     * @param createdBefore  创建时间上界
+     * @param remindedBefore 冷却上界（最近提醒时间必须早于/等于它才会再次提醒）
+     * @param limit          条数上限
+     * @return 任务列表（创建时间升序），无数据返回空列表
+     */
+    List<PlatformApproval> listRemindable(Instant createdBefore, Instant remindedBefore, int limit);
+
+    /**
+     * 记录一次提醒（不存在则新建，存在则次数 +1、刷新最近提醒时间）。
+     *
+     * <p>只写提醒记账，<b>不</b>修改审批状态；提醒与决策是两条独立路径。</p>
+     *
+     * @param approvalId 审批任务 ID（必须已存在）
+     * @param remindedAt 提醒时间
+     */
+    void markReminded(String approvalId, Instant remindedAt);
 }

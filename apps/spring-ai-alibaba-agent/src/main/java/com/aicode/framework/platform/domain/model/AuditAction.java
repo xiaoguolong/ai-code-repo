@@ -28,5 +28,9 @@ public enum AuditAction {
     /** 完成随访任务（Week 24） */
     FOLLOWUP_TASK_COMPLETE,
     /** 取消随访任务（Week 24） */
-    FOLLOWUP_TASK_CANCEL
+    FOLLOWUP_TASK_CANCEL,
+    /** 手动对账知识库绑定（Week 27，仅 admin） */
+    KNOWLEDGE_RECONCILE,
+    /** 审批待办超时提醒（Week 27，系统调度） */
+    APPROVAL_REMIND
 }

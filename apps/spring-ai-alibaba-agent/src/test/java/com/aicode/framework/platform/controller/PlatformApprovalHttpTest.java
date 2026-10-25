@@ -14,12 +14,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -44,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "platform.security.web-interceptors.enabled=true",
         "platform.persistence.mode=jdbc",
         "platform.memory.lifecycle.cleanup-enabled=false",
+        "platform.approval.reminder.enabled=false",
         "observability.enabled=false",
         "langfuse.enabled=false"
 })
@@ -65,6 +70,9 @@ class PlatformApprovalHttpTest {
 
     @Autowired
     private PasswordHasher passwordHasher;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @MockitoBean
     private PlatformAgentRunner platformAgentRunner;
@@ -211,6 +219,45 @@ class PlatformApprovalHttpTest {
     }
 
     @Test
+    void remindersEndpointListsOverduePendingApprovalWithoutDecidingIt() throws Exception {
+        String token = login("operator", "operator123");
+        JsonNode run = runHighRisk(token);
+        String approvalId = objectMapper.readTree(run.path("outputJson").asText())
+                .path("approvalId").asText();
+        backdate(approvalId, 30);
+
+        mockMvc.perform(get("/api/v1/platform/approvals/reminders?limit=20")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.thresholdHours").value(24))
+                .andExpect(jsonPath("$.data.items[?(@.approvalId=='" + approvalId + "')]").exists())
+                .andExpect(jsonPath("$.data.items[0].overdueHours")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(29)));
+
+        // 提醒只读：审批仍是待审（decidedBy/decidedAt 未变由用例单测覆盖，响应体不暴露 decidedBy）
+        mockMvc.perform(get("/api/v1/platform/approvals/" + approvalId)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PENDING"));
+    }
+
+    @Test
+    void adminRemindersIncludeOtherUsersOverdueApproval() throws Exception {
+        String operatorToken = login("operator", "operator123");
+        JsonNode run = runHighRisk(operatorToken);
+        String approvalId = objectMapper.readTree(run.path("outputJson").asText())
+                .path("approvalId").asText();
+        backdate(approvalId, 48);
+        String adminToken = login("admin", "admin123");
+
+        mockMvc.perform(get("/api/v1/platform/approvals/reminders")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[?(@.approvalId=='" + approvalId + "')]").exists());
+    }
+
+    @Test
     void invalidStatusReturns400() throws Exception {
         String token = login("operator", "operator123");
 
@@ -218,6 +265,12 @@ class PlatformApprovalHttpTest {
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    private void backdate(String approvalId, long hours) {
+        jdbcTemplate.update(
+                "UPDATE platform_approval SET created_at = ? WHERE approval_id = ?",
+                Timestamp.from(Instant.now().minus(hours, ChronoUnit.HOURS)), approvalId);
     }
 
     private JsonNode runHighRisk(String token) throws Exception {

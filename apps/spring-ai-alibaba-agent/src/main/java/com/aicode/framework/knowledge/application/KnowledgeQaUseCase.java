@@ -69,9 +69,17 @@ public class KnowledgeQaUseCase {
 
         KnowledgeBinding binding = bindingPort
                 .findByTenantAndKnowledgeBase(scope.tenantKey(), knowledgeBaseId)
-                .filter(KnowledgeBinding::enabled)
                 .orElseThrow(() -> new PlatformNotFoundException(
                         "knowledge base is not bound: " + knowledgeBaseId));
+        if (!binding.enabled()) {
+            throw new PlatformNotFoundException(
+                    "knowledge base is disabled: " + knowledgeBaseId);
+        }
+        if (binding.missing()) {
+            // 对账已确认企业侧删除：在调模型之前 404，不伪装成「没有检索到」。
+            throw new PlatformNotFoundException(
+                    "knowledge base was removed on enterprise side: " + knowledgeBaseId);
+        }
         log.info("[knowledge-qa] run callerUserId={} tenantKey={} knowledgeBaseId={}",
                 callerUserId, scope.tenantKey(), knowledgeBaseId);
         return agent.run(knowledgeBaseId, normalizedQuestion);

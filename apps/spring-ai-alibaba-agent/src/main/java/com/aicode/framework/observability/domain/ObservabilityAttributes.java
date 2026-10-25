@@ -84,6 +84,12 @@ public final class ObservabilityAttributes {
     /** token 类型标签值：补全。 */
     public static final String TOKEN_TYPE_COMPLETION = "completion";
 
+    /** 知识库检索结果标签键（Week 27）。 */
+    public static final String KNOWLEDGE_OUTCOME = "knowledge.outcome";
+
+    /** 知识库绑定对账结果标签键（Week 27）。 */
+    public static final String KNOWLEDGE_RESULT = "knowledge.result";
+
     private ObservabilityAttributes() {
     }
 }

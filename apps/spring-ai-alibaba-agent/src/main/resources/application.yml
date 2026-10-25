@@ -128,6 +128,13 @@ platform:
       enabled: ${PLATFORM_APPROVAL_RECONCILIATION_ENABLED:true}
       cron: "${PLATFORM_APPROVAL_RECONCILIATION_CRON:0 */10 * * * *}"
       limit: ${PLATFORM_APPROVAL_RECONCILIATION_LIMIT:200}
+    # Week 27：审批待办超时提醒（只提醒，不自动拒绝；阈值/冷却/上限在 Properties 里夹取）。
+    reminder:
+      enabled: ${PLATFORM_APPROVAL_REMINDER_ENABLED:true}
+      cron: "${PLATFORM_APPROVAL_REMINDER_CRON:0 5 * * * *}"
+      threshold-hours: ${PLATFORM_APPROVAL_REMINDER_THRESHOLD_HOURS:24}
+      cooldown-hours: ${PLATFORM_APPROVAL_REMINDER_COOLDOWN_HOURS:12}
+      limit: ${PLATFORM_APPROVAL_REMINDER_LIMIT:200}
   # Week 25：知识库 Agent 3（平台不存正文，检索走 enterprise 内部只读端点）。
   # internal-token 必须与 enterprise 的 ENTERPRISE_INTERNAL_TOKEN 一致；未配置时检索显式失败。
   knowledge:
@@ -138,6 +145,11 @@ platform:
     default-top-k: ${PLATFORM_KNOWLEDGE_DEFAULT_TOP_K:4}
     max-top-k: ${PLATFORM_KNOWLEDGE_MAX_TOP_K:10}
     max-question-chars: ${PLATFORM_KNOWLEDGE_MAX_QUESTION_CHARS:4000}
+    # Week 27：绑定对账（改名同步 / 删库标记 MISSING / 新增只统计）。
+    reconcile:
+      enabled: ${PLATFORM_KNOWLEDGE_RECONCILE_ENABLED:true}
+      cron: "${PLATFORM_KNOWLEDGE_RECONCILE_CRON:0 15 2 * * *}"
+      batch-limit: ${PLATFORM_KNOWLEDGE_RECONCILE_BATCH_LIMIT:500}
 
 # Week 21：记忆向量化（平台不做 RAG，维度与 embedding 模型保持一致）。
 # 默认 hashing 为离线确定性实现；换真模型时 provider=openai + base-url/api-key/model 均从环境变量注入。
@@ -246,12 +258,15 @@ management:
         agent.run.duration: true
         llm.call.duration: true
         http.server.requests: true
+        # Week 27：知识库检索 P95（与 agent/llm 同理，不开直方图就只有 count/sum）
+        knowledge.search.duration: true
       # 默认桶上界是 30s，而一次 Agent 执行 / 一次 LLM 调用经常 30–60s：
       # 超过上界的观测只会落进 +Inf，histogram_quantile 直接返回 NaN（Grafana P95 空白）。
       maximum-expected-value:
         agent.run.duration: 120s
         llm.call.duration: 120s
         http.server.requests: 30s
+        knowledge.search.duration: 5s
   tracing:
     enabled: true
     # 采样率：演示/验收取 1.0 保证 span 全落；生产环境按容量用环境变量降到 0.1 量级。

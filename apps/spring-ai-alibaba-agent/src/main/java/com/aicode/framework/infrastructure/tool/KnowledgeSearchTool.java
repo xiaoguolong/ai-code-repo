@@ -7,6 +7,8 @@ import com.aicode.core.domain.model.ToolResult;
 import com.aicode.framework.knowledge.domain.model.KnowledgeSearchHit;
 import com.aicode.framework.knowledge.domain.model.KnowledgeSearchQuery;
 import com.aicode.framework.knowledge.domain.port.KnowledgeSearchPort;
+import com.aicode.framework.observability.domain.AgentObservabilityPort;
+import com.aicode.framework.observability.domain.NoopObservabilityAdapter;
 import com.aicode.framework.platform.domain.model.KnowledgeBinding;
 import com.aicode.framework.platform.domain.model.PlatformMemoryScope;
 import com.aicode.framework.platform.domain.port.KnowledgeBindingPort;
@@ -45,19 +47,23 @@ public class KnowledgeSearchTool implements Tool {
     private final PlatformRunScopePort runScopePort;
     private final PlatformKnowledgeProperties properties;
     private final ObjectMapper objectMapper;
+    private final KnowledgeSearchTelemetry telemetry;
 
     public KnowledgeSearchTool(
             KnowledgeBindingPort bindingPort,
             KnowledgeSearchPort searchPort,
             PlatformRunScopePort runScopePort,
             PlatformKnowledgeProperties properties,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            AgentObservabilityPort observability
     ) {
         this.bindingPort = bindingPort;
         this.searchPort = searchPort;
         this.runScopePort = runScopePort;
         this.properties = properties == null ? new PlatformKnowledgeProperties() : properties;
         this.objectMapper = objectMapper;
+        this.telemetry = new KnowledgeSearchTelemetry(
+                observability == null ? new NoopObservabilityAdapter() : observability);
     }
 
     @Override
@@ -86,11 +92,19 @@ public class KnowledgeSearchTool implements Tool {
 
         KnowledgeBinding binding = bindingPort
                 .findByTenantAndKnowledgeBase(scope.tenantKey(), knowledgeBaseId)
-                .filter(KnowledgeBinding::enabled)
                 .orElseThrow(() -> new ToolExecutionException(
                         "knowledge base is not available for tenant: " + knowledgeBaseId));
+        if (!binding.enabled()) {
+            throw new ToolExecutionException(
+                    "knowledge base is not available for tenant: " + knowledgeBaseId);
+        }
+        if (binding.missing()) {
+            // 第二道防线：用例层已拦，但工具也可能被直接调用。
+            throw new ToolExecutionException(
+                    "knowledge base was deleted on enterprise side: " + knowledgeBaseId);
+        }
 
-        List<KnowledgeSearchHit> hits = searchPort.search(new KnowledgeSearchQuery(
+        List<KnowledgeSearchHit> hits = timedSearch(new KnowledgeSearchQuery(
                 binding.enterpriseUserId(), knowledgeBaseId, query, topK));
 
         Map<String, Object> data = new LinkedHashMap<>();
@@ -111,6 +125,26 @@ public class KnowledgeSearchTool implements Tool {
         log.info("[knowledge] tool search tenantKey={} knowledgeBaseId={} hits={}",
                 scope.tenantKey(), knowledgeBaseId, items.size());
         return new ToolResult(toJson(data));
+    }
+
+    /**
+     * 检索并记录专项指标（Week 27）：耗时含上游调用，命中数按本次结果累加。
+     *
+     * <p>指标失败由观测端口保证不抛出；这里只保证检索结果与异常原样透传。</p>
+     *
+     * @param query 检索条件
+     * @return 命中切片
+     */
+    private List<KnowledgeSearchHit> timedSearch(KnowledgeSearchQuery query) {
+        KnowledgeSearchTelemetry.Call call = telemetry.start();
+        try {
+            List<KnowledgeSearchHit> hits = searchPort.search(query);
+            telemetry.success(call, hits.size());
+            return hits;
+        } catch (RuntimeException ex) {
+            telemetry.failure(call);
+            throw ex;
+        }
     }
 
     private int resolveTopK(Map<String, Object> arguments) {

@@ -6,6 +6,7 @@ import com.aicode.framework.knowledge.domain.port.KnowledgeSearchPort;
 import com.aicode.framework.platform.domain.exception.PlatformAccessDeniedException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
 import com.aicode.framework.platform.domain.model.KnowledgeBinding;
+import com.aicode.framework.platform.domain.model.KnowledgeBindingSyncStatus;
 import com.aicode.framework.platform.domain.model.PlatformUser;
 import com.aicode.framework.platform.domain.port.KnowledgeBindingPort;
 import com.aicode.framework.platform.domain.port.PlatformUserPort;
@@ -74,13 +75,11 @@ public class KnowledgeBindingUseCase {
                 bindingPort.save(new KnowledgeBinding(
                         UUID.randomUUID().toString(), admin.tenantKey(), catalog.enterpriseUserId(),
                         entry.knowledgeBaseId(), entry.name(), entry.description(), true,
-                        callerUserId, now, now));
+                        callerUserId, now, now, KnowledgeBindingSyncStatus.ACTIVE, now));
                 imported++;
             } else {
-                bindingPort.save(new KnowledgeBinding(
-                        existing.bindingId(), existing.tenantKey(), catalog.enterpriseUserId(),
-                        entry.knowledgeBaseId(), entry.name(), entry.description(), existing.enabled(),
-                        existing.createdBy(), existing.createdAt(), now));
+                // 导入本身就是一次「刚从企业侧读到」的成功对账：状态置 ACTIVE 并刷新 lastSyncedAt。
+                bindingPort.save(existing.synced(entry.name(), entry.description(), now));
                 updated++;
             }
         }

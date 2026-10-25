@@ -1016,6 +1016,49 @@ template1 collation 未刷新、宿主机无 psql 导致演练脚本不可用、
 
 ---
 
+# 第27周：知识库运营化（绑定对账 + 审批超时提醒 + 检索指标）
+
+
+完成（2026-10-25，`week-26-candidates.md` P1 #1 / #3 / #6）：
+
+- [x] **绑定对账与自动同步（V10）**：`platform_knowledge_binding` 增加 `sync_status`（UNKNOWN/ACTIVE/MISSING）
+      与 `last_synced_at`；按「租户 + 企业归属人」分组调用 enterprise，改名/描述自动同步，
+      企业侧删库标记 `MISSING` 但**不删行**，企业侧新增只计 `unbound`（不自动绑定）
+- [x] **失败不改状态**：enterprise 停机/令牌未配/超时只计 `failed`，绑定状态与 `lastSyncedAt` 保持原值——
+      上游抖动不能让线上知识库全部变成「已删除」
+- [x] **定时 + 手动对账**：每日 02:15 调度（可关）；admin `POST /knowledge-bindings/reconcile` 只对账本租户，
+      写审计 `KNOWLEDGE_RECONCILE`；调度对账不写审计（日志 + 指标可追溯）
+- [x] **enterprise 按企业用户列库**：`GET /internal/knowledge/bases?enterpriseUserId=`
+      （与 `platformUserId` 互斥，恰好一个），对账不再依赖导入人的 SSO 映射
+- [x] **MISSING 检索语义**：问答用例与检索工具都在调模型/调上游之前 404，
+      不把「库已删除」伪装成「没检索到」；`UNKNOWN`（尚未对账）仍可检索
+- [x] **审批待办超时提醒**：V10 `platform_approval_reminder`；默认 24h 阈值 / 12h 冷却 / 单次 200 条；
+      `GET /approvals/reminders` 站内视图（admin 可见全部超时）；调度写审计 `APPROVAL_REMIND` + 指标
+- [x] **不自动拒绝**：提醒只写记账/审计/指标，审批状态、决策人、执行状态一个都不改（单测锁定）
+- [x] **检索与对账指标**：`knowledge.search.duration`（Timer + 直方图）、`knowledge.hit.count`、
+      `knowledge.reconcile.count{result}`、`knowledge.binding.missing.count`、`approval.reminder.count`
+- [x] **结构约束**：三个超 200 行的类按职责拆分（对账差异/指标上报、审批行映射、检索埋点），行为不变
+
+交付：Spec `docs/specs/week-27.md` ｜ 架构 `docs/architecture/week-27-architecture.md` ｜
+接口 `docs/api/week-27-api.md` ｜ 实现日志 `notes/impl-logs/week-27.md` ｜
+Postman `docs/postman/week-27.postman_collection.json` ｜ 迁移 `V10__platform_knowledge_sync_and_approval_reminder.sql`
+
+实测：根聚合 **971** 用例全绿（Week 26 基线 924；platform 648→**690**，
+enterprise 65→**70**，ai-core 90 / patient 21 / gateway 100 不变）；
+H2 首次启动 `Successfully applied 10 migrations ... now at version v10`，重启只校验。
+新增 47 个用例：对账 13、审批提醒 9、JDBC 适配器 7、HTTP 契约 5、检索工具 3、知识库用例 2、
+调度与指标契约 3（platform 42）+ enterprise 5（按企业用户列库 / 参数互斥）。
+
+> **云端发布待执行**（本周代码/迁移已就绪，未在腾讯云执行）：发布平台 jar 后 Flyway 会应用 V10；
+> 建议发布后依次验证 `sync_status` 列/`platform_approval_reminder` 表、手动对账一次、
+> 回填一条 24h 前待审再查 `GET /approvals/reminders`，步骤见 `docs/api/week-27-api.md` 与
+> `docs/specs/week-27.md` 第四节。
+
+> **明确不做**：科室级知识库授权（P1 #2）、平台用户停用 TD-06、SSE、日报导出、HIS/LIS 真实数据源；
+> 审批**不**自动拒绝/升级；对账**不**自动新增/删除绑定。触发条件见 `docs/specs/week-27.md` 第 1.2 节。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 

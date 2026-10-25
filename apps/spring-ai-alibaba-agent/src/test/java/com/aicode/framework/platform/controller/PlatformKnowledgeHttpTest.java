@@ -29,6 +29,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -52,6 +53,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "platform.memory.lifecycle.cleanup-enabled=false",
         "platform.approval.reconciliation.enabled=false",
         "platform.approval.pending-gauge.enabled=false",
+        "platform.knowledge.reconcile.enabled=false",
         "observability.enabled=false",
         "langfuse.enabled=false"
 })
@@ -190,6 +192,66 @@ class PlatformKnowledgeHttpTest {
 
         mockMvc.perform(get("/api/v1/platform/knowledge-bindings"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void adminReconcileSyncsRename() throws Exception {
+        String adminToken = login("admin", "admin123");
+        importBindings(adminToken);
+        when(knowledgeSearchPort.listBasesByEnterpriseUser(ENTERPRISE_USER_ID))
+                .thenReturn(new KnowledgeBaseCatalog(ENTERPRISE_USER_ID, List.of(
+                        new KnowledgeBaseCatalogEntry(KB_ID, "慢病指南（2026 版）", "内部资料", 3))));
+
+        mockMvc.perform(post("/api/v1/platform/knowledge-bindings/reconcile")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.tenantKey").value("default"))
+                .andExpect(jsonPath("$.data.groups").value(1))
+                .andExpect(jsonPath("$.data.updated").value(1))
+                .andExpect(jsonPath("$.data.missing").value(0));
+
+        mockMvc.perform(get("/api/v1/platform/knowledge-bindings")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].name").value("慢病指南（2026 版）"))
+                .andExpect(jsonPath("$.data.items[0].syncStatus").value("ACTIVE"));
+    }
+
+    @Test
+    void operatorCannotReconcileButCanReadSyncStatus() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String operatorToken = login("operator", "operator123");
+        importBindings(adminToken);
+
+        mockMvc.perform(post("/api/v1/platform/knowledge-bindings/reconcile")
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+        mockMvc.perform(get("/api/v1/platform/knowledge-bindings")
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].syncStatus").value("ACTIVE"));
+    }
+
+    @Test
+    void missingBindingIs404AndDoesNotCallAgent() throws Exception {
+        String adminToken = login("admin", "admin123");
+        String operatorToken = login("operator", "operator123");
+        importBindings(adminToken);
+        jdbcTemplate.update(
+                "UPDATE platform_knowledge_binding SET sync_status = 'MISSING' WHERE knowledge_base_id = ?",
+                KB_ID);
+
+        mockMvc.perform(post("/api/v1/platform/agents/knowledge-qa/runs")
+                        .header("Authorization", "Bearer " + operatorToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"input\":{\"knowledgeBaseId\":911,\"question\":\"糖尿病随访要点\"}}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("PLATFORM_NOT_FOUND"));
+
+        verifyNoInteractions(knowledgeQaAgent);
     }
 
     private String importBindings(String adminToken) throws Exception {

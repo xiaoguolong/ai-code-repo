@@ -10,6 +10,7 @@ import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.DocumentPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
 import com.aicode.enterprise.domain.port.SsoUserLinkPort;
+import com.aicode.enterprise.domain.port.UserPort;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -41,6 +42,7 @@ public class InternalKnowledgeUseCase {
     private final KnowledgeBasePort knowledgeBasePort;
     private final DocumentPort documentPort;
     private final SsoUserLinkPort ssoUserLinkPort;
+    private final UserPort userPort;
     private final EmbeddingModelPort embeddingModelPort;
     private final VectorStorePort vectorStorePort;
     private final RagRuntimeConfig ragConfig;
@@ -49,6 +51,7 @@ public class InternalKnowledgeUseCase {
             KnowledgeBasePort knowledgeBasePort,
             DocumentPort documentPort,
             SsoUserLinkPort ssoUserLinkPort,
+            UserPort userPort,
             EmbeddingModelPort embeddingModelPort,
             VectorStorePort vectorStorePort,
             RagRuntimeConfig ragConfig
@@ -56,6 +59,7 @@ public class InternalKnowledgeUseCase {
         this.knowledgeBasePort = knowledgeBasePort;
         this.documentPort = documentPort;
         this.ssoUserLinkPort = ssoUserLinkPort;
+        this.userPort = userPort;
         this.embeddingModelPort = embeddingModelPort;
         this.vectorStorePort = vectorStorePort;
         this.ragConfig = ragConfig;
@@ -72,11 +76,36 @@ public class InternalKnowledgeUseCase {
         long enterpriseUserId = ssoUserLinkPort.findEnterpriseUserId(platformUserId)
                 .orElseThrow(() -> new NotFoundException(
                         "platform user is not linked to an enterprise user: " + platformUserId));
+        return catalogOf(enterpriseUserId, "platformUserId=" + platformUserId);
+    }
+
+    /**
+     * 按企业本地用户列出知识库（Week 27：平台对账用）。
+     *
+     * <p>与 {@link #listBases(long)} 的区别：不依赖平台用户 ↔ 企业用户的实时 SSO 映射，
+     * 因为绑定表里记录的就是 {@code enterpriseUserId}，导入人离职/解绑不应让对账失效。</p>
+     *
+     * @param enterpriseUserId 企业本地用户 ID
+     * @return 本地用户 ID + 知识库清单
+     * @throws InvalidChatRequestException ID 非正数
+     * @throws NotFoundException           本地用户不存在（平台按整组失败处理，不标记删除）
+     */
+    public InternalKnowledgeCatalog listBasesByEnterpriseUser(long enterpriseUserId) {
+        if (enterpriseUserId <= 0) {
+            throw new InvalidChatRequestException("enterpriseUserId must be positive");
+        }
+        userPort.findById(enterpriseUserId)
+                .orElseThrow(() -> new NotFoundException(
+                        "enterprise user not found: " + enterpriseUserId));
+        return catalogOf(enterpriseUserId, "enterpriseUserId=" + enterpriseUserId);
+    }
+
+    private InternalKnowledgeCatalog catalogOf(long enterpriseUserId, String source) {
         List<InternalKnowledgeBaseView> bases = knowledgeBasePort.listByUser(enterpriseUserId).stream()
                 .map(this::toView)
                 .toList();
-        log.info("[enterprise-internal] list bases platformUserId={} enterpriseUserId={} count={}",
-                platformUserId, enterpriseUserId, bases.size());
+        log.info("[enterprise-internal] list bases {} enterpriseUserId={} count={}",
+                source, enterpriseUserId, bases.size());
         return new InternalKnowledgeCatalog(enterpriseUserId, bases);
     }
 

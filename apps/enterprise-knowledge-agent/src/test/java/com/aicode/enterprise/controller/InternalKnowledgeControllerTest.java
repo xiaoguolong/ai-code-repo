@@ -73,6 +73,32 @@ class InternalKnowledgeControllerTest {
     }
 
     @Test
+    void returnsCatalogByEnterpriseUserId() throws Exception {
+        when(useCase.listBasesByEnterpriseUser(7L)).thenReturn(new InternalKnowledgeCatalog(
+                7L, List.of(new InternalKnowledgeBaseView(11L, "慢病指南", "内部", 2))));
+
+        mockMvc.perform(get("/api/v1/internal/knowledge/bases")
+                        .header("X-Internal-Token", TOKEN)
+                        .param("enterpriseUserId", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.enterpriseUserId").value(7))
+                .andExpect(jsonPath("$.data.bases[0].knowledgeBaseId").value(11));
+    }
+
+    @Test
+    void requiresExactlyOneLookupMode() throws Exception {
+        mockMvc.perform(get("/api/v1/internal/knowledge/bases")
+                        .header("X-Internal-Token", TOKEN))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(get("/api/v1/internal/knowledge/bases")
+                        .header("X-Internal-Token", TOKEN)
+                        .param("platformUserId", "2")
+                        .param("enterpriseUserId", "7"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void returnsSearchHits() throws Exception {
         when(useCase.search(any())).thenReturn(new InternalKnowledgeResult(
                 7L,

@@ -24,6 +24,17 @@ public interface KnowledgeSearchPort {
     KnowledgeBaseCatalog listBases(long platformUserId);
 
     /**
+     * 按企业本地用户查询其名下知识库（Week 27：绑定对账用）。
+     *
+     * <p>不依赖平台 ↔ 企业的实时 SSO 映射：绑定里记录的就是 {@code enterpriseUserId}，
+     * 导入人离职/解绑不应让对账失效。</p>
+     *
+     * @param enterpriseUserId 企业本地用户 ID
+     * @return 企业用户 ID + 知识库清单
+     */
+    KnowledgeBaseCatalog listBasesByEnterpriseUser(long enterpriseUserId);
+
+    /**
      * 检索切片。
      *
      * @param query 检索条件

@@ -2,6 +2,7 @@ package com.aicode.enterprise.application;
 
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.core.domain.exception.NotFoundException;
+import com.aicode.core.domain.model.User;
 import com.aicode.core.domain.model.VectorSearchHit;
 import com.aicode.core.domain.port.EmbeddingModelPort;
 import com.aicode.core.domain.port.VectorStorePort;
@@ -10,6 +11,7 @@ import com.aicode.enterprise.domain.model.KnowledgeBase;
 import com.aicode.enterprise.domain.port.DocumentPort;
 import com.aicode.enterprise.domain.port.KnowledgeBasePort;
 import com.aicode.enterprise.domain.port.SsoUserLinkPort;
+import com.aicode.enterprise.domain.port.UserPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -21,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -35,6 +38,7 @@ class InternalKnowledgeUseCaseTest {
     private KnowledgeBasePort knowledgeBasePort;
     private DocumentPort documentPort;
     private SsoUserLinkPort ssoUserLinkPort;
+    private UserPort userPort;
     private EmbeddingModelPort embeddingModelPort;
     private VectorStorePort vectorStorePort;
     private InternalKnowledgeUseCase useCase;
@@ -44,10 +48,11 @@ class InternalKnowledgeUseCaseTest {
         knowledgeBasePort = mock(KnowledgeBasePort.class);
         documentPort = mock(DocumentPort.class);
         ssoUserLinkPort = mock(SsoUserLinkPort.class);
+        userPort = mock(UserPort.class);
         embeddingModelPort = mock(EmbeddingModelPort.class);
         vectorStorePort = mock(VectorStorePort.class);
         useCase = new InternalKnowledgeUseCase(
-                knowledgeBasePort, documentPort, ssoUserLinkPort, embeddingModelPort,
+                knowledgeBasePort, documentPort, ssoUserLinkPort, userPort, embeddingModelPort,
                 vectorStorePort, new RagRuntimeConfig(4, 500, 50));
     }
 
@@ -74,6 +79,36 @@ class InternalKnowledgeUseCaseTest {
 
         assertThatThrownBy(() -> useCase.listBases(PLATFORM_USER))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void listsBasesByEnterpriseUserWithoutSsoMapping() {
+        when(userPort.findById(ENTERPRISE_USER)).thenReturn(Optional.of(
+                new User(ENTERPRISE_USER, "doctor", "hash", Instant.now())));
+        when(knowledgeBasePort.listByUser(ENTERPRISE_USER)).thenReturn(List.of(knowledgeBase()));
+        when(documentPort.listByKnowledgeBase(KB_ID)).thenReturn(List.of(
+                new DocumentMetadata("D001", KB_ID, "糖尿病指南.pdf", 3, Instant.now())));
+
+        InternalKnowledgeCatalog catalog = useCase.listBasesByEnterpriseUser(ENTERPRISE_USER);
+
+        assertThat(catalog.enterpriseUserId()).isEqualTo(ENTERPRISE_USER);
+        assertThat(catalog.bases()).singleElement().satisfies(view ->
+                assertThat(view.knowledgeBaseId()).isEqualTo(KB_ID));
+        verifyNoInteractions(ssoUserLinkPort);
+    }
+
+    @Test
+    void unknownEnterpriseUserIsNotFound() {
+        when(userPort.findById(999L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> useCase.listBasesByEnterpriseUser(999L))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void nonPositiveEnterpriseUserIdIsRejected() {
+        assertThatThrownBy(() -> useCase.listBasesByEnterpriseUser(0L))
+                .isInstanceOf(InvalidChatRequestException.class);
     }
 
     @Test

@@ -48,18 +48,38 @@ public class RecordingObservabilityPort implements AgentObservabilityPort {
 
     @Override
     public void recordCounter(String name, double amount, String... tags) {
-        calls.add("recordCounter:" + name);
+        calls.add("recordCounter:" + name + tagsSuffix(tags));
     }
 
     @Override
     public void recordDuration(String name, long durationMs, String... tags) {
-        calls.add("recordDuration:" + name);
+        calls.add("recordDuration:" + name + tagsSuffix(tags));
     }
 
     @Override
     public void recordGauge(String name, double value, String... tags) {
-        calls.add("recordGauge:" + name + "=" + value);
+        calls.add("recordGauge:" + name + "=" + value + tagsSuffix(tags));
         delegate.recordGauge(name, value, tags);
+    }
+
+    /**
+     * 把标签拼成 {@code [k=v,...]} 便于断言（Week 27 起记录标签，之前只记名字）。
+     *
+     * @param tags 交替的键值对
+     * @return 空串或 {@code [k=v,...]}
+     */
+    private static String tagsSuffix(String... tags) {
+        if (tags == null || tags.length == 0) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i + 1 < tags.length; i += 2) {
+            if (builder.length() > 1) {
+                builder.append(',');
+            }
+            builder.append(tags[i]).append('=').append(tags[i + 1]);
+        }
+        return builder.append(']').toString();
     }
 
     @Override

@@ -9,14 +9,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
 
-import java.sql.ResultSet;
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * 审批任务落库适配器（Week 23，表 {@code platform_approval}，迁移 V6）。
+ * 审批任务落库适配器（Week 23，表 {@code platform_approval}，迁移 V6；Week 27 加提醒记账）。
  *
  * <p>决策用单条 {@code UPDATE ... WHERE status='PENDING'} 保证并发下只有一个赢家，
  * 避免两个审核人同时批准时写出两条随访记忆。</p>
@@ -30,6 +28,13 @@ public class JdbcPlatformApprovalAdapter implements PlatformApprovalPort {
             SELECT approval_id, execution_id, tenant_key, user_id, agent_key, patient_id,
                    risk_level, task, status, comment, decided_by, created_at, decided_at
             FROM platform_approval
+            """;
+
+    /** 带别名的同名列（Week 27：与提醒表 JOIN 时避免歧义）。 */
+    private static final String SELECT_ALIASED_COLUMNS = """
+            SELECT a.approval_id, a.execution_id, a.tenant_key, a.user_id, a.agent_key, a.patient_id,
+                   a.risk_level, a.task, a.status, a.comment, a.decided_by, a.created_at, a.decided_at
+            FROM platform_approval a
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -109,6 +114,58 @@ public class JdbcPlatformApprovalAdapter implements PlatformApprovalPort {
     }
 
     @Override
+    public List<PlatformApproval> listPendingCreatedBefore(long userId, Instant createdBefore, int limit) {
+        return jdbcTemplate.query(
+                SELECT_COLUMNS + " WHERE status = 'PENDING' AND user_id = ? AND created_at <= ?"
+                        + " ORDER BY created_at ASC, approval_id ASC LIMIT ?",
+                rowMapper, userId, PlatformJdbcSupport.toTimestamp(createdBefore), limit);
+    }
+
+    @Override
+    public List<PlatformApproval> listAllPendingCreatedBefore(Instant createdBefore, int limit) {
+        return jdbcTemplate.query(
+                SELECT_COLUMNS + " WHERE status = 'PENDING' AND created_at <= ?"
+                        + " ORDER BY created_at ASC, approval_id ASC LIMIT ?",
+                rowMapper, PlatformJdbcSupport.toTimestamp(createdBefore), limit);
+    }
+
+    @Override
+    public List<PlatformApproval> listRemindable(
+            Instant createdBefore,
+            Instant remindedBefore,
+            int limit
+    ) {
+        return jdbcTemplate.query(
+                SELECT_ALIASED_COLUMNS
+                        + " LEFT JOIN platform_approval_reminder r ON r.approval_id = a.approval_id"
+                        + " WHERE a.status = 'PENDING' AND a.created_at <= ?"
+                        + " AND (r.last_reminded_at IS NULL OR r.last_reminded_at <= ?)"
+                        + " ORDER BY a.created_at ASC, a.approval_id ASC LIMIT ?",
+                rowMapper,
+                PlatformJdbcSupport.toTimestamp(createdBefore),
+                PlatformJdbcSupport.toTimestamp(remindedBefore),
+                limit);
+    }
+
+    @Override
+    public void markReminded(String approvalId, Instant remindedAt) {
+        if (approvalId == null || approvalId.isBlank()) {
+            return;
+        }
+        int updated = jdbcTemplate.update("""
+                UPDATE platform_approval_reminder
+                SET reminder_count = reminder_count + 1, last_reminded_at = ?
+                WHERE approval_id = ?
+                """, PlatformJdbcSupport.toTimestamp(remindedAt), approvalId.trim());
+        if (updated == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO platform_approval_reminder (approval_id, reminder_count, last_reminded_at)
+                    VALUES (?, 1, ?)
+                    """, approvalId.trim(), PlatformJdbcSupport.toTimestamp(remindedAt));
+        }
+    }
+
+    @Override
     public boolean markDecided(
             String approvalId,
             ApprovalStatus status,
@@ -125,31 +182,5 @@ public class JdbcPlatformApprovalAdapter implements PlatformApprovalPort {
                 WHERE approval_id = ? AND status = 'PENDING'
                 """, status.name(), decidedBy, comment == null ? "" : comment,
                 PlatformJdbcSupport.toTimestamp(decidedAt), approvalId.trim()) > 0;
-    }
-
-    /**
-     * {@code platform_approval} 行 → 领域模型。
-     */
-    private static final class PlatformApprovalRowMapper implements RowMapper<PlatformApproval> {
-
-        @Override
-        public PlatformApproval mapRow(ResultSet rs, int rowNum) throws SQLException {
-            long decidedByValue = rs.getLong("decided_by");
-            Long decidedBy = rs.wasNull() ? null : decidedByValue;
-            return new PlatformApproval(
-                    rs.getString("approval_id"),
-                    rs.getString("execution_id"),
-                    rs.getString("tenant_key"),
-                    rs.getLong("user_id"),
-                    rs.getString("agent_key"),
-                    rs.getString("patient_id"),
-                    rs.getString("risk_level"),
-                    rs.getString("task"),
-                    ApprovalStatus.valueOf(rs.getString("status")),
-                    rs.getString("comment"),
-                    decidedBy,
-                    PlatformJdbcSupport.toInstant(rs.getTimestamp("created_at")),
-                    PlatformJdbcSupport.toInstant(rs.getTimestamp("decided_at")));
-        }
     }
 }

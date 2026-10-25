@@ -4,11 +4,13 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.framework.dto.ApiResponse;
 import com.aicode.framework.platform.application.ApprovalDecision;
+import com.aicode.framework.platform.application.ApprovalReminderUseCase;
 import com.aicode.framework.platform.application.PlatformApprovalDecisionUseCase;
 import com.aicode.framework.platform.application.PlatformApprovalUseCase;
 import com.aicode.framework.platform.domain.model.ApprovalStatus;
 import com.aicode.framework.platform.domain.model.PlatformApproval;
 import com.aicode.framework.platform.dto.ApprovalDecisionRequest;
+import com.aicode.framework.platform.dto.ApprovalReminderResponse;
 import com.aicode.framework.platform.dto.PlatformApprovalListResponse;
 import com.aicode.framework.platform.dto.PlatformApprovalResponse;
 import jakarta.validation.Valid;
@@ -35,13 +37,16 @@ public class PlatformApprovalController {
 
     private final PlatformApprovalUseCase platformApprovalUseCase;
     private final PlatformApprovalDecisionUseCase platformApprovalDecisionUseCase;
+    private final ApprovalReminderUseCase approvalReminderUseCase;
 
     public PlatformApprovalController(
             PlatformApprovalUseCase platformApprovalUseCase,
-            PlatformApprovalDecisionUseCase platformApprovalDecisionUseCase
+            PlatformApprovalDecisionUseCase platformApprovalDecisionUseCase,
+            ApprovalReminderUseCase approvalReminderUseCase
     ) {
         this.platformApprovalUseCase = platformApprovalUseCase;
         this.platformApprovalDecisionUseCase = platformApprovalDecisionUseCase;
+        this.approvalReminderUseCase = approvalReminderUseCase;
     }
 
     /**
@@ -61,6 +66,22 @@ public class PlatformApprovalController {
         List<PlatformApproval> approvals = platformApprovalUseCase.list(
                 callerUserId, parseStatus(status), limit);
         return ApiResponse.success(PlatformApprovalListResponse.from(approvals));
+    }
+
+    /**
+     * 超时待办站内提醒（Week 27，只读）。
+     *
+     * @param limit 条数上限，默认 20、上限 100
+     * @return 超时待办列表（最久的在前）
+     */
+    @GetMapping("/reminders")
+    public ApiResponse<ApprovalReminderResponse> reminders(
+            @RequestParam(defaultValue = "20") int limit
+    ) {
+        StpUtil.checkLogin();
+        long callerUserId = StpUtil.getLoginIdAsLong();
+        return ApiResponse.success(
+                ApprovalReminderResponse.from(approvalReminderUseCase.view(callerUserId, limit)));
     }
 
     /**

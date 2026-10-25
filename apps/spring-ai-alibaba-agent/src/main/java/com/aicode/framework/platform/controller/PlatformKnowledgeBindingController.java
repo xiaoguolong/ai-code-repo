@@ -4,6 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.framework.dto.ApiResponse;
 import com.aicode.framework.knowledge.dto.KnowledgeBindingListResponse;
 import com.aicode.framework.knowledge.dto.KnowledgeImportResponse;
+import com.aicode.framework.knowledge.dto.KnowledgeReconcileResponse;
+import com.aicode.framework.platform.application.KnowledgeBindingReconcileUseCase;
 import com.aicode.framework.platform.application.KnowledgeBindingUseCase;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,9 +25,14 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlatformKnowledgeBindingController {
 
     private final KnowledgeBindingUseCase bindingUseCase;
+    private final KnowledgeBindingReconcileUseCase reconcileUseCase;
 
-    public PlatformKnowledgeBindingController(KnowledgeBindingUseCase bindingUseCase) {
+    public PlatformKnowledgeBindingController(
+            KnowledgeBindingUseCase bindingUseCase,
+            KnowledgeBindingReconcileUseCase reconcileUseCase
+    ) {
         this.bindingUseCase = bindingUseCase;
+        this.reconcileUseCase = reconcileUseCase;
     }
 
     /**
@@ -51,6 +58,19 @@ public class PlatformKnowledgeBindingController {
         StpUtil.checkLogin();
         long callerUserId = StpUtil.getLoginIdAsLong();
         return ApiResponse.success(KnowledgeBindingListResponse.from(bindingUseCase.list(callerUserId)));
+    }
+
+    /**
+     * 手动对账本租户的知识库绑定（仅 admin）。
+     *
+     * @return 对账结果
+     */
+    @PostMapping("/reconcile")
+    public ApiResponse<KnowledgeReconcileResponse> reconcile() {
+        StpUtil.checkLogin();
+        long callerUserId = StpUtil.getLoginIdAsLong();
+        return ApiResponse.success(
+                KnowledgeReconcileResponse.from(reconcileUseCase.reconcileTenant(callerUserId)));
     }
 
     /**
