@@ -15,7 +15,11 @@
 
 services:
   postgres:
-    image: postgres:16
+    # Week 26：改用官方 pgvector 镜像（同 PostgreSQL 16 主版本，数据卷兼容），
+    # enterprise 的 document_chunk / 知识库检索需要 vector 扩展。
+    # 已有卷从 postgres:16 切过来时，务必按 docs/deploy/week-26-closeout.md 第 2.1 节
+    # 刷新 collation（含 template1）并 REINDEX，否则连接告警、建库失败。
+    image: pgvector/pgvector:pg16
     container_name: pg16
     restart: unless-stopped
     environment:
