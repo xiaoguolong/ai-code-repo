@@ -39,6 +39,8 @@ logs/
 │   ├── test/            # 第 28 周 platform 全量 / 根聚合（990 用例 + V11 首次迁移）
 │   ├── deploy/          # 巡检、备份、platform 发布
 │   └── acceptance/      # 停用/恢复/重启 seed/审计
+├── week-29/             # 前端构建/单测/UI 冒烟/nginx 安装/部署
+│   └── deployed/        # 云端部署版冒烟截图
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -157,7 +159,24 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 
 > 云端 V11 已于 2026-10-25 执行完成；回滚与脚本见 `deploy/app/cloud-week28-*.sh`。
 
-## 8. 早期日志
+## 8. 第 29 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-29/frontend-install.log` | pnpm 依赖安装（core-js postinstall 被忽略，属预期） |
+| `logs/week-29/ui-smoke2.log` | 本地 dev UI 冒烟 **PASS=7 FAIL=0**，无 console error |
+| `logs/week-29/ui-smoke-deployed.log` | 云端部署版（nginx）冒烟 **PASS=7 FAIL=0** |
+| `logs/week-29/ui-smoke-operator.log` | operator：knowledge-qa（1567 tokens）+ followup |
+| `logs/week-29/ui-smoke-approval.log` | 审批详情 → 拒绝 → 确定 成功 |
+| `logs/week-29/target-week29-nginx-check.log` | 变更前：nginx 未装、80 空闲、无 web 目录 |
+| `logs/week-29/target-week29-install-nginx.log` | 安装 nginx 1.18.0 并启动 |
+| `logs/week-29/target-week29-deploy-web.log` | 静态包解压、nginx 配置、trust-forwarded-for、健康检查 |
+| `logs/week-29/smoke-01..09*.png`、`deployed/` | 工作台/Agent/审批/知识库/用户/viewer 截图 |
+
+> 云端入口 `http://HOST/` 实测 200；仅 HTTP，TLS/域名未做。
+> 后端本周未改 Java，沿用 Week 28 根聚合 **990**。
+
+## 9. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -167,7 +186,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 9. 维护规则
+## 10. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

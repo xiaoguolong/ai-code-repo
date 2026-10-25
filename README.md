@@ -1104,6 +1104,36 @@ H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，�
 
 ---
 
+# 第29周：最小可用前端（apps/web + Ant Design Vue + 同域 nginx）
+
+完成（2026-10-25）：
+
+- [x] **9 个页面**：登录、工作台、4 个 Agent 运行、执行记录、执行详情、审批（待办/历史/超时）、
+      随访（完成/取消/提醒）、知识库（绑定/对账/问答 citations）、用户管理（停用/恢复）
+- [x] **会话与权限**：token 存 sessionStorage；刷新 `/auth/me` 恢复；401 统一回登录；
+      菜单/按钮按 admin/operator/viewer 收敛；viewer 直访 Agent 路由被守卫拦截
+- [x] **统一错误**：信封 `code` + HTTP 400/401/403/404/409/429/502 中文映射；409 提示后刷新
+- [x] **工程门禁**：`vue-tsc --noEmit` 0 错误、Vitest **11** 例、`vite build` 成功
+- [x] **浏览器冒烟**：Playwright-core + 本机 Edge（不下载浏览器），本地 **7/7**、云端部署版 **7/7**；
+      operator 另验 knowledge-qa（1567 tokens）、followup、审批拒绝
+- [x] **云端同域**：安装 nginx 1.18、静态 `/opt/ai-code/web`、`/api` → 8084、`/ent` → 8081（预留）、
+      `trust-forwarded-for=true`；公网 `http://HOST/` 实测 200
+
+交付：Spec `docs/specs/week-29.md` ｜ 架构 `docs/architecture/week-29-architecture.md` ｜
+接口映射 `docs/api/week-29-api.md` ｜ 部署 `docs/deploy/week-29-web.md` ｜
+实现日志 `notes/impl-logs/week-29.md` ｜ 前端说明 `apps/web/README.md`
+
+实测：前端 typecheck 0 / Vitest 11 全绿 / build 成功；UI 冒烟本地与云端均 **PASS=7 FAIL=0**；
+后端本周未改 Java，沿用 Week 28 根聚合 **990** 全绿。截图见 `logs/week-29/`。
+
+> **入口**：`http://<server.conf 的 HOST>/`（HTTP，未上 TLS/域名）。登录后按角色看到不同菜单；
+> 企业知识库页与 SSE 未做，第 30 周补。
+
+> **明确不做**：企业知识库管理页、SSE 流式、TLS/域名、前端 CI/E2E 矩阵；token 存 sessionStorage
+> （XSS 风险已登记，生产可换 HttpOnly Cookie）。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 

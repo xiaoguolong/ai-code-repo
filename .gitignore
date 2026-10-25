@@ -87,3 +87,11 @@ coverage/
 
 # Week 20 部署物打包（tar 产物，不提交）
 target-acceptance/*.tgz
+
+# Week 29 前端（Node）
+**/node_modules/
+**/dist/
+**/.vite/
+# unplugin-vue-components 自动生成
+apps/web/src/components.d.ts
+apps/web/logs/
