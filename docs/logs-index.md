@@ -36,7 +36,9 @@ logs/
 │   ├── deploy/          # 巡检、备份、enterprise/platform 发布
 │   └── acceptance/      # 对账/提醒/问答/指标、配置恢复、终检
 ├── week-28/
-│   └── test/            # 第 28 周 platform 全量 / 根聚合（990 用例 + V11 首次迁移）
+│   ├── test/            # 第 28 周 platform 全量 / 根聚合（990 用例 + V11 首次迁移）
+│   ├── deploy/          # 巡检、备份、platform 发布
+│   └── acceptance/      # 停用/恢复/重启 seed/审计
 └── legacy/
     └── 2026-10-06/      # 早期未按周命名的 all/gw/plat/package 日志
 ```
@@ -148,9 +150,12 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 |------|----------|
 | `logs/week-28/test/target-week28-platform-full.log` | platform **709** 全绿（Week 27 基线 690，+19）；首次 V11 迁移 |
 | `logs/week-28/test/target-week28-full.log` | 根聚合 **990** 全绿（Week 27 基线 971，+19） |
+| `logs/week-28/deploy/target-week28-precheck.log` | 变更前：v10、无 `disabled_at`、4 用户、服务 active |
+| `logs/week-28/deploy/target-week28-backup.log` | 备份 `week28-20261025-160902`（95M，dump 非空） |
+| `logs/week-28/deploy/target-week28-deploy-platform.log` | platform 16:20:25 发布，health 200 |
+| `logs/week-28/acceptance/target-week28-accept.log` | 停用/旧 token/重启 seed/恢复/审计 **PASS=17 FAIL=0** |
 
-> 云端 V11 尚未发布；发布后按 `docs/specs/week-28.md` 第 2/4 节补停用/恢复真机记录
-> （停用 → 旧 token 401 → 恢复 → 重启不被 seed 覆盖）。
+> 云端 V11 已于 2026-10-25 执行完成；回滚与脚本见 `deploy/app/cloud-week28-*.sh`。
 
 ## 8. 早期日志
 | 目录 | 内容 |

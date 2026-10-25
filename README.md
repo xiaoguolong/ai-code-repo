@@ -1094,8 +1094,10 @@ H2 首次启动 `Successfully applied 10 migrations ... now at version v10`，�
 enterprise 70 / patient 21 / ai-core 90 / gateway 100 不变）；
 H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，重启只校验。
 
-> **云端 V11 待发布**：发布平台 jar 后 Flyway 自动应用；重点复核「停用 → 旧 token 401 → 恢复可登录」
-> 与「重启后停用状态不被 seed 覆盖」。步骤见 `docs/specs/week-28.md` 第四节。
+> **云端已于 2026-10-25 16:20:25 发布并验收通过**：备份
+> `/opt/ai-code/backup/week28-20261025-160902`；V11 应用后停用 viewer → 旧 token 401 →
+> 重启平台（seed 重跑）仍停用 → 恢复后登录 200；审计 `USER_DISABLE`/`USER_ENABLE` 齐全，
+> 真机 **PASS=17 FAIL=0**。步骤见 `docs/specs/week-28.md` 第四节。
 
 > **明确不做**：用户硬删 / `sso_user_link` 级联；gateway 与 enterprise 已签发会话的跨进程吊销
 > （平台会话已踢出，其它入口等 TTL）；用户管理页面（第 29 周前端）；租户管理员自助停用。

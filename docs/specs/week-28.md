@@ -130,8 +130,9 @@ JDBC 适配器的 `save` **不更新** `disabled_at`，InMemory 适配器合并�
 - [x] 根聚合 **990** 全绿（Week 27 基线 971，+19；platform 709）；
 - [x] 文档：Spec / 架构 / 接口 / 实现日志 / README / 审计事件表同步。
 
-> 云端 V11 发布与真机停用/恢复**尚未执行**（无运维窗口）：发布平台 jar 后 Flyway 自动应用 V11，
-> 按第 2 节做「停用 → 旧 token 401 → 恢复 → 重启不被 seed 覆盖」复核。
+> 云端 V11 已于 **2026-10-25 16:20:25** 发布并真机验收通过（备份
+> `/opt/ai-code/backup/week28-20261025-160902`，**PASS=17 FAIL=0**）：停用 viewer → 旧 token 401 →
+> 重启（seed 重跑）仍停用 → 恢复后登录 200，审计齐全。
 
 ### 4.1 交付结果（2026-10-25）
 
@@ -142,7 +143,7 @@ JDBC 适配器的 `save` **不更新** `disabled_at`，InMemory 适配器合并�
 | V11（H2） | 首次 `applied 11 migrations ... now at version v11`；重启只校验 |
 | TD-06 语义 | 停用/恢复/踢会话/幂等/自锁/seed 保留/审计 共 19 例 |
 | 拆分行数 | `PlatformExecutionUseCase` 431→118、`FollowUpTaskUseCase` 290→151、`PlatformMemoryUseCase` 241→122 |
-| 云端 V11 | **未执行**：发布平台 jar 后自动应用，按第 2 节复核 |
+| 云端 V11 | 16:20:25 发布；`now at version v11`；停用/旧 token/重启 seed/恢复 **PASS=17 FAIL=0** |
 
 ## 五、风险与回滚
 
