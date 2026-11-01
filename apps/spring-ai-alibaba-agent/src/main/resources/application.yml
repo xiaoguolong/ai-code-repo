@@ -20,6 +20,9 @@ spring:
         options:
           model: ${LLM_MODEL:deepseek-chat}
           temperature: 0.7
+          # Week 31：流式时让厂商在末包返回 usage（OpenAI 兼容 stream_options.include_usage）。
+          # Spring AI 在非流式请求里会自动剥掉 streamOptions，不会影响同步调用。
+          stream-usage: true
     mcp:
       server:
         name: patient-tools-mcp
@@ -84,6 +87,15 @@ platform:
   # memory = 进程内（无数据库演示 / 单测）
   persistence:
     mode: ${PLATFORM_PERSISTENCE_MODE:jdbc}
+  # Week 31：SSE 流式执行。关闭时流式端点返回 503（STREAM_DISABLED），前端自动回退同步端点。
+  # max-concurrent 同时限制线程池与信号量：拿不到槽位在落执行记录之前 429，不留 RUNNING 僵尸。
+  execution:
+    stream:
+      enabled: ${PLATFORM_STREAM_ENABLED:true}
+      max-concurrent: ${PLATFORM_STREAM_MAX_CONCURRENT:4}
+      queue-capacity: ${PLATFORM_STREAM_QUEUE_CAPACITY:16}
+      timeout-seconds: ${PLATFORM_STREAM_TIMEOUT_SECONDS:300}
+      heartbeat-seconds: ${PLATFORM_STREAM_HEARTBEAT_SECONDS:15}
   # Week 21：按 租户+用户 隔离的长期记忆（platform_memory）。
   memory:
     # 语义检索先取最近 N 条候选，再在应用侧算余弦（防止全表扫描）

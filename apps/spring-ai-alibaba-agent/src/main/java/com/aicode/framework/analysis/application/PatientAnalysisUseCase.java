@@ -1,6 +1,7 @@
 package com.aicode.framework.analysis.application;
 
 import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.framework.analysis.domain.PatientAnalysisAgent;
 import com.aicode.framework.analysis.domain.model.PatientAnalysisResult;
 import com.aicode.framework.platform.application.PlatformMemoryUseCase;
@@ -44,9 +45,30 @@ public class PatientAnalysisUseCase {
      * @throws InvalidChatRequestException patientId 空白
      */
     public PatientAnalysisResult run(String patientId, String task, PlatformMemoryScope scope) {
+        return run(patientId, task, scope, null);
+    }
+
+    /**
+     * 执行患者分析（Week 31：可带增量回调），并按需写入记忆。
+     *
+     * @param patientId 患者编号
+     * @param task      任务描述，空白时用默认模板
+     * @param scope     记忆范围；为空（非平台调度）时不写记忆
+     * @param listener  增量回调；null 表示同步调用
+     * @return 分析结果（可能带 memoryId）
+     * @throws InvalidChatRequestException patientId 空白
+     */
+    public PatientAnalysisResult run(
+            String patientId,
+            String task,
+            PlatformMemoryScope scope,
+            ChatStreamListener listener
+    ) {
         String normalizedPatientId = requirePatientId(patientId);
         String normalizedTask = normalizeTask(normalizedPatientId, task);
-        PatientAnalysisResult result = agent.run(normalizedPatientId, normalizedTask);
+        PatientAnalysisResult result = listener == null
+                ? agent.run(normalizedPatientId, normalizedTask)
+                : agent.run(normalizedPatientId, normalizedTask, listener);
         if (scope == null) {
             return result;
         }

@@ -77,4 +77,51 @@ public class OpenAiChatResponseMapper {
         }
         return List.copyOf(toolCalls);
     }
+
+    /**
+     * 解析一条流式 chunk（SSE {@code data:} 后的 JSON）。
+     *
+     * <p>OpenAI 兼容协议的末包可能只有 {@code usage}、{@code choices} 为空数组；
+     * 首个包可能只有 role、content 为空。这两种都要能安全解析。</p>
+     *
+     * @param json 单条 chunk JSON
+     * @return 增量文本、用量（可能为 null）、模型名
+     * @throws IllegalStateException JSON 非法
+     */
+    public StreamDelta streamDelta(String json) {
+        try {
+            JsonNode root = objectMapper.readTree(json);
+            StringBuilder content = new StringBuilder();
+            JsonNode choices = root.path("choices");
+            if (choices.isArray() && !choices.isEmpty()) {
+                JsonNode delta = choices.get(0).path("delta");
+                String text = delta.path("content").asText("");
+                if (text.isBlank()) {
+                    text = delta.path("reasoning_content").asText("");
+                }
+                content.append(text);
+            }
+            TokenUsage usage = null;
+            JsonNode usageNode = root.get("usage");
+            if (usageNode != null && usageNode.isObject()) {
+                usage = new TokenUsage(
+                        usageNode.path("prompt_tokens").asInt(0),
+                        usageNode.path("completion_tokens").asInt(0),
+                        usageNode.path("total_tokens").asInt(0));
+            }
+            return new StreamDelta(content.toString(), usage, root.path("model").asText(""));
+        } catch (Exception ex) {
+            throw new IllegalStateException("LLM stream chunk parse failed", ex);
+        }
+    }
+
+    /**
+     * 单条流式 chunk 的解析结果。
+     *
+     * @param content 增量正文（可能为空串）
+     * @param usage   用量；只有带 usage 的包才有值，否则 null
+     * @param model   模型名（可能为空）
+     */
+    public record StreamDelta(String content, TokenUsage usage, String model) {
+    }
 }

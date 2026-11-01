@@ -95,7 +95,9 @@ class MonitoringMetricsContractTest {
                 MonitoringMetricNames.KNOWLEDGE_SEARCH_DURATION,
                 MonitoringMetricNames.KNOWLEDGE_HIT_COUNT,
                 MonitoringMetricNames.KNOWLEDGE_RECONCILE_COUNT,
-                MonitoringMetricNames.KNOWLEDGE_BINDING_MISSING_COUNT);
+                MonitoringMetricNames.KNOWLEDGE_BINDING_MISSING_COUNT,
+                MonitoringMetricNames.AGENT_STREAM_FIRST_DELTA,
+                MonitoringMetricNames.AGENT_STREAM_COUNT);
     }
 
     @Test

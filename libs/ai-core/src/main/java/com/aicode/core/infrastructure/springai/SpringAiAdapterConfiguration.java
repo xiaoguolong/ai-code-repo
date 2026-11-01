@@ -35,9 +35,13 @@ public class SpringAiAdapterConfiguration {
 
     /**
      * 以 Spring AI 为后端的 {@link ChatModelPort} 适配器。
+     *
+     * <p>Bean 名 {@code delegateChatModelPort} 与 OpenAI 兼容适配器同名：两者由
+     * {@code framework.model-provider} 二选一，平台侧按该名字注入"被装饰的原始端口"，
+     * 不再硬编码 {@code springAiChatModelAdapter}（Week 31 切 provider 时踩过启动失败）。</p>
      */
     @Bean
-    ChatModelPort springAiChatModelAdapter(
+    ChatModelPort delegateChatModelPort(
             ChatModel chatModel,
             SpringAiToolCallbackFactory springAiToolCallbackFactory,
             SpringAiMessageMapper springAiMessageMapper

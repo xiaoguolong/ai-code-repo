@@ -16,6 +16,8 @@ import com.aicode.framework.platform.domain.exception.PlatformAgentDisabledExcep
 import com.aicode.framework.platform.domain.exception.PlatformConflictException;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
 import com.aicode.framework.platform.domain.exception.PlatformRateLimitExceededException;
+import com.aicode.framework.platform.domain.exception.PlatformStreamBusyException;
+import com.aicode.framework.platform.domain.exception.PlatformStreamDisabledException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotFoundException;
 import com.aicode.framework.workflow.domain.exception.WorkflowNotPendingException;
 import org.slf4j.Logger;
@@ -178,6 +180,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(PlatformAgentDisabledException.class)
     public ResponseEntity<ApiResponse<Void>> handlePlatformAgentDisabled(PlatformAgentDisabledException ex) {
         return respond(ApiErrorCode.AGENT_DISABLED, ex.getMessage());
+    }
+
+    /**
+     * 流式输出未启用 → 503 {@code STREAM_DISABLED}（Week 31）；前端据此回退同步端点。
+     */
+    @ExceptionHandler(PlatformStreamDisabledException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStreamDisabled(PlatformStreamDisabledException ex) {
+        return respond(ApiErrorCode.STREAM_DISABLED, ex.getMessage());
+    }
+
+    /**
+     * 流式并发已满 → 429 {@code RATE_LIMITED}（Week 31），且在落执行记录之前返回。
+     */
+    @ExceptionHandler(PlatformStreamBusyException.class)
+    public ResponseEntity<ApiResponse<Void>> handleStreamBusy(PlatformStreamBusyException ex) {
+        log.warn("[api] sse concurrency full traceId={} error={}", TraceIds.current(), ex.getMessage());
+        return respond(ApiErrorCode.RATE_LIMITED, ex.getMessage());
     }
 
     /**

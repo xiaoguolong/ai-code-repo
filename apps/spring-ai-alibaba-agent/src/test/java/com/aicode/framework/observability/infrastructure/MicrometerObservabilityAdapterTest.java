@@ -34,6 +34,9 @@ class MicrometerObservabilityAdapterTest extends OtelSdkTestSupport {
 
     @BeforeEach
     void setUp() {
+        // 防御性隔离：MockMvc 的过滤器链可能在当前测试线程留下 MDC（Week 31 全量跑时踩到），
+        // 本类断言的是"span 期间 MDC 的值"，前置状态必须是干净的。
+        org.slf4j.MDC.clear();
         registry = new SimpleMeterRegistry();
         port = new MicrometerObservabilityAdapter(tracer, registry);
     }

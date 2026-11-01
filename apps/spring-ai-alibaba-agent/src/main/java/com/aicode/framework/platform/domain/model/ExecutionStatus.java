@@ -19,5 +19,12 @@ public enum ExecutionStatus {
      */
     PENDING_APPROVAL,
     /** 人工审核拒绝，不写随访记忆（Week 23） */
-    REJECTED
+    REJECTED,
+
+    /**
+     * 调用方取消（Week 31）：用户点"停止"、SSE 断连或超时。
+     *
+     * <p>不算失败：不计入失败率，也不写业务副作用；记录保留以便追查"谁在什么时候中止了哪次执行"。</p>
+     */
+    CANCELLED
 }

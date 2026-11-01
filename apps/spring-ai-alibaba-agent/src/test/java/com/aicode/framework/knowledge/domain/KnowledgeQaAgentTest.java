@@ -1,9 +1,11 @@
 package com.aicode.framework.knowledge.domain;
 
 import com.aicode.core.domain.exception.ChatModelException;
+import com.aicode.core.domain.exception.StreamCancelledException;
 import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.core.domain.model.ChatOptions;
 import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.core.domain.model.FinishReason;
 import com.aicode.core.domain.model.PromptDescriptor;
 import com.aicode.core.domain.model.PromptTemplate;
@@ -19,6 +21,7 @@ import com.aicode.framework.knowledge.domain.model.KnowledgeAnswer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -28,6 +31,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -111,6 +116,39 @@ class KnowledgeQaAgentTest {
 
         assertThatThrownBy(() -> agent(failing, mock(ChatModelPort.class)).run(KB_ID, "q"))
                 .isInstanceOf(ToolExecutionException.class);
+    }
+
+    @Test
+    void streamingForwardsDeltasAndUsesAccumulatedAnswer() {
+        ChatModelPort chat = mock(ChatModelPort.class);
+        when(chat.chatStream(anyList(), any(ChatOptions.class), any(ChatStreamListener.class)))
+                .thenAnswer(invocation -> {
+                    ChatStreamListener listener = invocation.getArgument(2);
+                    listener.onDelta("每 3 个月");
+                    listener.onDelta("复查 HbA1c");
+                    return new ChatResult("每 3 个月复查 HbA1c", List.of(), FinishReason.STOP,
+                            new TokenUsage(4, 6, 10), "test-model");
+                });
+        KnowledgeQaAgent agent = agent(toolWithHits(), chat);
+        List<String> deltas = new ArrayList<>();
+
+        KnowledgeAnswer answer = agent.run(KB_ID, "糖尿病随访要点", deltas::add);
+
+        assertThat(deltas).containsExactly("每 3 个月", "复查 HbA1c");
+        assertThat(answer.answer()).isEqualTo("每 3 个月复查 HbA1c");
+        assertThat(answer.usage().totalTokens()).isEqualTo(10);
+        verify(chat, never()).chat(anyList(), any(ChatOptions.class));
+    }
+
+    @Test
+    void streamingCancellationIsNotSwallowedByDegradation() {
+        ChatModelPort chat = mock(ChatModelPort.class);
+        when(chat.chatStream(anyList(), any(ChatOptions.class), any(ChatStreamListener.class)))
+                .thenThrow(new StreamCancelledException("client gone"));
+
+        assertThatThrownBy(() -> agent(toolWithHits(), chat).run(KB_ID, "q", delta -> {
+        }))
+                .isInstanceOf(StreamCancelledException.class);
     }
 
     private KnowledgeQaAgent agent(ToolPort toolPort, ChatModelPort chatModelPort) {

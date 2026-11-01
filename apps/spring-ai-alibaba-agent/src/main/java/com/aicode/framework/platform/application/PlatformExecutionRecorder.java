@@ -109,6 +109,23 @@ final class PlatformExecutionRecorder {
     }
 
     /**
+     * 构造 CANCELLED 记录（Week 31）。
+     *
+     * <p>输出留空、不记模型与 token：取消时没有完整结果；保留错误摘要用于追查中止原因。</p>
+     *
+     * @param running    运行中记录
+     * @param reason     取消原因（如 client cancelled）
+     * @param finishedAt 取消时间
+     * @return CANCELLED 记录
+     */
+    ExecutionRecord cancelled(ExecutionRecord running, String reason, Instant finishedAt) {
+        return new ExecutionRecord(
+                running.executionId(), running.userId(), running.agentKey(), running.agentType(),
+                ExecutionStatus.CANCELLED, running.inputJson(), "", "", TokenUsage.unknown(),
+                reason == null ? "" : reason, running.startedAt(), finishedAt, running.tenantKey());
+    }
+
+    /**
      * JSON 序列化。
      *
      * @param value 任意值

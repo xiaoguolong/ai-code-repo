@@ -7,8 +7,8 @@ import java.math.RoundingMode;
  * 运营统计汇总（Week 24）。
  *
  * <p><b>成功/失败率的分母只取 {@code completed + failed}</b>：待审（{@code PENDING_APPROVAL}）、
- * 被拒（{@code REJECTED}）与运行中（{@code RUNNING}）都不是「失败」。
- * 这个口径与 Grafana 失败率面板（TD-01）必须一致，否则面板与日报会各说一套。</p>
+ * 被拒（{@code REJECTED}）、运行中（{@code RUNNING}）与调用方取消（{@code CANCELLED}，Week 31）
+ * 都不是「失败」。这个口径与 Grafana 失败率面板（TD-01）必须一致，否则面板与日报会各说一套。</p>
  *
  * @param totalRuns        窗口内执行总数
  * @param completed        成功数
@@ -16,6 +16,7 @@ import java.math.RoundingMode;
  * @param pendingApproval  待审数
  * @param rejected         审批拒绝数
  * @param running          运行中数
+ * @param cancelled        调用方取消数（Week 31）
  * @param promptTokens     提示 token 合计
  * @param completionTokens 补全 token 合计
  * @param totalCostUsd     估算成本（USD，只统计价目表里配置了单价的模型）
@@ -29,6 +30,7 @@ public record OperationsSummary(
         long pendingApproval,
         long rejected,
         long running,
+        long cancelled,
         long promptTokens,
         long completionTokens,
         double totalCostUsd,

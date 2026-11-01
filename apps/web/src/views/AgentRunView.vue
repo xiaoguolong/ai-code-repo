@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { message } from 'ant-design-vue';
 import { listAgents, listKnowledgeBindings, runAgent } from '@/api/platform';
+import { runAgentStream, type RunStreamMeta } from '@/api/stream';
 import type {
   AgentDefinition,
   ExecutionRecord,
@@ -40,6 +41,13 @@ const bindings = ref<KnowledgeBinding[]>([]);
 const running = ref(false);
 const error = ref('');
 const result = ref<ExecutionRecord | null>(null);
+const preview = ref('');
+const streamMeta = ref<RunStreamMeta | null>(null);
+const canStream = computed(
+  () => agentKey.value === 'knowledge-qa' || agentKey.value === 'patient-analysis'
+);
+const previewField = computed(() => (agentKey.value === 'patient-analysis' ? '报告' : '答案'));
+let abortController: AbortController | null = null;
 
 const form = reactive({
   patientId: 'P002',
@@ -94,6 +102,30 @@ function validate(): string | null {
   return null;
 }
 
+function buildInput(): Record<string, unknown> {
+  const input: Record<string, unknown> = {};
+  if (form.task.trim()) {
+    input.task = form.task.trim();
+  }
+  if (agentKey.value === 'patient-analysis' || agentKey.value === 'followup') {
+    input.patientId = form.patientId.trim();
+  } else if (agentKey.value === 'operations-analysis') {
+    input.windowDays = form.windowDays;
+  } else if (agentKey.value === 'knowledge-qa') {
+    input.knowledgeBaseId = form.knowledgeBaseId;
+    input.question = form.question.trim();
+  }
+  return input;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError';
+}
+
+function stop(): void {
+  abortController?.abort();
+}
+
 async function submit(): Promise<void> {
   error.value = '';
   const invalid = validate();
@@ -103,33 +135,82 @@ async function submit(): Promise<void> {
   }
   running.value = true;
   result.value = null;
+  preview.value = '';
+  streamMeta.value = null;
+  const input = buildInput();
+
+  if (!canStream.value) {
+    try {
+      result.value = await runAgent(agentKey.value, input);
+      message.success('运行完成');
+    } catch (e) {
+      error.value = e instanceof ApiError ? e.message : '运行失败，请稍后再试';
+    } finally {
+      running.value = false;
+    }
+    return;
+  }
+
+  abortController = new AbortController();
+  let finalReceived = false;
   try {
-    const input: Record<string, unknown> = {};
-    if (form.task.trim()) {
-      input.task = form.task.trim();
+    await runAgentStream(
+      agentKey.value,
+      input,
+      {
+        onMeta: (meta) => {
+          streamMeta.value = meta;
+        },
+        onDelta: (text) => {
+          preview.value += text;
+        },
+        onFinal: (record) => {
+          finalReceived = true;
+          result.value = record;
+        },
+        onError: (streamError) => {
+          error.value = streamError.message;
+        }
+      },
+      abortController.signal
+    );
+    if (finalReceived) {
+      message.success('运行完成');
     }
-    if (agentKey.value === 'patient-analysis' || agentKey.value === 'followup') {
-      input.patientId = form.patientId.trim();
-    } else if (agentKey.value === 'operations-analysis') {
-      input.windowDays = form.windowDays;
-    } else if (agentKey.value === 'knowledge-qa') {
-      input.knowledgeBaseId = form.knowledgeBaseId;
-      input.question = form.question.trim();
-    }
-    result.value = await runAgent(agentKey.value, input);
-    message.success('运行完成');
   } catch (e) {
-    error.value = e instanceof ApiError ? e.message : '运行失败，请稍后再试';
+    if (isAbortError(e)) {
+      message.info('已停止生成');
+    } else if (
+      e instanceof ApiError &&
+      !streamMeta.value &&
+      [404, 405, 429, 503].includes(e.status ?? 0)
+    ) {
+      // 流式入口不可用（未部署/开关关闭/并发满）：只回退一次同步端点。
+      try {
+        result.value = await runAgent(agentKey.value, input);
+        message.success('运行完成（已回退同步模式）');
+      } catch (fallbackError) {
+        error.value =
+          fallbackError instanceof ApiError ? fallbackError.message : '运行失败，请稍后再试';
+      }
+    } else {
+      error.value = e instanceof ApiError ? e.message : '运行失败，请稍后再试';
+    }
   } finally {
     running.value = false;
+    abortController = null;
   }
 }
 
 watch(agentKey, () => {
+  abortController?.abort();
   result.value = null;
+  preview.value = '';
+  streamMeta.value = null;
   void load();
 });
 onMounted(() => void load());
+onBeforeUnmount(() => abortController?.abort());
 </script>
 
 <template>
@@ -224,7 +305,7 @@ onMounted(() => void load());
                 运行 Agent
               </a-button>
               <span v-if="running" style="margin-left: 12px; color: #8c8c8c">
-                运行中，长任务可能需要 30–60 秒…
+                {{ canStream ? '生成中，首字出现后边生成边显示…' : '运行中，长任务可能需要 30–60 秒…' }}
               </span>
             </a-form-item>
           </a-form>
@@ -233,8 +314,24 @@ onMounted(() => void load());
 
       <a-col :xs="24" :lg="14">
         <a-card title="运行结果">
-          <a-empty v-if="!result" description="尚未运行" />
-          <template v-else>
+          <template v-if="!result && (running || preview)">
+            <a-space wrap style="margin-bottom: 12px">
+              <a-tag :color="running ? 'processing' : 'default'">
+                {{ running ? '生成中' : '已停止' }}
+              </a-tag>
+              <a-tag v-if="streamMeta">执行 {{ streamMeta.executionId.slice(0, 8) }}</a-tag>
+              <a-button v-if="running" danger size="small" @click="stop">停止生成</a-button>
+            </a-space>
+            <h4>{{ previewField }}</h4>
+            <pre class="pre-wrap">{{ preview }}<span v-if="running">▌</span></pre>
+            <div v-if="!running" style="color: #8c8c8c; margin-top: 8px">
+              已停止生成，执行记录会标记为「已取消」；可重新运行。
+            </div>
+          </template>
+
+          <a-empty v-if="!result && !running && !preview" description="尚未运行" />
+
+          <template v-if="result">
             <a-space wrap style="margin-bottom: 12px">
               <StatusTag :status="result.status" />
               <a-tag>模型：{{ result.model || '-' }}</a-tag>

@@ -60,7 +60,10 @@ public enum ApiErrorCode {
     WORKFLOW_NOT_PENDING(HttpStatus.CONFLICT, "工作流不处于待审批状态"),
 
     /** 未预期异常，对外只给通用文案，堆栈仅进服务端日志。HTTP 500。 */
-    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后重试");
+    INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "系统繁忙，请稍后重试"),
+
+    /** 流式输出未启用（Week 31），客户端应回退同步端点。HTTP 503。 */
+    STREAM_DISABLED(HttpStatus.SERVICE_UNAVAILABLE, "流式输出未启用");
 
     private final HttpStatus status;
     private final String message;

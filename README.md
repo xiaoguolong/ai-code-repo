@@ -1162,6 +1162,44 @@ H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，�
 
 ---
 
+# 第31周：真 SSE 流式（知识库问答 + 患者分析）
+
+完成（2026-11-01，ADR-0002 落地 ADR-0001 的 6 步清单）：
+
+- [x] **流式契约**：`ChatModelPort.chatStream(...)`（默认回退=单 chunk）+ `ChatStreamListener`
+      + `StreamCancelledException`；同步 `chat(...)` 行为不变
+- [x] **Spring AI 增量适配**：`chatModel.stream(prompt)` 逐块回调，累加正文、末包 usage、
+      `finish_reason`；监听器取消时 `takeWhile` 退订上游
+- [x] **SSE 端点** `POST /platform/agents/{key}/runs/stream`：预检同步（401/403/404/400/429/503
+      仍是 JSON 信封）→ `SseEmitter` + 有界 worker（默认 4 并发）；`meta/delta/final/error`
+      + 15s 心跳；`final` 与同步端点同结构，作为权威结果覆盖预览
+- [x] **记录只落一次**：复用 `PlatformExecutionRunner`（拆 prepare/execute），
+      审计/指标/span/审批副作用与同步端点同一套
+- [x] **取消/断连**：`CANCELLED` 状态（不计失败率），停止/断连/超时退订模型，不留 RUNNING
+- [x] **流式脱敏**：32 字符 carry 防 PII 跨 chunk 漏掩；顺带修复 **18 位身份证完全不被掩码** 的旧缺陷
+- [x] **前端**：`fetch + ReadableStream` reader、边生成边显示、停止生成、final 覆盖、
+      仅在未收到 meta 时回退同步；`CANCELLED` 标签
+- [x] **运维**：nginx 专用流式 location（`proxy_buffering off`、300s）、
+      `cloud-week31.sh` / `cloud-accept-week31.sh`、开关 `PLATFORM_STREAM_ENABLED`
+
+交付：Spec `docs/specs/week-31.md` ｜ 架构 `docs/architecture/week-31-architecture.md` ｜
+接口 `docs/api/week-31-api.md` ｜ ADR `docs/adr/0002-sse-streaming.md` ｜
+实现日志 `notes/impl-logs/week-31.md` ｜ Postman `docs/postman/week-31.postman_collection.json` ｜
+脚本 `deploy/app/cloud-week31.sh`、`cloud-accept-week31.sh`
+
+实测：ai-core **108**（+18）、平台 **734**（+22）、enterprise/patient/gateway 70/21/100 不变，
+根聚合 **1033** 全绿（Week 30 基线 990，+43）；前端 typecheck 0 / Vitest **23**（+12）/ build 成功。
+**云端已发布并真机验收 PASS=15 FAIL=0**：知识库问答首字 **1.2s**、nginx 路径 **1.1s**、
+患者分析首字 **1.1s**（final PENDING_APPROVAL）；停止→CANCELLED、同步回归、指标、无 RUNNING 全过。
+流式链路 = 原生 SSE reader（`openai-compatible`）+ `SimpleClientHttpRequestFactory` + 逐帧 flush。
+
+> **入口**：Agent 页（知识库问答/患者分析）直接流式；脚本/Postman 仍可用同步端点。
+
+> **明确不做**：OpenAI 兼容通道增量解析（回退单 chunk）、断线续传（Last-Event-ID）、
+> 多实例流广播、gateway `/gw/` 直连流式、PDF/OCR、科室授权、TLS、容器化。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 

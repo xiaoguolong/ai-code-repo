@@ -101,6 +101,49 @@ final class PlatformExecutionObservability {
                 ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.FAILED.name());
     }
 
+    /**
+     * 取消终态（Week 31）：span 标 CANCELLED + 计数/耗时；<b>不</b>计入失败。
+     *
+     * @param span         span
+     * @param agent        Agent
+     * @param runStartedAt 开始纳秒
+     */
+    void recordCancelled(SpanScope span, PlatformAgentDefinition agent, long runStartedAt) {
+        long durationMs = elapsedMs(runStartedAt);
+        span.attribute(ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.CANCELLED.name());
+        span.attribute(ObservabilityAttributes.DURATION_MS, String.valueOf(durationMs));
+        observability.recordCounter(MonitoringMetricNames.AGENT_RUN_COUNT, 1.0,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.CANCELLED.name());
+        observability.recordDuration(MonitoringMetricNames.AGENT_RUN_DURATION, durationMs,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey(),
+                ObservabilityAttributes.EXECUTION_STATUS, ExecutionStatus.CANCELLED.name());
+        recordStreamOutcome(agent.agentKey(), "cancelled");
+    }
+
+    /**
+     * 流式首字耗时（Week 31）：从执行开始到第一段可见增量。
+     *
+     * @param agent         Agent
+     * @param firstDeltaMs  首字毫秒
+     */
+    void recordFirstDelta(PlatformAgentDefinition agent, long firstDeltaMs) {
+        observability.recordDuration(MonitoringMetricNames.AGENT_STREAM_FIRST_DELTA, firstDeltaMs,
+                ObservabilityAttributes.AGENT_KEY, agent.agentKey());
+    }
+
+    /**
+     * 流式终态计数（Week 31）：{@code result} 取 completed / failed / cancelled。
+     *
+     * @param agentKey Agent 标识
+     * @param result   终态
+     */
+    void recordStreamOutcome(String agentKey, String result) {
+        observability.recordCounter(MonitoringMetricNames.AGENT_STREAM_COUNT, 1.0,
+                ObservabilityAttributes.AGENT_KEY, agentKey,
+                "stream.result", result);
+    }
+
     private void record(
             SpanScope span,
             PlatformAgentDefinition agent,

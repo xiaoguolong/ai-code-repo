@@ -145,7 +145,7 @@ class OperationsAnomalyDetectorTest {
 
     private OperationsSummary summary(long failed, long completed, long pending, long totalTokens) {
         return new OperationsSummary(
-                failed + completed + pending, completed, failed, pending, 0, 0,
+                failed + completed + pending, completed, failed, pending, 0, 0, 0,
                 totalTokens, 0, 0.0, true, false);
     }
 }

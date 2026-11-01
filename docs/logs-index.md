@@ -194,7 +194,21 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 企业冒烟临时库已清理（既有库 1 / 文档 1 未变）；云端 `/ent/knowledge` 200。
 > 后端本周无 Java 改动，沿用 Week 28 根聚合 **990**。
 
-## 10. 早期日志
+## 10. 第 31 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-31/aicore-test.log` | ai-core **108** 用例全绿（流式契约/原生 SSE/取消/PII 结构化脱敏） |
+| `logs/week-31/platform-test.log` | 平台 **734** 用例全绿（SSE 预检/事件/取消/统计） |
+| `logs/week-31/root-test.log` | 根聚合 **1033** 全绿（ai-core 108 / enterprise 70 / patient 21 / platform 734 / gateway 100） |
+| `logs/week-31/sse-http.log` | MockMvc SSE 主链路：`meta → delta → final`、final.traceId 非空 |
+| `logs/week-31/web-ci.log` | 前端 typecheck 0 / Vitest **23** / build 成功 |
+
+> 云端已发布并执行 `cloud-accept-week31.sh`：**PASS=15 FAIL=0**（首字知识库 **1225ms**、nginx **1125ms**、
+> 患者分析 **1075ms**；COMPLETED/PENDING_APPROVAL/CANCELLED/同步回归/指标/无 RUNNING 全过）。
+> 根因与最终链路（原生 SSE + Simple factory + 逐帧 flush）见 `notes/impl-logs/week-31.md` 7.3。
+
+## 11. 早期日志
 | 目录 | 内容 |
 |------|------|
 | `logs/week-20/test/` | `target-week20-full/full2/final` + 平台/网关分模块测试 |
@@ -204,7 +218,7 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-22/test/` | `target-week22-full/final/final2/final3` |
 | `logs/legacy/2026-10-06/` | 早期 `all/gw/plat/package` 测试日志 |
 
-## 11. 维护规则
+## 12. 维护规则
 
 1. 新日志按周/类别归档，**不要再写仓库根目录**；
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；

@@ -6,6 +6,7 @@ import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.core.domain.model.ChatMessage;
 import com.aicode.core.domain.model.ChatOptions;
 import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.core.domain.model.MessageRole;
 import com.aicode.core.domain.model.PromptTemplate;
 import com.aicode.core.domain.model.TokenUsage;
@@ -83,6 +84,19 @@ public class KnowledgeQaAgent {
      * @throws ToolExecutionException 检索失败（上游不可用/未绑定/越权）
      */
     public KnowledgeAnswer run(long knowledgeBaseId, String question) {
+        return run(knowledgeBaseId, question, null);
+    }
+
+    /**
+     * 回答知识库问题（Week 31：可带增量回调）。
+     *
+     * @param knowledgeBaseId 知识库 ID
+     * @param question        问题（调用方已校验非空）
+     * @param listener        增量回调；null 表示同步调用
+     * @return 带引用的答案
+     * @throws ToolExecutionException 检索失败（上游不可用/未绑定/越权）
+     */
+    public KnowledgeAnswer run(long knowledgeBaseId, String question, ChatStreamListener listener) {
         List<KnowledgeStep> steps = new ArrayList<>();
         ToolResult toolResult = toolPort.execute(new ToolCall(
                 "search_knowledge", TOOL_NAME, toJson(knowledgeBaseId, question)));
@@ -103,7 +117,7 @@ public class KnowledgeQaAgent {
                 .map(hit -> new KnowledgeCitation(
                         hit.documentId(), hit.documentName(), hit.chunkIndex(), hit.content(), hit.score()))
                 .toList();
-        AnswerOutcome outcome = generateAnswer(question, retrieved.hits());
+        AnswerOutcome outcome = generateAnswer(question, retrieved.hits(), listener);
         addStep(steps, "answer_generation", "degraded=" + outcome.degraded());
         log.info("[knowledge-qa] answered knowledgeBaseId={} hits={} degraded={} tokens={}",
                 knowledgeBaseId, retrieved.hits().size(), outcome.degraded(), outcome.usage().totalTokens());
@@ -114,7 +128,11 @@ public class KnowledgeQaAgent {
                 outcome.usage(), outcome.model(), steps);
     }
 
-    private AnswerOutcome generateAnswer(String question, List<KnowledgeSearchHit> hits) {
+    private AnswerOutcome generateAnswer(
+            String question,
+            List<KnowledgeSearchHit> hits,
+            ChatStreamListener listener
+    ) {
         String fallback = composeExcerptAnswer(hits);
         try {
             PromptTemplate system = promptTemplatePort.load(PROMPT_NAME);
@@ -122,12 +140,14 @@ public class KnowledgeQaAgent {
                     .map(hit -> new VectorSearchHit(
                             hit.documentId(), hit.knowledgeBaseId(), hit.chunkIndex(), hit.content(), hit.score()))
                     .toList();
-            ChatResult result = chatModelPort.chat(
-                    List.of(
-                            new ChatMessage(MessageRole.SYSTEM, system.content()),
-                            new ChatMessage(MessageRole.USER,
-                                    RagContextAssembler.buildUserMessage(context, question))),
-                    new ChatOptions(config.model(), config.temperature(), config.maxTokens()));
+            List<ChatMessage> messages = List.of(
+                    new ChatMessage(MessageRole.SYSTEM, system.content()),
+                    new ChatMessage(MessageRole.USER,
+                            RagContextAssembler.buildUserMessage(context, question)));
+            ChatOptions options = new ChatOptions(config.model(), config.temperature(), config.maxTokens());
+            ChatResult result = listener == null
+                    ? chatModelPort.chat(messages, options)
+                    : chatModelPort.chatStream(messages, options, listener);
             String content = result.content() == null ? "" : result.content().trim();
             if (content.isEmpty()) {
                 log.warn("[knowledge-qa] empty model content, degrade to excerpts");
@@ -173,7 +193,8 @@ public class KnowledgeQaAgent {
             }
             return new Retrieved(knowledgeBaseName, hits);
         } catch (Exception ex) {
-            throw new ToolExecutionException("invalid knowledge tool result", ex);
+            // 带上根因：只打 "invalid knowledge tool result" 时排障只能猜（Week 31 真机踩过）。
+            throw new ToolExecutionException("invalid knowledge tool result: " + ex.getMessage(), ex);
         }
     }
 

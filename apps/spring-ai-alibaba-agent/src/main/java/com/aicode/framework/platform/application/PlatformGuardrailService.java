@@ -33,4 +33,16 @@ public class PlatformGuardrailService {
         }
         return guardrailPort.sanitizeOutputMap(GuardrailContext.platformRun(userId, agentKey), output);
     }
+
+    /**
+     * 脱敏流式文本片段（Week 31）。关闭时原样返回。
+     *
+     * @param userId   调用者
+     * @param agentKey Agent 标识
+     * @param text     待脱敏文本
+     * @return 脱敏后文本
+     */
+    public String sanitizeStreamText(long userId, String agentKey, String text) {
+        return guardrailPort.sanitizeTextOutput(GuardrailContext.platformRun(userId, agentKey), text);
+    }
 }

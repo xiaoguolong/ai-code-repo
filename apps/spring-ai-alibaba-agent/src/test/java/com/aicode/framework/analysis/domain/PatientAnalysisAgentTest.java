@@ -24,6 +24,7 @@ import com.aicode.framework.workflow.domain.model.RiskLevel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -87,6 +88,50 @@ class PatientAnalysisAgentTest {
 
         assertThatThrownBy(() -> agent(failing, chatAnswer("x")).run("P001", "task"))
                 .isInstanceOf(ToolExecutionException.class);
+    }
+
+    @Test
+    void streamingForwardsReportDeltas() {
+        List<String> deltas = new ArrayList<>();
+        ChatModelPort streaming = new ChatModelPort() {
+            @Override
+            public ChatResult chat(List<ChatMessage> messages, ChatOptions options, List<ToolDefinition> tools) {
+                throw new AssertionError("streaming path must not call chat()");
+            }
+
+            @Override
+            public ChatResult chatStream(
+                    List<ChatMessage> messages,
+                    ChatOptions options,
+                    com.aicode.core.domain.model.ChatStreamListener listener
+            ) {
+                listener.onDelta("报告");
+                listener.onDelta("正文");
+                return new ChatResult("报告正文", List.of(), FinishReason.STOP,
+                        new TokenUsage(2, 3, 5), "test-model");
+            }
+        };
+
+        PatientAnalysisResult result = agent(new FakeToolPort(), streaming)
+                .run("P001", "生成慢病分析报告", deltas::add);
+
+        assertThat(deltas).containsExactly("报告", "正文");
+        assertThat(result.report()).isEqualTo("报告正文");
+        assertThat(result.usage().totalTokens()).isEqualTo(5);
+    }
+
+    @Test
+    void streamingCancellationIsNotSwallowedByDegradation() {
+        ChatModelPort cancelling = org.mockito.Mockito.mock(ChatModelPort.class);
+        org.mockito.Mockito.when(cancelling.chatStream(
+                        org.mockito.ArgumentMatchers.anyList(),
+                        org.mockito.ArgumentMatchers.any(ChatOptions.class),
+                        org.mockito.ArgumentMatchers.any(com.aicode.core.domain.model.ChatStreamListener.class)))
+                .thenThrow(new com.aicode.core.domain.exception.StreamCancelledException("client gone"));
+
+        assertThatThrownBy(() -> agent(new FakeToolPort(), cancelling).run("P001", "task", delta -> {
+        }))
+                .isInstanceOf(com.aicode.core.domain.exception.StreamCancelledException.class);
     }
 
     private PatientAnalysisAgent agent(ToolPort toolPort, ChatModelPort chatModelPort) {

@@ -45,7 +45,8 @@ export type ExecutionStatus =
   | 'COMPLETED'
   | 'FAILED'
   | 'PENDING_APPROVAL'
-  | 'REJECTED';
+  | 'REJECTED'
+  | 'CANCELLED';
 
 export interface ExecutionRecord {
   executionId: string;

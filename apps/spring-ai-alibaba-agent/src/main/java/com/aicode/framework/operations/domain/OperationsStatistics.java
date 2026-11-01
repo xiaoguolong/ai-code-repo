@@ -49,6 +49,7 @@ public final class OperationsStatistics {
         long pending = 0;
         long rejected = 0;
         long running = 0;
+        long cancelled = 0;
         long promptTokens = 0;
         long completionTokens = 0;
         double cost = 0.0;
@@ -61,6 +62,7 @@ public final class OperationsStatistics {
                 case PENDING_APPROVAL -> pending++;
                 case REJECTED -> rejected++;
                 case RUNNING -> running++;
+                case CANCELLED -> cancelled++;
             }
             int prompt = record.usage() == null ? 0 : record.usage().promptTokens();
             int completion = record.usage() == null ? 0 : record.usage().completionTokens();
@@ -78,7 +80,7 @@ public final class OperationsStatistics {
         }
 
         return new OperationsSummary(
-                safe.size(), completed, failed, pending, rejected, running,
+                safe.size(), completed, failed, pending, rejected, running, cancelled,
                 promptTokens, completionTokens, round6(cost), costConfigured, truncated);
     }
 

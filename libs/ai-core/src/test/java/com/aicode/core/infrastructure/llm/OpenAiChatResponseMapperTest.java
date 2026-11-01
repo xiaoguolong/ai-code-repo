@@ -107,4 +107,44 @@ class OpenAiChatResponseMapperTest {
         assertThat(result.hasToolCalls()).isFalse();
         assertThat(result.content()).isEqualTo("最终答案");
     }
+
+    @Test
+    void parsesStreamContentDelta() {
+        String json = """
+                {"model": "deepseek-chat", "choices": [{"delta": {"content": "你"}}]}
+                """;
+
+        OpenAiChatResponseMapper.StreamDelta delta = mapper.streamDelta(json);
+
+        assertThat(delta.content()).isEqualTo("你");
+        assertThat(delta.usage()).isNull();
+        assertThat(delta.model()).isEqualTo("deepseek-chat");
+    }
+
+    @Test
+    void parsesStreamRoleOnlyChunkAsEmptyContent() {
+        String json = """
+                {"choices": [{"delta": {"role": "assistant", "content": ""}}]}
+                """;
+
+        assertThat(mapper.streamDelta(json).content()).isEmpty();
+    }
+
+    @Test
+    void parsesStreamUsageOnlyFinalChunk() {
+        String json = """
+                {"choices": [], "usage": {"prompt_tokens": 7, "completion_tokens": 2, "total_tokens": 9}}
+                """;
+
+        OpenAiChatResponseMapper.StreamDelta delta = mapper.streamDelta(json);
+
+        assertThat(delta.content()).isEmpty();
+        assertThat(delta.usage().totalTokens()).isEqualTo(9);
+    }
+
+    @Test
+    void streamDeltaRejectsMalformedJson() {
+        assertThatThrownBy(() -> mapper.streamDelta("not-json"))
+                .isInstanceOf(IllegalStateException.class);
+    }
 }

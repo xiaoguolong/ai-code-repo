@@ -95,11 +95,11 @@ public class AppConfiguration {
     @Bean
     @Primary
     ChatModelPort observableChatModelPort(
-            @Qualifier("springAiChatModelAdapter") ChatModelPort springAiChatModelAdapter,
+            @Qualifier("delegateChatModelPort") ChatModelPort delegateChatModelPort,
             AgentObservabilityPort agentObservabilityPort,
             LangfuseGenerationSupport langfuseGenerationSupport
     ) {
-        return new ObservableChatModelAdapter(springAiChatModelAdapter, agentObservabilityPort,
+        return new ObservableChatModelAdapter(delegateChatModelPort, agentObservabilityPort,
                 langfuseGenerationSupport);
     }
 

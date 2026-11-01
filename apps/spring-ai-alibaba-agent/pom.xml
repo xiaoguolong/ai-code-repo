@@ -71,6 +71,12 @@
             <artifactId>spring-ai-starter-model-openai</artifactId>
             <version>${spring-ai.version}</version>
         </dependency>
+        <!-- Week 31：Spring AI 的流式走 WebClient；没有 Reactor Netty 时 Spring 会退回 JDK HttpClient 连接器，
+             真机表现为"整段响应到达后才一次性吐出 chunk"（首字=总耗时）。显式引入 Netty 连接器。 -->
+        <dependency>
+            <groupId>io.projectreactor.netty</groupId>
+            <artifactId>reactor-netty-http</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>

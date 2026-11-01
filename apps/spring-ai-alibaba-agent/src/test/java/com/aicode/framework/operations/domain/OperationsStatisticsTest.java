@@ -51,6 +51,22 @@ class OperationsStatisticsTest {
     }
 
     @Test
+    void cancelledRunsAreCountedButExcludedFromFailureRate() {
+        List<ExecutionRecord> records = List.of(
+                record("e1", ExecutionStatus.COMPLETED, 10, 10, "deepseek-chat"),
+                record("e2", ExecutionStatus.CANCELLED, 0, 0, "deepseek-chat"),
+                record("e3", ExecutionStatus.CANCELLED, 0, 0, "deepseek-chat"));
+
+        OperationsSummary summary = statistics.summarize(records, PRICES, false);
+
+        assertThat(summary.totalRuns()).isEqualTo(3);
+        assertThat(summary.cancelled()).isEqualTo(2);
+        assertThat(summary.denominator()).isEqualTo(1);
+        assertThat(summary.failureRate()).isZero();
+        assertThat(summary.successRate()).isEqualTo(1.0);
+    }
+
+    @Test
     void ratesAreZeroWhenThereIsNoCompletedOrFailedRun() {
         OperationsSummary summary = statistics.summarize(
                 List.of(record("e1", ExecutionStatus.PENDING_APPROVAL, 0, 0, "deepseek-chat")),

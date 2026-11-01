@@ -62,7 +62,7 @@ class PlatformOperationsHttpTest {
     void stubReport() {
         Instant end = Instant.parse("2026-10-25T09:00:00Z");
         OperationsSummary summary = new OperationsSummary(
-                3, 2, 1, 0, 0, 0, 100, 50, 0.0, true, false);
+                3, 2, 1, 0, 0, 0, 0, 100, 50, 0.0, true, false);
         when(operationsAnalysisAgent.run(any(), any())).thenReturn(new OperationsDailyReport(
                 end.minusSeconds(7 * 86400L), end, 7, summary, List.of(), List.of(),
                 "## 运营概览\n运行正常", false, TokenUsage.unknown(), "test-model"));

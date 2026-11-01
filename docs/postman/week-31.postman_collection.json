@@ -1,0 +1,152 @@
+{
+  "info": {
+    "name": "Week 31 - SSE 流式执行",
+    "description": "平台 8084。前置：登录拿 adminToken；知识库问答需要一条 enabled 且未 MISSING 的知识库绑定（knowledgeBaseId）。用 Postman 的 SSE 响应面板查看 meta/delta/final。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "platformBaseUrl", "value": "http://127.0.0.1:8084" },
+    { "key": "adminToken", "value": "" },
+    { "key": "knowledgeBaseId", "value": "1" }
+  ],
+  "item": [
+    {
+      "name": "01 - 登录 admin",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/auth/login",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "auth", "login"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"username\":\"admin\",\"password\":\"admin123\"}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200', () => pm.response.to.have.status(200));",
+              "pm.collectionVariables.set('adminToken', pm.response.json().data.token);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - 知识库问答（SSE）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "text/event-stream, application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/knowledge-qa/runs/stream",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "knowledge-qa", "runs", "stream"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"input\":{\"knowledgeBaseId\":{{knowledgeBaseId}},\"question\":\"糖尿病患者的随访频率是多少？\"}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + event-stream', () => {",
+              "  pm.expect(pm.response.code).to.eql(200);",
+              "  pm.expect(pm.response.headers.get('Content-Type')).to.contain('text/event-stream');",
+              "});",
+              "pm.test('包含 meta 与 final', () => {",
+              "  const body = pm.response.text();",
+              "  pm.expect(body).to.contain('event: meta');",
+              "  pm.expect(body).to.contain('event: final');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - 患者分析（SSE，HIGH 待审）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "text/event-stream, application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/patient-analysis/runs/stream",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "patient-analysis", "runs", "stream"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"input\":{\"patientId\":\"P002\"}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('200 + event-stream', () => pm.expect(pm.response.code).to.eql(200));",
+              "pm.test('final 为 PENDING_APPROVAL', () => {",
+              "  const body = pm.response.text();",
+              "  const finals = body.split('event: final');",
+              "  pm.expect(finals.length).to.be.above(1);",
+              "  pm.expect(body).to.contain('PENDING_APPROVAL');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - 不支持的 Agent（400）",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Accept", "value": "text/event-stream, application/json" },
+          { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+        ],
+        "url": {
+          "raw": "{{platformBaseUrl}}/api/v1/platform/agents/medical-assistant/runs/stream",
+          "host": ["{{platformBaseUrl}}"],
+          "path": ["api", "v1", "platform", "agents", "medical-assistant", "runs", "stream"]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\"input\":{\"patientId\":\"P001\"}}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('400 VALIDATION_ERROR', () => {",
+              "  pm.response.to.have.status(400);",
+              "  pm.expect(pm.response.json().code).to.eql('VALIDATION_ERROR');",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

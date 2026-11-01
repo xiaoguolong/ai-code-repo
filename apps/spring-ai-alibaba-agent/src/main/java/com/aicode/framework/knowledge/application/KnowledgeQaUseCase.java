@@ -1,6 +1,7 @@
 package com.aicode.framework.knowledge.application;
 
 import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.framework.knowledge.domain.KnowledgeQaAgent;
 import com.aicode.framework.knowledge.domain.model.KnowledgeAnswer;
 import com.aicode.framework.platform.domain.exception.PlatformNotFoundException;
@@ -53,6 +54,24 @@ public class KnowledgeQaUseCase {
      * @throws PlatformNotFoundException   知识库未绑定到当前租户
      */
     public KnowledgeAnswer run(long callerUserId, Long knowledgeBaseId, String question) {
+        return run(callerUserId, knowledgeBaseId, question, null);
+    }
+
+    /**
+     * 回答知识库问题（Week 31：可带增量回调）。
+     *
+     * @param callerUserId    调用者（来自登录态，仅用于日志）
+     * @param knowledgeBaseId 知识库 ID
+     * @param question        问题
+     * @param listener        增量回调；null 表示同步调用
+     * @return 带引用的答案
+     */
+    public KnowledgeAnswer run(
+            long callerUserId,
+            Long knowledgeBaseId,
+            String question,
+            ChatStreamListener listener
+    ) {
         PlatformMemoryScope scope = runScopePort.currentScope()
                 .orElseThrow(() -> new IllegalStateException("knowledge qa requires platform run scope"));
         if (knowledgeBaseId == null || knowledgeBaseId <= 0) {
@@ -80,8 +99,10 @@ public class KnowledgeQaUseCase {
             throw new PlatformNotFoundException(
                     "knowledge base was removed on enterprise side: " + knowledgeBaseId);
         }
-        log.info("[knowledge-qa] run callerUserId={} tenantKey={} knowledgeBaseId={}",
-                callerUserId, scope.tenantKey(), knowledgeBaseId);
-        return agent.run(knowledgeBaseId, normalizedQuestion);
+        log.info("[knowledge-qa] run callerUserId={} tenantKey={} knowledgeBaseId={} streaming={}",
+                callerUserId, scope.tenantKey(), knowledgeBaseId, listener != null);
+        return listener == null
+                ? agent.run(knowledgeBaseId, normalizedQuestion)
+                : agent.run(knowledgeBaseId, normalizedQuestion, listener);
     }
 }

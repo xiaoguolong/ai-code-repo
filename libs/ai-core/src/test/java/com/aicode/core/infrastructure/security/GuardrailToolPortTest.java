@@ -59,6 +59,23 @@ class GuardrailToolPortTest {
     }
 
     @Test
+    void keepsJsonValidWhenScoresHaveLongDecimalDigits() throws Exception {
+        // Week 31 真机回归：knowledge-qa 工具结果里 score 可能是 15/16 位小数，
+        // 身份证掩码若作用在整段 JSON 文本上，会把数字替换成带 * 的文本 → 非法 JSON。
+        ToolCall call = new ToolCall("call-1", "KnowledgeSearchTool", "{\"patientId\":\"P001\"}");
+        String json = "{\"hits\":[{\"documentId\":\"d1\",\"score\":0.486819416284103,"
+                + "\"score2\":0.4868194162841034,\"content\":\"联系电话13812345678\"}]}";
+        when(delegate.execute(any())).thenReturn(new ToolResult(json));
+
+        ToolResult result = guardrailToolPort.execute(call);
+
+        assertThat(result.output()).contains("0.486819416284103");
+        assertThat(result.output()).contains("0.4868194162841034");
+        assertThat(result.output()).contains("138****5678");
+        assertThat(new ObjectMapper().readTree(result.output()).path("hits")).hasSize(1);
+    }
+
+    @Test
     void delegatesDefinitions() {
         when(delegate.definitions()).thenReturn(List.of(new ToolDefinition("T", "d", Map.of())));
 

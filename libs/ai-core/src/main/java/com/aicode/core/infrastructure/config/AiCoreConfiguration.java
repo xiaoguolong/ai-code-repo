@@ -7,10 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
 import java.net.InetSocketAddress;
-import java.net.ProxySelector;
+import java.net.Proxy;
 import java.net.http.HttpClient;
 import java.time.Duration;
 
@@ -58,19 +59,21 @@ public class AiCoreConfiguration {
 
     /**
      * LLM HTTP 客户端。Authorization 在适配器里按请求附加，避免空密钥绑死在 Bean 上。
+     *
+     * <p><b>Week 31 真机修复</b>：原实现用 {@link JdkClientHttpRequestFactory}（JDK HttpClient），
+     * 对 {@code text/event-stream} 会等整段响应到齐才把 InputStream 交给调用方，导致原生 SSE
+     * 也变成"末尾一次性吐出"（首字=总耗时）。改用 {@link SimpleClientHttpRequestFactory}
+     * （HttpURLConnection），本地 SSE 测试已证明它按块交付。</p>
      */
     @Bean
     RestClient llmRestClient(LlmProperties llmProperties) {
-        HttpClient.Builder httpBuilder = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(llmProperties.timeoutSeconds()));
-        if (llmProperties.proxyHost() != null && !llmProperties.proxyHost().isBlank()) {
-            ProxySelector proxy = ProxySelector.of(
-                    new InetSocketAddress(llmProperties.proxyHost(), llmProperties.resolvedProxyPort())
-            );
-            httpBuilder.proxy(proxy);
-        }
-        JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpBuilder.build());
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(llmProperties.timeoutSeconds()));
         factory.setReadTimeout(Duration.ofSeconds(llmProperties.timeoutSeconds()));
+        if (llmProperties.proxyHost() != null && !llmProperties.proxyHost().isBlank()) {
+            factory.setProxy(new Proxy(Proxy.Type.HTTP, new InetSocketAddress(
+                    llmProperties.proxyHost(), llmProperties.resolvedProxyPort())));
+        }
         return RestClient.builder()
                 .baseUrl(llmProperties.baseUrl())
                 .requestFactory(factory)

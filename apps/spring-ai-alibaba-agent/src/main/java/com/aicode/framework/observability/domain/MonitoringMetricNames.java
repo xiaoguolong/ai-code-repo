@@ -69,12 +69,19 @@ public final class MonitoringMetricNames {
     /** 企业侧已删除的绑定数（Gauge，Week 27；无标签）。 */
     public static final String KNOWLEDGE_BINDING_MISSING_COUNT = "knowledge.binding.missing.count";
 
+    /** 流式首字耗时（Timer，Week 31；标签：{@code agent.key}；导出名 {@code agent_stream_first_delta_seconds}）。 */
+    public static final String AGENT_STREAM_FIRST_DELTA = "agent.stream.first.delta";
+
+    /** 流式终态计数（Counter，Week 31；标签：{@code agent.key} / {@code stream.result}）。 */
+    public static final String AGENT_STREAM_COUNT = "agent.stream.count";
+
     /** 全部指标名（契约测试遍历用）。 */
     private static final List<String> ALL = List.of(
             AGENT_RUN_COUNT, AGENT_RUN_DURATION, LLM_CALL_COUNT, LLM_CALL_DURATION,
             LLM_TOKENS, LLM_COST_USD, TOOL_CALL_COUNT, APPROVAL_PENDING_COUNT,
             APPROVAL_REMINDER_COUNT, KNOWLEDGE_SEARCH_DURATION, KNOWLEDGE_HIT_COUNT,
-            KNOWLEDGE_RECONCILE_COUNT, KNOWLEDGE_BINDING_MISSING_COUNT);
+            KNOWLEDGE_RECONCILE_COUNT, KNOWLEDGE_BINDING_MISSING_COUNT,
+            AGENT_STREAM_FIRST_DELTA, AGENT_STREAM_COUNT);
 
     private MonitoringMetricNames() {
     }

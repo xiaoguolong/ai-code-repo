@@ -60,6 +60,25 @@ class DefaultGuardrailAdapterTest {
     }
 
     @Test
+    void masksIdCardInOutput() {
+        GuardrailContext context = GuardrailContext.platformRun(1L, "agent");
+
+        assertThat(guardrail.sanitizeTextOutput(context, "身份证 110101199001011234"))
+                .isEqualTo("身份证 110101********1234");
+        assertThat(guardrail.sanitizeTextOutput(context, "旧证 110101199001011"))
+                .isEqualTo("旧证 110101********1");
+    }
+
+    @Test
+    void doesNotTouchNonIdLongNumbers() {
+        GuardrailContext context = GuardrailContext.platformRun(1L, "agent");
+        // 16/17 位是小数/时间戳常见长度，真实身份证只有 15/18 位，不能被误掩。
+        String text = "score=0.4868194162841034 ts=1730428800123456";
+
+        assertThat(guardrail.sanitizeTextOutput(context, text)).isEqualTo(text);
+    }
+
+    @Test
     void masksNestedOutputMap() {
         GuardrailContext context = GuardrailContext.platformRun(1L, "agent");
 

@@ -1,6 +1,7 @@
 package com.aicode.framework.platform.domain.service;
 
 import com.aicode.core.domain.exception.InvalidChatRequestException;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.framework.analysis.application.PatientAnalysisUseCase;
 import com.aicode.framework.analysis.domain.model.PatientAnalysisResult;
 import com.aicode.framework.analysis.domain.model.PatientAnalysisStep;
@@ -142,15 +143,35 @@ public class PlatformAgentRunner {
      * @return 输出、用量与模型名
      */
     public PlatformRunOutput run(PlatformAgentDefinition agent, Map<String, Object> input) {
-        log.info("[platform] dispatch agentKey={} agentType={}", agent.agentKey(), agent.agentType());
+        return run(agent, input, null);
+    }
+
+    /**
+     * 带增量回调地执行（Week 31）。
+     *
+     * <p>只有 {@code KNOWLEDGE_QA} 与 {@code PATIENT_ANALYSIS} 使用 listener；
+     * 其它类型忽略它（平台侧也不会把它们路由到流式端点）。</p>
+     *
+     * @param agent    Agent 定义
+     * @param input    Run 入参
+     * @param listener 增量回调；null 表示同步执行
+     * @return 输出、用量与模型名
+     */
+    public PlatformRunOutput run(
+            PlatformAgentDefinition agent,
+            Map<String, Object> input,
+            ChatStreamListener listener
+    ) {
+        log.info("[platform] dispatch agentKey={} agentType={} streaming={}",
+                agent.agentKey(), agent.agentType(), listener != null);
         return switch (agent.agentType()) {
             case FRAMEWORK_REACT -> runFrameworkReact(input);
             case PATIENT_RISK_WORKFLOW -> runPatientRisk(input);
             case MEDICAL_ASSISTANT -> runMedicalAssistant(input);
-            case PATIENT_ANALYSIS -> runPatientAnalysis(input);
+            case PATIENT_ANALYSIS -> runPatientAnalysis(input, listener);
             case OPERATIONS_ANALYSIS -> runOperationsAnalysis(input);
             case FOLLOW_UP -> runFollowUp(input);
-            case KNOWLEDGE_QA -> runKnowledgeQa(input);
+            case KNOWLEDGE_QA -> runKnowledgeQa(input, listener);
         };
     }
 
@@ -193,14 +214,16 @@ public class PlatformAgentRunner {
         return new PlatformRunOutput(output, result.usage(), result.model());
     }
 
-    private PlatformRunOutput runPatientAnalysis(Map<String, Object> input) {
+    private PlatformRunOutput runPatientAnalysis(Map<String, Object> input, ChatStreamListener listener) {
         if (patientAnalysisUseCase == null) {
             throw new IllegalStateException("patient analysis use case is not configured");
         }
         String patientId = requireString(input, "patientId");
         String task = optionalString(input, "task");
         PlatformMemoryScope scope = runScopePort.currentScope().orElse(null);
-        PatientAnalysisResult result = patientAnalysisUseCase.run(patientId, task, scope);
+        PatientAnalysisResult result = listener == null
+                ? patientAnalysisUseCase.run(patientId, task, scope)
+                : patientAnalysisUseCase.run(patientId, task, scope, listener);
         Map<String, Object> output = toOutput(result);
         output.put("task", task == null ? PatientAnalysisUseCase.defaultTask(patientId) : task);
         boolean pendingApproval = scope != null && result.requiresApproval();
@@ -302,7 +325,7 @@ public class PlatformAgentRunner {
      * <p>知识库是租户资源，必须有 Platform Run 范围（租户+用户）才能查绑定；
      * 没有范围说明是直连 Run，直接显式失败而不是猜一个租户。</p>
      */
-    private PlatformRunOutput runKnowledgeQa(Map<String, Object> input) {
+    private PlatformRunOutput runKnowledgeQa(Map<String, Object> input, ChatStreamListener listener) {
         if (knowledgeQaUseCase == null) {
             throw new IllegalStateException("knowledge qa use case is not configured");
         }
@@ -310,7 +333,9 @@ public class PlatformAgentRunner {
         String question = requireString(input, "question");
         PlatformMemoryScope scope = runScopePort.currentScope()
                 .orElseThrow(() -> new IllegalStateException("knowledge qa requires platform run scope"));
-        KnowledgeAnswer answer = knowledgeQaUseCase.run(scope.userId(), knowledgeBaseId, question);
+        KnowledgeAnswer answer = listener == null
+                ? knowledgeQaUseCase.run(scope.userId(), knowledgeBaseId, question)
+                : knowledgeQaUseCase.run(scope.userId(), knowledgeBaseId, question, listener);
 
         Map<String, Object> output = toOutput(answer);
         String task = optionalString(input, "task");
@@ -360,6 +385,7 @@ public class PlatformAgentRunner {
         summaryMap.put("pendingApproval", summary.pendingApproval());
         summaryMap.put("rejected", summary.rejected());
         summaryMap.put("running", summary.running());
+        summaryMap.put("cancelled", summary.cancelled());
         summaryMap.put("successRate", summary.successRate());
         summaryMap.put("failureRate", summary.failureRate());
         summaryMap.put("promptTokens", summary.promptTokens());

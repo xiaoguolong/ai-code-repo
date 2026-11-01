@@ -5,6 +5,7 @@ import com.aicode.core.domain.exception.ToolExecutionException;
 import com.aicode.core.domain.model.ChatMessage;
 import com.aicode.core.domain.model.ChatOptions;
 import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.core.domain.model.MessageRole;
 import com.aicode.core.domain.model.PromptTemplate;
 import com.aicode.core.domain.model.TokenUsage;
@@ -92,6 +93,19 @@ public class PatientAnalysisAgent {
      * @throws ToolExecutionException 任一工具失败（不吞错）
      */
     public PatientAnalysisResult run(String patientId, String task) {
+        return run(patientId, task, null);
+    }
+
+    /**
+     * 执行一次患者分析（Week 31：可带增量回调，报告边生成边下发）。
+     *
+     * @param patientId 患者编号（调用方已校验非空）
+     * @param task      任务描述（用于报告生成，可为空串）
+     * @param listener  增量回调；null 表示同步调用
+     * @return 结构化结果
+     * @throws ToolExecutionException 任一工具失败（不吞错）
+     */
+    public PatientAnalysisResult run(String patientId, String task, ChatStreamListener listener) {
         List<PatientAnalysisStep> steps = new ArrayList<>();
 
         PatientProfile patient = toolResultMapper.parsePatient(
@@ -109,7 +123,7 @@ public class PatientAnalysisAgent {
         RiskAssessment risk = riskAssessor.assess(metrics);
         addStep(steps, STEP_RISK, "risk=" + risk.riskLevel().name());
 
-        ReportOutcome reportOutcome = generateReport(patientId, task, patient, metrics, reports, risk);
+        ReportOutcome reportOutcome = generateReport(patientId, task, patient, metrics, reports, risk, listener);
         addStep(steps, STEP_REPORT_GENERATION, "generated report degraded=" + reportOutcome.degraded());
 
         log.info("[patient-analysis] run completed patientId={} reports={} riskLevel={} degraded={} tokens={}",
@@ -132,15 +146,18 @@ public class PatientAnalysisAgent {
             PatientProfile patient,
             HealthMetrics metrics,
             List<ReportSummary> reports,
-            RiskAssessment risk
+            RiskAssessment risk,
+            ChatStreamListener listener
     ) {
         try {
             PromptTemplate system = promptTemplatePort.load(PROMPT_NAME);
-            ChatResult result = chatModelPort.chat(
-                    List.of(
-                            new ChatMessage(MessageRole.SYSTEM, system.content()),
-                            new ChatMessage(MessageRole.USER, buildUserMessage(patientId, task, patient, metrics, reports, risk))),
-                    new ChatOptions(config.model(), config.temperature(), config.maxTokens()));
+            List<ChatMessage> messages = List.of(
+                    new ChatMessage(MessageRole.SYSTEM, system.content()),
+                    new ChatMessage(MessageRole.USER, buildUserMessage(patientId, task, patient, metrics, reports, risk)));
+            ChatOptions options = new ChatOptions(config.model(), config.temperature(), config.maxTokens());
+            ChatResult result = listener == null
+                    ? chatModelPort.chat(messages, options)
+                    : chatModelPort.chatStream(messages, options, listener);
             String content = result.content() == null ? "" : result.content().trim();
             String model = (result.model() == null || result.model().isBlank()) ? config.model() : result.model();
             if (content.isEmpty()) {

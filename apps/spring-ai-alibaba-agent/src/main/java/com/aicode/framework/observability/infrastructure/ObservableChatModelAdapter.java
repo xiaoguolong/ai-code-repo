@@ -3,6 +3,7 @@ package com.aicode.framework.observability.infrastructure;
 import com.aicode.core.domain.model.ChatMessage;
 import com.aicode.core.domain.model.ChatOptions;
 import com.aicode.core.domain.model.ChatResult;
+import com.aicode.core.domain.model.ChatStreamListener;
 import com.aicode.core.domain.model.ToolDefinition;
 import com.aicode.core.domain.port.ChatModelPort;
 import com.aicode.framework.observability.domain.AgentObservabilityPort;
@@ -14,14 +15,18 @@ import com.aicode.framework.observability.domain.SpanScope;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
- * LLM 调用链埋点装饰器（Week 17）。
+ * LLM 调用链埋点装饰器（Week 17；Week 31 增加增量）。
  *
- * <p>包在 {@link ChatModelPort} 外层：一次 {@code chat()} 往来 = 一个 {@code llm.chat} span +
- * {@code llm.call.count} / {@code llm.call.duration} / {@code llm.tokens.total} 指标。
- * 这是 LLM 应用<b>成本核算的最小单位</b>：Agent 一次执行可能调多轮模型，只看 agent.run 无法区分
- * 「模型慢」与「工具慢」，也无法按模型归集 token。</p>
+ * <p>包在 {@link ChatModelPort} 外层：一次 {@code chat()} / {@code chatStream()} 往来 =
+ * 一个 {@code llm.chat} span + {@code llm.call.count} / {@code llm.call.duration} /
+ * {@code llm.tokens.total} 指标。这是 LLM 应用<b>成本核算的最小单位</b>。</p>
+ *
+ * <p><b>Week 31 教训</b>：本类曾只覆盖 {@code chat(...)}，新加的 {@code chatStream(...)} 落到接口默认实现，
+ * 于是"流式"退化成同步调用 + 一个整段 chunk——真机表现为首字=总耗时。
+ * 所有 {@link ChatModelPort} 装饰器都必须显式覆盖新增方法，否则会把内层能力吃掉。</p>
  *
  * <p>属性只写模型名、结束原因、token 数与工具调用数量；<b>不写 Prompt 与输出正文</b>
  * （消息里可能含患者隐私，写进 span 等于复制到第三个系统）。</p>
@@ -62,8 +67,25 @@ public class ObservableChatModelAdapter implements ChatModelPort {
      */
     @Override
     public ChatResult chat(List<ChatMessage> messages, ChatOptions options, List<ToolDefinition> tools) {
+        return observed(messages, options, () -> delegate.chat(messages, options, tools));
+    }
+
+    /**
+     * 发起一次带观测的增量补全（Week 31）：增量直接透传给调用方监听器，
+     * span/指标覆盖整段流（结束时记一次 token 用量）。
+     */
+    @Override
+    public ChatResult chatStream(
+            List<ChatMessage> messages,
+            ChatOptions options,
+            ChatStreamListener listener
+    ) {
+        return observed(messages, options, () -> delegate.chatStream(messages, options, listener));
+    }
+
+    private ChatResult observed(List<ChatMessage> messages, ChatOptions options, Supplier<ChatResult> call) {
         if (!observability.isEnabled()) {
-            return delegate.chat(messages, options, tools);
+            return call.get();
         }
         String model = options == null ? null : options.model();
         Map<String, String> attributes = new LinkedHashMap<>();
@@ -75,7 +97,7 @@ public class ObservableChatModelAdapter implements ChatModelPort {
         long startedAt = System.nanoTime();
         try (SpanScope scope = observability.openSpan(SpanKind.LLM_CALL, SPAN_NAME, attributes)) {
             try {
-                ChatResult result = delegate.chat(messages, options, tools);
+                ChatResult result = call.get();
                 recordSuccess(scope, result, model);
                 recordLangfuse(scope, messages, options, result);
                 recordCall(resolvedModel(result, model), ObservabilityAttributes.OUTCOME_SUCCESS, startedAt);

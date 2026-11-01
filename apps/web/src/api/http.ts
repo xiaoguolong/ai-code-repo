@@ -63,6 +63,16 @@ export function setUnauthorizedHandler(handler: () => void): void {
   unauthorizedHandler = handler;
 }
 
+/**
+ * 统一处理 401：清掉会话并通知应用回登录页。
+ *
+ * <p>axios 拦截器与 SSE（fetch）共用，避免两条链路对 401 的处理不一致。</p>
+ */
+export function notifyUnauthorized(): void {
+  sessionStorage.removeItem(TOKEN_KEY);
+  unauthorizedHandler?.();
+}
+
 export const http: AxiosInstance = axios.create({
   baseURL: '/api',
   timeout: 180_000,
@@ -83,8 +93,7 @@ http.interceptors.response.use(
   (error: unknown) => {
     const apiError = toApiError(error);
     if (apiError.status === 401) {
-      sessionStorage.removeItem(TOKEN_KEY);
-      unauthorizedHandler?.();
+      notifyUnauthorized();
     }
     return Promise.reject(apiError);
   }
