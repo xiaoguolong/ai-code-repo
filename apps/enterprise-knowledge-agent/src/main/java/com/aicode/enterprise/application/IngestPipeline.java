@@ -171,6 +171,24 @@ public class IngestPipeline {
     }
 
     /**
+     * 只重清洗/切片/向量化，不重跑 OCR（用于提示词升级后修复历史文档）。
+     *
+     * @param jobId 作业
+     * @return 是否受理（没有 OCR 文本时拒绝）
+     */
+    public boolean reprocess(String jobId) {
+        IngestJob job = load(jobId);
+        if (job.ocrMarkdown().isBlank()) {
+            return false;
+        }
+        IngestJob reset = new IngestJob(job.jobId(), job.kbId(), job.userId(), job.fileName(), job.fileId(),
+                job.contentHash(), IngestJobStatus.PENDING, job.pageCount(), 0,
+                job.ocrMarkdown(), "", "", "", job.createdAt(), job.startedAt(), null);
+        jobs.update(reset);
+        return true;
+    }
+
+    /**
      * 取消未完成作业。
      *
      * @param jobId 作业
@@ -241,10 +259,12 @@ public class IngestPipeline {
             for (String segment : segments) {
                 ChatResult result = chatModelPort.chat(
                         List.of(new ChatMessage(MessageRole.SYSTEM, prompt.content()),
-                                new ChatMessage(MessageRole.USER, segment)),
+                                new ChatMessage(MessageRole.USER,
+                                        "请清洗下面的 OCR 文本，只输出清洗后的 markdown 正文：\n\n"
+                                                + segment)),
                         new ChatOptions(chatConfig.model(), chatConfig.temperature(), chatConfig.maxTokens()));
                 String part = result.content() == null || result.content().isBlank()
-                        ? segment : result.content();
+                        ? segment : sanitizeCleanOutput(result.content(), segment);
                 cleaned.append(part);
                 if (!cleaned.isEmpty() && cleaned.charAt(cleaned.length() - 1) != '\n') {
                     cleaned.append('\n');
@@ -308,6 +328,8 @@ public class IngestPipeline {
         jobs.saveStep(base.running(now()));
         long start = System.nanoTime();
         try {
+            // 先删切片再删文档：document_chunk.document_id 有外键指向 document，顺序反了会报 FK 错误。
+            vectorStorePort.deleteByDocumentId(documentId);
             documentPort.deleteByDocumentId(documentId);
             documentPort.create(new DocumentMetadata(documentId, job.kbId(), job.fileName(),
                     chunks.size(), now()));
@@ -323,6 +345,52 @@ public class IngestPipeline {
             jobs.saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
             throw ex;
         }
+    }
+
+    /**
+     * 清理模型可能输出的"思考过程"前缀（deepseek-v4-pro 在个别输入上会把分析写进正文）。
+     *
+     * <p>规则：以"我们需要/用户要求/分析/好的"开头时，截到第一个 markdown 标题；
+     * 找不到标题则退回原文片段。这是兜底，不能替代提示词约束。</p>
+     *
+     * @param text     模型输出
+     * @param fallback 原始片段
+     * @return 可入库正文
+     */
+    static String sanitizeCleanOutput(String text, String fallback) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isEmpty()) {
+            return fallback;
+        }
+        String[] reasoningPrefixes = {"我们需要", "用户要求", "用户需要", "分析：", "好的，", "好的,"};
+        boolean reasoning = false;
+        for (String prefix : reasoningPrefixes) {
+            if (trimmed.startsWith(prefix)) {
+                reasoning = true;
+                break;
+            }
+        }
+        if (!reasoning) {
+            return trimmed;
+        }
+        int heading = firstHeadingIndex(trimmed);
+        return heading >= 0 ? trimmed.substring(heading).trim() : fallback;
+    }
+
+    private static int firstHeadingIndex(String text) {
+        int index = 0;
+        while (index < text.length()) {
+            int lineEnd = text.indexOf('\n', index);
+            String line = (lineEnd < 0 ? text.substring(index) : text.substring(index, lineEnd)).trim();
+            if (line.startsWith("#")) {
+                return index;
+            }
+            if (lineEnd < 0) {
+                break;
+            }
+            index = lineEnd + 1;
+        }
+        return text.trim().startsWith("#") ? text.indexOf('#') : -1;
     }
 
     private IngestJobStep baseStep(IngestJob job, int stepNo, IngestStepKey key, String input) {

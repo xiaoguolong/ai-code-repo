@@ -146,6 +146,26 @@ class IngestPipelineTest {
         assertThat(ocr.calls).isZero();
     }
 
+    @Test
+    void reprocessSkipsOcrAndRebuildsChunks() {
+        jobs.create(IngestJob.pending("j5", 1L, 2L, "guide.pdf", "hash-5", NOW)
+                .withFile("f1").withOcr(2, "# 旧 OCR 文本"));
+        jobs.update(jobs.findById("j5").orElseThrow().succeeded("ingest-j5", 1, NOW));
+        documents.created.add(new DocumentMetadata("ingest-j5", 1L, "guide.pdf", 1, NOW));
+
+        assertThat(pipeline.reprocess("j5")).isTrue();
+        pipeline.run("j5");
+
+        assertThat(ocr.calls).isZero();
+        assertThat(jobs.findById("j5").orElseThrow().status()).isEqualTo(IngestJobStatus.SUCCEEDED);
+        assertThat(jobs.listSteps("j5"))
+                .filteredOn(step -> step.key() == IngestStepKey.OCR)
+                .singleElement()
+                .extracting(IngestJobStep::status).isEqualTo(IngestStepStatus.SKIPPED);
+        assertThat(documents.created).hasSize(1);
+        assertThat(documents.created.get(0).documentId()).isEqualTo("ingest-j5");
+    }
+
     // ---------- 假实现 ----------
 
     private static final class FakeJobs implements IngestJobPort {

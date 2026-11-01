@@ -6,6 +6,7 @@ import com.aicode.enterprise.application.CancelIngestJobUseCase;
 import com.aicode.enterprise.application.CreateIngestJobOutcome;
 import com.aicode.enterprise.application.CreateIngestJobUseCase;
 import com.aicode.enterprise.application.IngestJobQueryUseCase;
+import com.aicode.enterprise.application.ReprocessIngestJobUseCase;
 import com.aicode.enterprise.application.RetryIngestJobUseCase;
 import com.aicode.enterprise.dto.ApiResponse;
 import com.aicode.enterprise.dto.IngestJobCreateResponse;
@@ -39,17 +40,20 @@ public class IngestJobController {
     private final IngestJobQueryUseCase queryUseCase;
     private final RetryIngestJobUseCase retryUseCase;
     private final CancelIngestJobUseCase cancelUseCase;
+    private final ReprocessIngestJobUseCase reprocessUseCase;
 
     public IngestJobController(
             CreateIngestJobUseCase createUseCase,
             IngestJobQueryUseCase queryUseCase,
             RetryIngestJobUseCase retryUseCase,
-            CancelIngestJobUseCase cancelUseCase
+            CancelIngestJobUseCase cancelUseCase,
+            ReprocessIngestJobUseCase reprocessUseCase
     ) {
         this.createUseCase = createUseCase;
         this.queryUseCase = queryUseCase;
         this.retryUseCase = retryUseCase;
         this.cancelUseCase = cancelUseCase;
+        this.reprocessUseCase = reprocessUseCase;
     }
 
     /**
@@ -121,6 +125,19 @@ public class IngestJobController {
     public ApiResponse<Void> retry(@PathVariable String jobId) {
         long userId = StpUtil.getLoginIdAsLong();
         retryUseCase.retry(jobId, userId);
+        return ApiResponse.success(null);
+    }
+
+    /**
+     * 只重清洗/切片（不重跑 OCR）。
+     *
+     * @param jobId 作业
+     * @return 空响应
+     */
+    @PostMapping("/ingest-jobs/{jobId}/reprocess")
+    public ApiResponse<Void> reprocess(@PathVariable String jobId) {
+        long userId = StpUtil.getLoginIdAsLong();
+        reprocessUseCase.reprocess(jobId, userId);
         return ApiResponse.success(null);
     }
 

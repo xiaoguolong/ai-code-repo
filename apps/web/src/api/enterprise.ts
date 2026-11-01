@@ -9,7 +9,8 @@ import type {
   EnterpriseUser,
   IngestJobCreateResult,
   IngestJobDetail,
-  IngestJobSummary
+  IngestJobSummary,
+  DocumentChunk
 } from './types';
 
 const TOKEN_KEY = 'aicode_enterprise_token';
@@ -98,6 +99,10 @@ export function ingestDocument(
     name,
     content
   });
+}
+
+export function listDocumentChunks(baseId: number, documentId: string): Promise<DocumentChunk[]> {
+  return get<DocumentChunk[]>(`/api/v1/knowledge-bases/${baseId}/documents/${documentId}/chunks`);
 }
 
 export function deleteDocument(baseId: number, documentId: string): Promise<void> {

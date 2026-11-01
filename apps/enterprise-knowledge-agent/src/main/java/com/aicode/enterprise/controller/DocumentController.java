@@ -4,8 +4,10 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.aicode.enterprise.application.DeleteDocumentUseCase;
 import com.aicode.enterprise.application.IngestDocumentCommand;
 import com.aicode.enterprise.application.IngestDocumentUseCase;
+import com.aicode.enterprise.application.ListDocumentChunksUseCase;
 import com.aicode.enterprise.application.ListDocumentsUseCase;
 import com.aicode.enterprise.dto.ApiResponse;
+import com.aicode.enterprise.dto.DocumentChunkDto;
 import com.aicode.enterprise.dto.DocumentItemDto;
 import com.aicode.enterprise.dto.IngestDocumentRequest;
 import com.aicode.enterprise.dto.IngestDocumentResponse;
@@ -30,15 +32,18 @@ public class DocumentController {
     private final IngestDocumentUseCase ingestDocumentUseCase;
     private final ListDocumentsUseCase listDocumentsUseCase;
     private final DeleteDocumentUseCase deleteDocumentUseCase;
+    private final ListDocumentChunksUseCase listDocumentChunksUseCase;
 
     public DocumentController(
             IngestDocumentUseCase ingestDocumentUseCase,
             ListDocumentsUseCase listDocumentsUseCase,
-            DeleteDocumentUseCase deleteDocumentUseCase
+            DeleteDocumentUseCase deleteDocumentUseCase,
+            ListDocumentChunksUseCase listDocumentChunksUseCase
     ) {
         this.ingestDocumentUseCase = ingestDocumentUseCase;
         this.listDocumentsUseCase = listDocumentsUseCase;
         this.deleteDocumentUseCase = deleteDocumentUseCase;
+        this.listDocumentChunksUseCase = listDocumentChunksUseCase;
     }
 
     /**
@@ -59,6 +64,18 @@ public class DocumentController {
         Long userId = StpUtil.getLoginIdAsLong();
         List<DocumentItemDto> data = listDocumentsUseCase.list(userId, kbId).stream()
                 .map(DocumentItemDto::from)
+                .toList();
+        return ApiResponse.success(data);
+    }
+
+    /**
+     * 查看某文档的分块正文（Week 32 增补）。
+     */
+    @GetMapping("/{docId}/chunks")
+    public ApiResponse<List<DocumentChunkDto>> chunks(@PathVariable Long kbId, @PathVariable String docId) {
+        Long userId = StpUtil.getLoginIdAsLong();
+        List<DocumentChunkDto> data = listDocumentChunksUseCase.list(kbId, docId, userId).stream()
+                .map(DocumentChunkDto::from)
                 .toList();
         return ApiResponse.success(data);
     }

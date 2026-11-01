@@ -296,3 +296,8 @@ export interface IngestJobCreateResult {
   fileName: string;
   duplicate: boolean;
 }
+export interface DocumentChunk {
+  chunkIndex: number;
+  content: string;
+  chars: number;
+}

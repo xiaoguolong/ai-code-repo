@@ -10,11 +10,13 @@ import {
   getIngestJob,
   ingestDocument,
   listBases,
+  listDocumentChunks,
   listDocuments,
   listIngestJobs,
   retryIngestJob
 } from '@/api/enterprise';
 import type {
+  DocumentChunk,
   EnterpriseDocument,
   EnterpriseKnowledgeBase,
   IngestJobDetail,
@@ -349,6 +351,31 @@ async function removeDoc(doc: EnterpriseDocument | Record<string, unknown>): Pro
   }
 }
 
+/* ---------- 文档分块查看 ---------- */
+
+const chunkDrawerOpen = ref(false);
+const chunkDocName = ref('');
+const chunks = ref<DocumentChunk[]>([]);
+const loadingChunks = ref(false);
+
+async function openChunks(doc: EnterpriseDocument | Record<string, unknown>): Promise<void> {
+  const target = doc as EnterpriseDocument;
+  if (!selectedBaseId.value) {
+    return;
+  }
+  chunkDocName.value = target.name;
+  chunks.value = [];
+  chunkDrawerOpen.value = true;
+  loadingChunks.value = true;
+  try {
+    chunks.value = await listDocumentChunks(selectedBaseId.value, target.documentId);
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '分块加载失败');
+  } finally {
+    loadingChunks.value = false;
+  }
+}
+
 async function logout(): Promise<void> {
   await store.logout();
   bases.value = [];
@@ -498,14 +525,17 @@ onMounted(async () => {
                   </div>
                 </template>
                 <template v-else-if="column.key === 'actions'">
-                  <a-popconfirm
-                    title="删除该文档及其切片？"
-                    ok-text="删除"
-                    cancel-text="取消"
-                    @confirm="removeDoc(record)"
-                  >
-                    <a-button size="small" danger>删除</a-button>
-                  </a-popconfirm>
+                  <a-space>
+                    <a-button size="small" @click.stop="openChunks(record)">切片</a-button>
+                    <a-popconfirm
+                      title="删除该文档及其切片？"
+                      ok-text="删除"
+                      cancel-text="取消"
+                      @confirm="removeDoc(record)"
+                    >
+                      <a-button size="small" danger>删除</a-button>
+                    </a-popconfirm>
+                  </a-space>
                 </template>
               </template>
             </a-table>
@@ -647,6 +677,19 @@ onMounted(async () => {
       </a-spin>
     </a-drawer>
 
+    <a-drawer v-model:open="chunkDrawerOpen" :title="`分块：${chunkDocName}`" width="720">
+      <a-spin :spinning="loadingChunks">
+        <a-empty v-if="!loadingChunks && chunks.length === 0" description="没有分块（或该文档未入库成功）" />
+        <div v-for="chunk in chunks" :key="chunk.chunkIndex" class="chunk-card">
+          <div class="chunk-head">
+            <a-tag color="blue">#{{ chunk.chunkIndex + 1 }}</a-tag>
+            <span class="step-duration">{{ chunk.chars }} 字</span>
+          </div>
+          <pre class="prompt-pre">{{ chunk.content }}</pre>
+        </div>
+      </a-spin>
+    </a-drawer>
+
     <a-modal
       v-model:open="createOpen"
       title="新建知识库"
@@ -720,6 +763,19 @@ onMounted(async () => {
   font-size: 12px;
   margin-bottom: 4px;
   word-break: break-all;
+}
+.chunk-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+  background: #fafafa;
+}
+.chunk-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
 }
 .prompt-pre {
   white-space: pre-wrap;

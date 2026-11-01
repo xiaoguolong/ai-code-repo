@@ -109,3 +109,25 @@ POST /api/v1/ingest-jobs/{jobId}/cancel
 | 409 | `CONFLICT` | 非失败作业重试 / 终态作业取消 |
 | 429 | `TOO_MANY_REQUESTS` | 入库队列已满 |
 | 502 | `CHAT_MODEL_ERROR` / `EMBEDDING_ERROR` / `OCR_ERROR` | 上游失败（作业落 FAILED） |
+## 7. 查看文档分块（Week 32 增补）
+
+```http
+GET /api/v1/knowledge-bases/{kbId}/documents/{documentId}/chunks
+```
+
+```json
+{"data":[{"chunkIndex":0,"content":"## 一、普通感冒...","chars":500}]}
+```
+
+- 按 `chunk_index` 升序；只返回正文与字符数，不返回向量；
+- 知识库不属于当前用户 → 403；文档不在该库 → 404。
+
+## 8. 只重清洗（不重跑 OCR）
+
+```http
+POST /api/v1/ingest-jobs/{jobId}/reprocess
+```
+
+- 用已保存的 `ocr_markdown` 重新执行 clean→chunk→embed→index，**不调用 OCR**（省配额）；
+- 提示词升级后修复历史文档；没有 OCR 文本 → 409；
+- 索引先删旧切片再删文档（外键顺序），重建后 `documentId` 不变。

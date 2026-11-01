@@ -62,3 +62,15 @@
    导致 `chunk=1`；改为 **1500 字符分段清洗**（7 段），产出 18035 字 / 40 块；
 2. **客户端 multipart 头**：验收脚本首次漏设 `Content-Type: multipart/form-data`，
    Spring 报 `HttpMediaTypeNotSupportedException` 500；属验收脚本问题，服务端未改。
+## 6. 增补（2026-11-01，用户反馈后）
+
+1. **分块查看**：新增 `GET /knowledge-bases/{kbId}/documents/{docId}/chunks` + 企业页文档行「切片」
+   按钮（抽屉展示序号/字数/正文）；真机验证 8 块可读。
+2. **只重清洗**：新增 `POST /ingest-jobs/{jobId}/reprocess`，用已存 `ocr_markdown` 重跑
+   clean→chunk→embed→index，不重跑 OCR（OCR 配额 429 时仍可修复历史文档）。
+3. **外键顺序 bug**：`indexStep` 原先先删 `document` 再删 `document_chunk`，触发
+   `fk_document_chunk_document`；改为先删切片（向量）再删文档。
+4. **清洗兜底**：`deepseek-v4-pro` 会把"思考过程"写进正文；新增 `sanitizeCleanOutput`
+   去掉"我们需要/用户要求/分析"前缀（截到第一个 markdown 标题，找不到则回退原文），
+   并在 prompt 中加硬性约束。真机重跑后首块已是正文；**中段仍可能夹带分析**
+   （模型特性），彻底解决需给 clean 步骤换非推理模型（`ingest.clean-model`，待补）。
