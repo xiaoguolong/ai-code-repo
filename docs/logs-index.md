@@ -224,3 +224,13 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 2. 日志不得包含真实密钥、密码、完整 Prompt 或患者隐私正文；
 3. 需要长期引用的结论写进 `notes/impl-logs/week-XX.md`，日志只作为原始证据；
 4. `logs/` 不入库；如换机器需要保留，单独打包或上传对象存储。
+## 11. 第 32 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-32/root-test.log` | 根聚合 **1041** 全绿（ai-core 108 / enterprise 78 / patient 21 / platform 734 / gateway 100） |
+| `logs/week-32/enterprise-test.log` | enterprise **78** 全绿（新增 V8 作业/步骤 upsert 4、流水线 4） |
+
+> 前端 `tools/web-ci.ps1` 全绿（typecheck 0 / Vitest 23 / build）。真机验收 **PASS**：20 页 PDF 入库成功
+> （千帆单次 10 页、chunk 40），clean prompt 原文 + 3948/7120 token，重复上传幂等、文本入库回归正常；
+> 发布/回滚/验收步骤见 `docs/deploy/week-32-ops.md`。

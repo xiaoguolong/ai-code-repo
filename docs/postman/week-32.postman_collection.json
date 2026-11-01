@@ -1,0 +1,59 @@
+{
+  "info": {
+    "name": "Week 32 — PDF/OCR 入库作业",
+    "description": "建作业 / 列表 / 详情（含 prompt 原文）/ 重试 / 取消。需企业端 satoken。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://118.195.208.210/ent" },
+    { "key": "satoken", "value": "<enterprise-token>" },
+    { "key": "kbId", "value": "1" },
+    { "key": "jobId", "value": "<job-id>" }
+  ],
+  "item": [
+    {
+      "name": "建入库作业（multipart）",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "satoken", "value": "{{satoken}}" }],
+        "body": {
+          "mode": "formdata",
+          "formdata": [{ "key": "file", "type": "file", "src": "fixtures/guide.pdf" }]
+        },
+        "url": { "raw": "{{baseUrl}}/api/v1/knowledge-bases/{{kbId}}/ingest-jobs", "host": ["{{baseUrl}}"], "path": ["api", "v1", "knowledge-bases", "{{kbId}}", "ingest-jobs"] }
+      }
+    },
+    {
+      "name": "作业列表",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{satoken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/knowledge-bases/{{kbId}}/ingest-jobs?limit=20", "host": ["{{baseUrl}}"], "path": ["api", "v1", "knowledge-bases", "{{kbId}}", "ingest-jobs"], "query": [{ "key": "limit", "value": "20" }] }
+      }
+    },
+    {
+      "name": "作业详情（节点 + prompt 原文）",
+      "request": {
+        "method": "GET",
+        "header": [{ "key": "satoken", "value": "{{satoken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/ingest-jobs/{{jobId}}", "host": ["{{baseUrl}}"], "path": ["api", "v1", "ingest-jobs", "{{jobId}}"] }
+      }
+    },
+    {
+      "name": "从失败步重试",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "satoken", "value": "{{satoken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/ingest-jobs/{{jobId}}/retry", "host": ["{{baseUrl}}"], "path": ["api", "v1", "ingest-jobs", "{{jobId}}", "retry"] }
+      }
+    },
+    {
+      "name": "取消作业",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "satoken", "value": "{{satoken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/ingest-jobs/{{jobId}}/cancel", "host": ["{{baseUrl}}"], "path": ["api", "v1", "ingest-jobs", "{{jobId}}", "cancel"] }
+      }
+    }
+  ]
+}

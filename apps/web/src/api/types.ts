@@ -257,3 +257,42 @@ export interface EnterpriseIngestResult {
   name: string;
   chunkCount: number;
 }
+
+/* ---------- Week 32：PDF/OCR 入库作业（节点视图） ---------- */
+
+export interface IngestStep {
+  stepNo: number;
+  stepKey: string;
+  status: string;
+  durationMs: number;
+  inputSummary: string;
+  outputSummary: string;
+  promptVersion: string;
+  promptText: string;
+  promptTokens: number;
+  completionTokens: number;
+  errorMessage: string;
+}
+
+export interface IngestJobSummary {
+  jobId: string;
+  fileName: string;
+  status: string;
+  pageCount: number;
+  chunkCount: number;
+  documentId: string;
+  errorMessage: string;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface IngestJobDetail extends IngestJobSummary {
+  steps: IngestStep[];
+}
+
+export interface IngestJobCreateResult {
+  jobId: string;
+  status: string;
+  fileName: string;
+  duplicate: boolean;
+}

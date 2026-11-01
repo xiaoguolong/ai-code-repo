@@ -6,7 +6,10 @@ import type {
   EnterpriseIngestResult,
   EnterpriseKnowledgeBase,
   EnterpriseLoginResponse,
-  EnterpriseUser
+  EnterpriseUser,
+  IngestJobCreateResult,
+  IngestJobDetail,
+  IngestJobSummary
 } from './types';
 
 const TOKEN_KEY = 'aicode_enterprise_token';
@@ -99,6 +102,33 @@ export function ingestDocument(
 
 export function deleteDocument(baseId: number, documentId: string): Promise<void> {
   return del<void>(`/api/v1/knowledge-bases/${baseId}/documents/${documentId}`);
+}
+
+/* ---------- Week 32：PDF/OCR 入库作业 ---------- */
+
+export function createIngestJob(baseId: number, file: File): Promise<IngestJobCreateResult> {
+  const form = new FormData();
+  form.append('file', file);
+  return entHttp.post(`/api/v1/knowledge-bases/${baseId}/ingest-jobs`, form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 180_000
+  }) as unknown as Promise<IngestJobCreateResult>;
+}
+
+export function listIngestJobs(baseId: number): Promise<IngestJobSummary[]> {
+  return get<IngestJobSummary[]>(`/api/v1/knowledge-bases/${baseId}/ingest-jobs`);
+}
+
+export function getIngestJob(jobId: string): Promise<IngestJobDetail> {
+  return get<IngestJobDetail>(`/api/v1/ingest-jobs/${jobId}`);
+}
+
+export function retryIngestJob(jobId: string): Promise<void> {
+  return post<void>(`/api/v1/ingest-jobs/${jobId}/retry`);
+}
+
+export function cancelIngestJob(jobId: string): Promise<void> {
+  return post<void>(`/api/v1/ingest-jobs/${jobId}/cancel`);
 }
 
 export { TOKEN_KEY as ENTERPRISE_TOKEN_KEY };

@@ -7,6 +7,7 @@ import com.aicode.enterprise.domain.exception.ConflictException;
 import com.aicode.core.domain.exception.EmbeddingException;
 import com.aicode.core.domain.exception.FileStorageException;
 import com.aicode.enterprise.domain.exception.ForbiddenException;
+import com.aicode.enterprise.domain.exception.IngestQueueFullException;
 import com.aicode.core.domain.exception.InvalidChatRequestException;
 import com.aicode.core.domain.exception.NotFoundException;
 import com.aicode.core.domain.exception.OcrException;
@@ -91,6 +92,15 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleConflict(ConflictException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(ApiResponse.error("CONFLICT", ex.getMessage()));
+    }
+
+    /**
+     * 入库队列满 → 429（Week 32）。
+     */
+    @ExceptionHandler(IngestQueueFullException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIngestQueueFull(IngestQueueFullException ex) {
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ApiResponse.error("TOO_MANY_REQUESTS", ex.getMessage()));
     }
 
     /**

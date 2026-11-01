@@ -1,17 +1,25 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import {
+  cancelIngestJob,
   createBase,
+  createIngestJob,
   deleteBase,
   deleteDocument,
+  getIngestJob,
   ingestDocument,
   listBases,
-  listDocuments
+  listDocuments,
+  listIngestJobs,
+  retryIngestJob
 } from '@/api/enterprise';
 import type {
   EnterpriseDocument,
-  EnterpriseKnowledgeBase
+  EnterpriseKnowledgeBase,
+  IngestJobDetail,
+  IngestJobSummary,
+  IngestStep
 } from '@/api/types';
 import { ApiError } from '@/api/http';
 import { useEnterpriseAuthStore } from '@/stores/enterpriseAuth';
@@ -37,6 +45,169 @@ const createForm = reactive({ name: '', description: '' });
 const ingestOpen = ref(false);
 const ingesting = ref(false);
 const ingestForm = reactive({ name: '', content: '' });
+
+/* ---------- Week 32：PDF/OCR 入库作业 ---------- */
+
+const jobs = ref<IngestJobSummary[]>([]);
+const loadingJobs = ref(false);
+const uploading = ref(false);
+const drawerOpen = ref(false);
+const jobDetail = ref<IngestJobDetail | null>(null);
+const loadingDetail = ref(false);
+let pollTimer: number | undefined;
+
+const jobColumns = [
+  { title: '文件', dataIndex: 'fileName', key: 'fileName' },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '页/块', key: 'counts', width: 100 },
+  { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 160 },
+  { title: '操作', key: 'actions', width: 150 }
+];
+
+/** 节点 key → 中文名。 */
+const STEP_LABELS: Record<string, string> = {
+  upload: '上传文件',
+  ocr: 'OCR 识别',
+  clean: 'LLM 清洗',
+  chunk: '切片',
+  embed: '向量化',
+  index: '建索引'
+};
+
+function stepLabel(step: IngestStep): string {
+  return `${step.stepNo}. ${STEP_LABELS[step.stepKey] ?? step.stepKey}`;
+}
+
+function statusColor(status: string): string {
+  switch (status) {
+    case 'SUCCEEDED':
+      return 'green';
+    case 'FAILED':
+      return 'red';
+    case 'RUNNING':
+      return 'blue';
+    case 'CANCELLED':
+      return 'orange';
+    default:
+      return 'default';
+  }
+}
+
+async function loadJobs(): Promise<void> {
+  if (!selectedBaseId.value) {
+    jobs.value = [];
+    return;
+  }
+  loadingJobs.value = true;
+  try {
+    jobs.value = await listIngestJobs(selectedBaseId.value);
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '入库作业加载失败');
+  } finally {
+    loadingJobs.value = false;
+  }
+}
+
+async function onPickFile(file: File): Promise<boolean> {
+  if (!selectedBaseId.value) {
+    message.warning('先选择知识库');
+    return false;
+  }
+  uploading.value = true;
+  try {
+    const created = await createIngestJob(selectedBaseId.value, file);
+    message.success(created.duplicate ? '同一文件已入库，已打开原作业' : '已提交，正在处理');
+    await loadJobs();
+    await openJob({ jobId: created.jobId } as IngestJobSummary);
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '提交失败');
+  } finally {
+    uploading.value = false;
+  }
+  return false;
+}
+
+async function openJob(job: IngestJobSummary): Promise<void> {
+  drawerOpen.value = true;
+  jobDetail.value = null;
+  await loadDetail(job.jobId);
+  startPolling(job.jobId);
+}
+
+/** 表格行点击：Record 断言成领域类型，并可顺带触发重试/取消。 */
+async function openJobRecord(
+  record: Record<string, unknown>,
+  action?: 'retry' | 'cancel'
+): Promise<void> {
+  await openJob(record as unknown as IngestJobSummary);
+  if (action === 'retry') {
+    await retryJob();
+  } else if (action === 'cancel') {
+    await cancelJob();
+  }
+}
+
+async function loadDetail(jobId: string): Promise<void> {
+  loadingDetail.value = true;
+  try {
+    jobDetail.value = await getIngestJob(jobId);
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '作业详情加载失败');
+  } finally {
+    loadingDetail.value = false;
+  }
+}
+
+function startPolling(jobId: string): void {
+  stopPolling();
+  pollTimer = window.setInterval(async () => {
+    const status = jobDetail.value?.status;
+    if (!drawerOpen.value || !status || (status !== 'PENDING' && status !== 'RUNNING')) {
+      stopPolling();
+      return;
+    }
+    await loadDetail(jobId);
+    await loadJobs();
+  }, 2000);
+}
+
+function stopPolling(): void {
+  if (pollTimer !== undefined) {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  }
+}
+
+async function retryJob(): Promise<void> {
+  if (!jobDetail.value) {
+    return;
+  }
+  try {
+    await retryIngestJob(jobDetail.value.jobId);
+    message.success('已重新提交');
+    await loadDetail(jobDetail.value.jobId);
+    startPolling(jobDetail.value.jobId);
+    await loadJobs();
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '重试失败');
+  }
+}
+
+async function cancelJob(): Promise<void> {
+  if (!jobDetail.value) {
+    return;
+  }
+  try {
+    await cancelIngestJob(jobDetail.value.jobId);
+    message.success('已取消');
+    await loadDetail(jobDetail.value.jobId);
+    await loadJobs();
+  } catch (e) {
+    message.error(e instanceof ApiError ? e.message : '取消失败');
+  }
+}
+
+onUnmounted(stopPolling);
 
 const selectedBase = computed(() =>
   bases.value.find((item) => item.id === selectedBaseId.value)
@@ -185,7 +356,10 @@ async function logout(): Promise<void> {
   selectedBaseId.value = undefined;
 }
 
-watch(selectedBaseId, () => void loadDocs());
+watch(selectedBaseId, () => {
+  void loadDocs();
+  void loadJobs();
+});
 
 onMounted(async () => {
   if (!store.token) {
@@ -194,6 +368,7 @@ onMounted(async () => {
   try {
     await store.ensureUser();
     await loadBases();
+    await loadJobs();
   } catch (e) {
     if (e instanceof ApiError && e.status === 401) {
       store.clear();
@@ -341,7 +516,136 @@ onMounted(async () => {
           </a-card>
         </a-col>
       </a-row>
+
+      <a-card title="PDF/OCR 入库作业" style="margin-top: 16px">
+        <template #extra>
+          <a-space>
+            <a-upload
+              :show-upload-list="false"
+              :before-upload="onPickFile"
+              accept=".pdf,.png,.jpg,.jpeg"
+            >
+              <a-button type="primary" :loading="uploading" :disabled="!selectedBaseId">
+                上传 PDF/图片
+              </a-button>
+            </a-upload>
+            <a-button :loading="loadingJobs" @click="loadJobs">刷新</a-button>
+          </a-space>
+        </template>
+        <a-table
+          :data-source="jobs"
+          :columns="jobColumns"
+          :pagination="false"
+          row-key="jobId"
+          size="small"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'fileName'">
+              <div style="font-weight: 500">{{ record.fileName }}</div>
+              <div class="mono" style="color: #8c8c8c; font-size: 12px">{{ record.jobId }}</div>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <a-tag :color="statusColor(record.status)">{{ record.status }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'counts'">
+              {{ record.pageCount }} 页 / {{ record.chunkCount }} 块
+            </template>
+            <template v-else-if="column.key === 'createdAt'">
+              {{ formatTime(record.createdAt) }}
+            </template>
+            <template v-else-if="column.key === 'actions'">
+              <a-space>
+                <a-button size="small" @click="openJobRecord(record)">查看</a-button>
+                <a-button
+                  v-if="record.status === 'FAILED'"
+                  size="small"
+                  type="link"
+                  @click="openJobRecord(record, 'retry')"
+                >
+                  重试
+                </a-button>
+                <a-button
+                  v-if="record.status === 'RUNNING' || record.status === 'PENDING'"
+                  size="small"
+                  type="link"
+                  danger
+                  @click="openJobRecord(record, 'cancel')"
+                >
+                  取消
+                </a-button>
+              </a-space>
+            </template>
+          </template>
+        </a-table>
+        <a-empty
+          v-if="!loadingJobs && jobs.length === 0"
+          :description="selectedBaseId ? '还没有入库作业，上传一个 PDF 试试' : '先选择左侧知识库'"
+        />
+      </a-card>
     </template>
+
+    <a-drawer v-model:open="drawerOpen" title="入库作业（节点视图）" width="760" @close="stopPolling">
+      <a-spin :spinning="loadingDetail">
+        <template v-if="jobDetail">
+          <div class="job-head">
+            <div>
+              <div style="font-size: 16px; font-weight: 600">{{ jobDetail.fileName }}</div>
+              <div class="mono" style="color: #8c8c8c; font-size: 12px">{{ jobDetail.jobId }}</div>
+            </div>
+            <a-tag :color="statusColor(jobDetail.status)">{{ jobDetail.status }}</a-tag>
+          </div>
+          <a-descriptions :column="3" size="small" style="margin: 12px 0">
+            <a-descriptions-item label="页数">{{ jobDetail.pageCount }}</a-descriptions-item>
+            <a-descriptions-item label="切片">{{ jobDetail.chunkCount }}</a-descriptions-item>
+            <a-descriptions-item label="文档">{{ jobDetail.documentId || '-' }}</a-descriptions-item>
+          </a-descriptions>
+          <a-alert
+            v-if="jobDetail.errorMessage"
+            type="error"
+            :message="jobDetail.errorMessage"
+            show-icon
+            style="margin-bottom: 12px"
+          />
+          <a-timeline>
+            <a-timeline-item
+              v-for="step in jobDetail.steps"
+              :key="step.stepNo"
+              :color="step.status === 'FAILED' ? 'red' : step.status === 'SUCCEEDED' ? 'green' : 'gray'"
+            >
+              <div class="step-card">
+                <div class="step-head">
+                  <strong>{{ stepLabel(step) }}</strong>
+                  <a-tag :color="statusColor(step.status)">{{ step.status }}</a-tag>
+                  <span class="step-duration">{{ step.durationMs }} ms</span>
+                </div>
+                <div class="step-meta">输入：{{ step.inputSummary || '-' }}</div>
+                <div class="step-meta">输出：{{ step.outputSummary || '-' }}</div>
+                <a-collapse v-if="step.promptText" ghost>
+                  <a-collapse-panel
+                    key="prompt"
+                    :header="`查看 prompt 原文（${step.promptTokens} → ${step.completionTokens} token）`"
+                  >
+                    <pre class="prompt-pre">{{ step.promptText }}</pre>
+                  </a-collapse-panel>
+                </a-collapse>
+                <div v-else class="step-meta" style="color: #bfbfbf">该步无 prompt</div>
+                <a-alert v-if="step.errorMessage" type="error" :message="step.errorMessage" />
+              </div>
+            </a-timeline-item>
+          </a-timeline>
+          <a-space>
+            <a-button v-if="jobDetail.status === 'FAILED'" type="primary" @click="retryJob">从失败步重试</a-button>
+            <a-button
+              v-if="jobDetail.status === 'RUNNING' || jobDetail.status === 'PENDING'"
+              danger
+              @click="cancelJob"
+            >
+              取消
+            </a-button>
+          </a-space>
+        </template>
+      </a-spin>
+    </a-drawer>
 
     <a-modal
       v-model:open="createOpen"
@@ -369,7 +673,7 @@ onMounted(async () => {
       <a-alert
         type="info"
         show-icon
-        message="当前只支持纯文本（name + content）；PDF/OCR 走 enterprise 的另一条链路。"
+        message="纯文本入库仍保留（回归用）；PDF/扫描件请用下方「PDF/OCR 入库作业」。"
         style="margin-bottom: 12px"
       />
       <a-form layout="vertical">
@@ -389,3 +693,43 @@ onMounted(async () => {
     </a-modal>
   </div>
 </template>
+<style scoped>
+.job-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.step-card {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: #fafafa;
+}
+.step-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.step-duration {
+  color: #8c8c8c;
+  font-size: 12px;
+}
+.step-meta {
+  color: #595959;
+  font-size: 12px;
+  margin-bottom: 4px;
+  word-break: break-all;
+}
+.prompt-pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  padding: 8px;
+  font-size: 12px;
+  max-height: 240px;
+  overflow: auto;
+  margin: 0;
+}
+</style>

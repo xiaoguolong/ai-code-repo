@@ -66,7 +66,7 @@ public class PaddleOcrResponseMapper {
                             images.put(entry.getKey(), entry.getValue().asText()));
                 }
             }
-            return new OcrResult(builder.toString().trim(), Map.copyOf(images));
+            return new OcrResult(builder.toString().trim(), Map.copyOf(images), pages.size());
         } catch (IllegalStateException ex) {
             throw ex;
         } catch (Exception ex) {

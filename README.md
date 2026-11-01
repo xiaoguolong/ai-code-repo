@@ -1200,6 +1200,27 @@ H2 首次启动 `Successfully applied 11 migrations ... now at version v11`，�
 
 ---
 
+# 第32周：PDF/OCR 入库 + 步骤级过程管理（Dify 式节点视图）
+
+- [x] **V8 迁移**：`ingest_job`（`ocr_markdown`/`clean_markdown`/`content_hash` 幂等/状态机）+
+      `ingest_job_step`（`prompt_text` 永久保留、token、耗时、输入/输出摘要）
+- [x] **异步流水线** `IngestPipeline`：upload→ocr→clean→chunk→embed→index；每步落 Step；
+      失败可重试（已有 OCR 文本则跳过 OCR）、运行中可取消、索引确定性 documentId 幂等
+- [x] **接口**：建作业（multipart）/列表/详情（含 prompt 原文）/重试/取消；
+      队列满 429、非失败重试 409、越权 403
+- [x] **企业页**：上传 PDF/图片、作业列表、节点时间线抽屉（prompt 折叠、token/耗时、重试/取消、2s 轮询）
+- [x] **提示词**：`prompts/ingest-clean-v1.txt`，clean 步骤 prompt 原文落 `ingest_job_step.prompt_text`
+
+交付：Spec `docs/specs/week-32.md` ｜ 接口 `docs/api/week-32-api.md` ｜
+实现日志 `notes/impl-logs/week-32.md`
+
+实测：根聚合 **1041** 全绿（ai-core **108** / enterprise **78** / patient 21 / platform 734 /
+gateway 100），前端 typecheck 0 / Vitest **23** / build 成功。
+**真机验收 PASS**：20 页 PDF 入库 `SUCCEEDED`（厂商单次解析上限 10 页、`chunkCount=40`），
+6 节点齐全，clean 节点 prompt 原文 + `3948/7120` token；同文件重传幂等；文本入库回归 200。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 
