@@ -242,5 +242,5 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 | `logs/week-33/enterprise-test.log` | enterprise **103** 全绿（分批拆分/契约/恢复/清理 prompt/OCR 退避） |
 
 > 前端 `tools/web-ci.ps1` 全绿（typecheck 0 / Vitest 23 / build）。
-> 真机 20 页验收 **BLOCKED**：千帆 `OCR HTTP 429`，分批逻辑单测覆盖 8/8/4；配额恢复后重跑
-> `cloud-accept-week33.sh`（待补）。
+> 真机 **PASS**：20 页 PDF → `pageCount=20`、`分批=3`、59 块；clean prompt 8697/13312 token；
+> 指标 `ingest_job_total` / `ingest_step_duration_seconds` 可见。

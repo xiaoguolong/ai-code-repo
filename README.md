@@ -1240,7 +1240,7 @@ gateway 100），前端 typecheck 0 / Vitest **23** / build 成功。
 
 实测：根聚合 **1066** 全绿（ai-core 108 / enterprise 103 / patient 21 / platform 734 / gateway 100），
 前端 typecheck 0 / Vitest 23 / build 成功。
-真机 20 页验收被千帆 `OCR HTTP 429` 阻塞（分批逻辑已单测覆盖 8/8/4），配额恢复后重跑即可。
+**真机验收 PASS**：20 页 PDF → `pageCount=20`、`分批=3`、59 块；clean prompt token 8697/13312，分块接口可读。
 
 ---
 
