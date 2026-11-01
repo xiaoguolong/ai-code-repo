@@ -18,6 +18,23 @@ Migrating schema "public" to version "8 - ingest job"
 Successfully applied 1 migration to schema "public", now at version v8
 ```
 
+## 1.5 前端发布（企业页新 UI）
+
+```powershell
+# 1) 构建（web-ci 会顺带 typecheck/test/build）
+.\tools\web-ci.ps1
+# 2) 打包 dist（内容根目录即 index.html）
+Push-Location apps\web\dist; tar -czf "$env:TEMP\web-w32.tar.gz" .; Pop-Location
+# 3) 上传 + 只替换 /opt/ai-code/web（不动 nginx 配置）
+.\remote.ps1 -Put "$env:TEMP\web-w32.tar.gz /tmp/web.tar.gz"
+.\remote.ps1 -Script .\deploy\app\cloud-week32-web.sh
+```
+
+校验：`curl http://118.195.208.210/assets/EnterpriseKnowledgeView-<hash>.js` 返回 200，
+且 bundle 内含 "PDF/OCR 入库作业"。用户端需 **Ctrl+F5** 强刷（旧 chunk 有缓存）。
+
+回滚：`rm -rf /opt/ai-code/web && mv /opt/ai-code/web.prev /opt/ai-code/web`。
+
 ## 2. 回滚
 
 ```bash
