@@ -71,6 +71,9 @@ public class IngestPipeline {
     /** 清洗分段长度：1500 字符约 700-900 token，低于 chat.max-tokens=1024，避免输出截断。 */
     private static final int CLEAN_SEGMENT_CHARS = 1500;
 
+    /** 单批 OCR 最大尝试次数（含首次）。 */
+    private static final int OCR_MAX_ATTEMPTS = 3;
+
     private final IngestJobPort jobs;
     private final FileStoragePort fileStoragePort;
     private final DocumentOcrPort ocrPort;
@@ -286,8 +289,7 @@ public class IngestPipeline {
                 batches = split.chunks().size();
                 pages = 0;
                 for (int i = 0; i < batches; i++) {
-                    OcrResult result = ocrPort.recognize(
-                            Base64.getEncoder().encodeToString(split.chunks().get(i)), OcrFileType.PDF);
+                    OcrResult result = recognizeWithRetry(split.chunks().get(i), OcrFileType.PDF);
                     pages += split.counts().get(i);
                     pageTexts.add(imageProcessor.clean(result, job.userId()));
                     if (i < batches - 1) {
@@ -295,9 +297,7 @@ public class IngestPipeline {
                     }
                 }
             } else {
-                OcrResult result = ocrPort.recognize(
-                        Base64.getEncoder().encodeToString(bytes),
-                        OcrFileType.inferFromFileName(job.fileName()));
+                OcrResult result = recognizeWithRetry(bytes, OcrFileType.inferFromFileName(job.fileName()));
                 if (result.pageCount() > properties.getMaxPages()) {
                     throw new IllegalStateException("OCR 页数超限：" + result.pageCount()
                             + " > " + properties.getMaxPages());
@@ -324,6 +324,35 @@ public class IngestPipeline {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("interrupted while waiting between OCR batches", ex);
         }
+    }
+
+    /**
+     * 单批 OCR 重试：429/网络抖动时退避再试（1s、2s），最多 3 次。
+     *
+     * @param batch    该批字节
+     * @param fileType 文件类型
+     * @return OCR 结果
+     */
+    private OcrResult recognizeWithRetry(byte[] batch, OcrFileType fileType) {
+        RuntimeException last = null;
+        for (int attempt = 1; attempt <= OCR_MAX_ATTEMPTS; attempt++) {
+            try {
+                return ocrPort.recognize(Base64.getEncoder().encodeToString(batch), fileType);
+            } catch (RuntimeException ex) {
+                last = ex;
+                if (attempt == OCR_MAX_ATTEMPTS) {
+                    break;
+                }
+                log.warn("[ingest] OCR 第 {} 次失败，{}ms 后重试：{}", attempt, 1000L * attempt, rootMessage(ex));
+                try {
+                    Thread.sleep(1000L * attempt);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException("interrupted while retrying OCR", interrupted);
+                }
+            }
+        }
+        throw last;
     }
 
     private IngestJob cleanStep(IngestJob job) {

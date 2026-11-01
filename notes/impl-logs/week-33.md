@@ -21,7 +21,7 @@
 
 | 范围 | 结果 |
 |------|------|
-| enterprise | **102** 全绿（W33 +7：拆分 4、分批 1、模型 1、清洗验收 3、恢复 1、清理 1、契约 6 —— 含重叠） |
+| enterprise | **103** 全绿（含分批 4+1、模型 1、清洗验收 3、恢复 1、清理 1、契约 6、OCR 退避 1） |
 | ai-core | 108 全绿 |
 | 前端 | typecheck 0 / Vitest 23 / build 成功 |
 | 真机 | **BLOCKED**：`OCR HTTP 429`（千帆配额），分批逻辑未能在真机跑到终态 |
@@ -40,3 +40,15 @@
 1. 千帆配额恢复后重跑 20 页验收（断言 `pageCount=20`、`分批=3`、chunk>0、prompt/token 可见）；
 2. 若仍 429：考虑批间退避（指数退避）或换供应商（W34 评估）；
 3. `ingest.clean-model` 生产建议配 `deepseek-chat`，观察清洗质量是否稳定。
+## 5. OCR 退避重试（真机 429 后补充）
+
+单批 OCR 失败会退避重试：1s、2s（最多 3 次），仍失败才置作业 FAILED。
+真机复验（10:22 部署后重试 job `4c2f6e36`）：`ocr FAILED 12780ms`（3 次尝试）仍 `OCR HTTP 429`，
+说明是配额级限流而非瞬时抖动；分批/退避逻辑由单测覆盖（FakeOcr 前两次 429、第三次成功）。
+
+指标已在真机可见：`ingest_job_total{status="failed"}`、`ingest_step_duration_seconds_count{step="ocr",status="failed"}`。
+
+## 6. 外部阻塞
+
+千帆 OCR 自 09:00 起持续 429（多次重试、跨 3 轮），20 页真机验收无法完成；
+`cloud-accept-week33.sh` 已就绪，配额恢复后直接重跑。

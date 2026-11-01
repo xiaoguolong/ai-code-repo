@@ -81,6 +81,17 @@ class IngestPipelineTest {
     }
 
     @Test
+    void retriesOcrBeforeFailing() {
+        ocr.failuresRemaining = 2;
+        jobs.create(IngestJob.pending("j8", 1L, 2L, "guide.pdf", "hash-8", NOW).withFile("f1"));
+
+        pipeline.run("j8");
+
+        assertThat(jobs.findById("j8").orElseThrow().status()).isEqualTo(IngestJobStatus.SUCCEEDED);
+        assertThat(ocr.calls).isEqualTo(3);
+    }
+
+    @Test
     void usesConfiguredCleanModel() {
         properties.setCleanModel("deepseek-chat");
         jobs.create(IngestJob.pending("j7", 1L, 2L, "guide.pdf", "hash-7", NOW).withFile("f1"));
@@ -293,12 +304,17 @@ class IngestPipelineTest {
     private static final class FakeOcr implements DocumentOcrPort {
         private int calls;
         private RuntimeException failure;
+        private int failuresRemaining;
 
         @Override
         public OcrResult recognize(String file, OcrFileType fileType) {
             calls++;
             if (failure != null) {
                 throw failure;
+            }
+            if (failuresRemaining > 0) {
+                failuresRemaining--;
+                throw new IllegalStateException("OCR HTTP 429");
             }
             return new OcrResult("# 指南\n\n正文内容。", Map.of(), 2);
         }

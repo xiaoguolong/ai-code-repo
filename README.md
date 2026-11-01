@@ -1238,7 +1238,7 @@ gateway 100），前端 typecheck 0 / Vitest **23** / build 成功。
 交付：Spec `docs/specs/week-33.md` ｜ 接口 `docs/api/week-33-api.md` ｜
 实现日志 `notes/impl-logs/week-33.md` ｜ 运维 `docs/deploy/week-33-ops.md`
 
-实测：根聚合 **1065** 全绿（ai-core 108 / enterprise 102 / patient 21 / platform 734 / gateway 100），
+实测：根聚合 **1066** 全绿（ai-core 108 / enterprise 103 / patient 21 / platform 734 / gateway 100），
 前端 typecheck 0 / Vitest 23 / build 成功。
 真机 20 页验收被千帆 `OCR HTTP 429` 阻塞（分批逻辑已单测覆盖 8/8/4），配额恢复后重跑即可。
 

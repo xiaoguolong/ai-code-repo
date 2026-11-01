@@ -238,8 +238,8 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 
 | 日志 | 证明什么 |
 |------|----------|
-| `logs/week-33/root-test.log` | 根聚合 **1065** 全绿（ai-core 108 / enterprise 102 / patient 21 / platform 734 / gateway 100） |
-| `logs/week-33/enterprise-test.log` | enterprise **102** 全绿（分批拆分/契约/恢复/清理 prompt） |
+| `logs/week-33/root-test.log` | 根聚合 **1066** 全绿（ai-core 108 / enterprise 103 / patient 21 / platform 734 / gateway 100） |
+| `logs/week-33/enterprise-test.log` | enterprise **103** 全绿（分批拆分/契约/恢复/清理 prompt/OCR 退避） |
 
 > 前端 `tools/web-ci.ps1` 全绿（typecheck 0 / Vitest 23 / build）。
 > 真机 20 页验收 **BLOCKED**：千帆 `OCR HTTP 429`，分批逻辑单测覆盖 8/8/4；配额恢复后重跑
