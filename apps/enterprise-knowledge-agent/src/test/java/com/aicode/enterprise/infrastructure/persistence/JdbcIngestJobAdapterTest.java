@@ -95,6 +95,38 @@ class JdbcIngestJobAdapterTest {
     }
 
     @Test
+    void clearsPromptButKeepsTokens() {
+        ingestJobPort.create(IngestJob.pending("job-10", KB_ID, USER_ID, "p.pdf", "hash-10", now));
+        IngestJobStep step = IngestJobStep.pending("job-10", 3, IngestStepKey.CLEAN, "ocrChars=10", now)
+                .running(now)
+                .succeeded("清洗后", "v1", "原始 prompt 文本", new com.aicode.core.domain.model.TokenUsage(10, 20, 30), 5, now);
+        ingestJobPort.saveStep(step);
+
+        int cleared = ingestJobPort.clearPrompt("job-10");
+
+        IngestJobStep loaded = ingestJobPort.listSteps("job-10").get(0);
+        assertThat(cleared).isEqualTo(1);
+        assertThat(loaded.promptText()).isEmpty();
+        assertThat(loaded.promptTokens()).isEqualTo(10);
+        assertThat(loaded.completionTokens()).isEqualTo(20);
+    }
+
+    @Test
+    void failsUnfinishedJobsOnStartup() {
+        ingestJobPort.create(IngestJob.pending("job-8", KB_ID, USER_ID, "a.pdf", "hash-8", now));
+        ingestJobPort.create(IngestJob.pending("job-9", KB_ID, USER_ID, "b.pdf", "hash-9", now));
+        ingestJobPort.update(ingestJobPort.findById("job-9").orElseThrow().running(now));
+
+        int recovered = ingestJobPort.failUnfinished("restarted");
+
+        assertThat(recovered).isEqualTo(2);
+        IngestJob failed = ingestJobPort.findById("job-9").orElseThrow();
+        assertThat(failed.status()).isEqualTo(IngestJobStatus.FAILED);
+        assertThat(failed.errorMessage()).isEqualTo("restarted");
+        assertThat(failed.finishedAt()).isNotNull();
+    }
+
+    @Test
     void savesStepAsUpsertWithPromptAndTokens() {
         ingestJobPort.create(IngestJob.pending("job-5", KB_ID, USER_ID, "c.pdf", "hash-5", now));
         IngestJobStep pending = IngestJobStep.pending("job-5", 1, IngestStepKey.UPLOAD, "file=c.pdf (2MB)", now);

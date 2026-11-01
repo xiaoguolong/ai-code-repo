@@ -1221,6 +1221,29 @@ gateway 100），前端 typecheck 0 / Vitest **23** / build 成功。
 
 ---
 
+# 第33周：大文档分批 OCR + 质量与可运维性
+
+- [x] **PDF 分批**：`pdfbox:3.0.3` + `PdfPageSplitter`，PDF 按 **8 页/批**拆分后逐批 OCR，
+  `pageCount` 为批次累加（20 页 → 20），OCR 节点显示 `分批=3`
+- [x] **清洗质量**：`ingest.clean-model` 可配（建议 `deepseek-chat`），调用失败回退默认模型；
+  输出过短/复述指令时退回 OCR 原文
+- [x] **启动恢复**：进程启动把遗留 `RUNNING/PENDING` 置 `FAILED`（可重试）
+- [x] **契约用例**：空文件 400 / 越权 403 / 队列满 429（作业落 FAILED）/ 幂等命中
+- [x] **可观测**：actuator + Prometheus，`ingest_job_total`、`ingest_job_duration_seconds`、
+  `ingest_step_duration_seconds`；仅本机 8081，nginx 不反代
+- [x] **prompt 治理**：`DELETE /api/v1/admin/ingest-jobs/{id}/prompt`（X-Admin-Token），
+  清原文、保留 token/耗时
+- [x] **平台提示**：operator 在「知识库」页看到"绑定由 admin 导入、文档在企业端"引导
+
+交付：Spec `docs/specs/week-33.md` ｜ 接口 `docs/api/week-33-api.md` ｜
+实现日志 `notes/impl-logs/week-33.md` ｜ 运维 `docs/deploy/week-33-ops.md`
+
+实测：根聚合 **1065** 全绿（ai-core 108 / enterprise 102 / patient 21 / platform 734 / gateway 100），
+前端 typecheck 0 / Vitest 23 / build 成功。
+真机 20 页验收被千帆 `OCR HTTP 429` 阻塞（分批逻辑已单测覆盖 8/8/4），配额恢复后重跑即可。
+
+---
+
 # 第六阶段：企业项目实战（第6个月）
 
 

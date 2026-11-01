@@ -62,4 +62,20 @@ public interface IngestJobPort {
      * @return 按 step_no 升序的步骤
      */
     List<IngestJobStep> listSteps(String jobId);
+
+    /**
+     * 启动恢复：把遗留的 RUNNING/PENDING 置 FAILED。
+     *
+     * @param reason 失败原因（写入 error_message）
+     * @return 受影响行数
+     */
+    int failUnfinished(String reason);
+
+    /**
+     * 清空某作业所有步骤的 prompt 原文（保留 token/耗时/版本）。
+     *
+     * @param jobId 作业
+     * @return 清空的步骤数
+     */
+    int clearPrompt(String jobId);
 }

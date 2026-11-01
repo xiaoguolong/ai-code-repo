@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import {
   cancelIngestJob,
@@ -38,6 +38,7 @@ const selectedBaseId = ref<number | undefined>(undefined);
 const documents = ref<EnterpriseDocument[]>([]);
 const loadingBases = ref(false);
 const loadingDocs = ref(false);
+const docsCard = ref<{ $el?: HTMLElement } | null>(null);
 const error = ref('');
 
 const createOpen = ref(false);
@@ -272,6 +273,13 @@ async function loadDocs(): Promise<void> {
   }
 }
 
+/** 选中知识库并把文档卡片滚到可视区（窄窗口下文档卡在知识库列表下方）。 */
+async function selectBase(id: number): Promise<void> {
+  selectedBaseId.value = id;
+  await nextTick();
+  docsCard.value?.$el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 async function submitCreate(): Promise<void> {
   if (!createForm.name.trim()) {
     message.warning('请输入知识库名称');
@@ -462,7 +470,7 @@ onMounted(async () => {
               "
               :custom-row="
                 (record: EnterpriseKnowledgeBase) => ({
-                  onClick: () => (selectedBaseId = record.id),
+                  onClick: () => selectBase(record.id),
                   class: 'clickable-row'
                 })
               "
@@ -493,6 +501,7 @@ onMounted(async () => {
 
         <a-col :xs="24" :lg="13">
           <a-card
+            ref="docsCard"
             :title="selectedBase ? `文档：${selectedBase.name}` : '文档'"
             :loading="loadingDocs"
           >

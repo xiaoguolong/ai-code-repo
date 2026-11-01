@@ -112,4 +112,12 @@ enterprise:
   # 必须与平台 .env 的 PLATFORM_KNOWLEDGE_INTERNAL_TOKEN 一致；未配置时内部端点一律 403。
   internal:
     token: ${ENTERPRISE_INTERNAL_TOKEN:}
-
+# Week 33：只暴露 health/prometheus；nginx 不反代 /actuator，Prometheus 仅本机抓取
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      show-details: never

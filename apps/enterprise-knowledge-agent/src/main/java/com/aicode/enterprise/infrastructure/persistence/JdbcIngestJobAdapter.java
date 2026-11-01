@@ -127,6 +127,22 @@ public class JdbcIngestJobAdapter implements IngestJobPort {
                 STEP_COLUMNS + " WHERE job_id = ? ORDER BY step_no ASC", stepMapper, jobId);
     }
 
+    @Override
+    public int failUnfinished(String reason) {
+        return jdbcTemplate.update("""
+                        UPDATE ingest_job
+                        SET status = 'FAILED', error_message = ?, finished_at = CURRENT_TIMESTAMP
+                        WHERE status IN ('RUNNING', 'PENDING')
+                        """, reason);
+    }
+
+    @Override
+    public int clearPrompt(String jobId) {
+        return jdbcTemplate.update(
+                "UPDATE ingest_job_step SET prompt_text = '' WHERE job_id = ? AND prompt_text <> ''",
+                jobId);
+    }
+
     private static Timestamp ts(Instant instant) {
         return instant == null ? null : Timestamp.from(instant);
     }

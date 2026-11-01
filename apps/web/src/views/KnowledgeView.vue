@@ -149,6 +149,13 @@ onMounted(() => void load());
       </template>
     </PageHeader>
 
+    <a-alert v-if="!auth.isAdmin" type="info" show-icon style="margin-bottom: 16px">
+      <template #message>
+        绑定由 admin 导入；文档在企业端上传/查看。
+        <router-link to="/ent/knowledge">打开企业知识库 →</router-link>
+      </template>
+    </a-alert>
+
     <a-alert v-if="error" type="error" :message="error" show-icon style="margin-bottom: 16px" />
 
     <a-alert

@@ -67,11 +67,45 @@ class IngestPipelineTest {
         documents = new FakeDocuments();
         vectors = new FakeVectors();
         properties = new IngestProperties();
-        pipeline = new IngestPipeline(
-                jobs, new FakeFiles(), ocr, new com.aicode.core.domain.OcrMarkdownImageProcessor(null, new FakeFiles(), null),
+        pipeline = pipelineWith(new FakeFiles());
+    }
+
+    private IngestPipeline pipelineWith(FakeFiles files) {
+        return new IngestPipeline(
+                jobs, files, ocr, new com.aicode.core.domain.OcrMarkdownImageProcessor(null, files, null),
                 chat, new FakePrompts(), documents, text -> new float[]{0.1f, 0.2f}, vectors,
                 new RagRuntimeConfig(4, 500, 50), new ChatRuntimeConfig("fake-model", 0.2, 256),
-                properties, Clock.fixed(NOW, ZoneOffset.UTC));
+                properties, new com.aicode.enterprise.infrastructure.ocr.PdfPageSplitter(),
+                new io.micrometer.core.instrument.simple.SimpleMeterRegistry(),
+                Clock.fixed(NOW, ZoneOffset.UTC));
+    }
+
+    @Test
+    void usesConfiguredCleanModel() {
+        properties.setCleanModel("deepseek-chat");
+        jobs.create(IngestJob.pending("j7", 1L, 2L, "guide.pdf", "hash-7", NOW).withFile("f1"));
+
+        pipeline.run("j7");
+
+        assertThat(chat.lastModel).isEqualTo("deepseek-chat");
+    }
+
+    @Test
+    void splitsTwentyPagePdfIntoBatchesOfEight() {
+        pipeline = pipelineWith(new FakeFiles(20));
+        jobs.create(IngestJob.pending("j6", 1L, 2L, "big.pdf", "hash-6", NOW).withFile("f1"));
+
+        pipeline.run("j6");
+
+        IngestJob job = jobs.findById("j6").orElseThrow();
+        assertThat(job.status()).isEqualTo(IngestJobStatus.SUCCEEDED);
+        assertThat(job.pageCount()).isEqualTo(20);
+        assertThat(ocr.calls).isEqualTo(3);
+        assertThat(jobs.listSteps("j6"))
+                .filteredOn(step -> step.key() == IngestStepKey.OCR)
+                .singleElement()
+                .extracting(IngestJobStep::outputSummary).asString()
+                .contains("分批=3");
     }
 
     @Test
@@ -208,9 +242,29 @@ class IngestPipelineTest {
         public List<IngestJobStep> listSteps(String jobId) {
             return new ArrayList<>(steps.getOrDefault(jobId, Map.of()).values());
         }
+
+        @Override
+        public int failUnfinished(String reason) {
+            return 0;
+        }
+
+        @Override
+        public int clearPrompt(String jobId) {
+            return 0;
+        }
     }
 
     private static final class FakeFiles implements FileStoragePort {
+        private final int pages;
+
+        FakeFiles() {
+            this(2);
+        }
+
+        FakeFiles(int pages) {
+            this.pages = pages;
+        }
+
         @Override
         public FileReference store(Long userId, String originalName, String contentType, byte[] content) {
             return new FileReference("f1", originalName, contentType, content.length, StorageType.LOCAL, "/f1");
@@ -218,7 +272,21 @@ class IngestPipelineTest {
 
         @Override
         public FileContent load(String fileId) {
-            return new FileContent("application/pdf", new byte[]{1, 2, 3});
+            return new FileContent("application/pdf", pdfWithPages(pages));
+        }
+    }
+
+    /** 生成一份指定页数的最小 PDF，供分批逻辑解析。 */
+    private static byte[] pdfWithPages(int pages) {
+        try (org.apache.pdfbox.pdmodel.PDDocument doc = new org.apache.pdfbox.pdmodel.PDDocument();
+             java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream()) {
+            for (int i = 0; i < pages; i++) {
+                doc.addPage(new org.apache.pdfbox.pdmodel.PDPage());
+            }
+            doc.save(out);
+            return out.toByteArray();
+        } catch (java.io.IOException ex) {
+            throw new IllegalStateException(ex);
         }
     }
 
@@ -238,10 +306,12 @@ class IngestPipelineTest {
 
     private static final class FakeChat implements ChatModelPort {
         private int calls;
+        private String lastModel;
 
         @Override
         public ChatResult chat(List<ChatMessage> messages, ChatOptions options, List<ToolDefinition> tools) {
             calls++;
+            lastModel = options.model();
             return new ChatResult("清洗后的正文", List.of(), FinishReason.STOP,
                     new TokenUsage(12, 34, 46), "fake-model");
         }

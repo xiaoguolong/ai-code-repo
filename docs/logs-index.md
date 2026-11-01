@@ -234,3 +234,13 @@ logs/week-<NN>/<test|deploy|migration|acceptance|commit>/target-week<NN>-<用途
 > 前端 `tools/web-ci.ps1` 全绿（typecheck 0 / Vitest 23 / build）。真机验收 **PASS**：20 页 PDF 入库成功
 > （千帆单次 10 页、chunk 40），clean prompt 原文 + 3948/7120 token，重复上传幂等、文本入库回归正常；
 > 发布/回滚/验收步骤见 `docs/deploy/week-32-ops.md`。
+## 12. 第 33 周关键日志
+
+| 日志 | 证明什么 |
+|------|----------|
+| `logs/week-33/root-test.log` | 根聚合 **1065** 全绿（ai-core 108 / enterprise 102 / patient 21 / platform 734 / gateway 100） |
+| `logs/week-33/enterprise-test.log` | enterprise **102** 全绿（分批拆分/契约/恢复/清理 prompt） |
+
+> 前端 `tools/web-ci.ps1` 全绿（typecheck 0 / Vitest 23 / build）。
+> 真机 20 页验收 **BLOCKED**：千帆 `OCR HTTP 429`，分批逻辑单测覆盖 8/8/4；配额恢复后重跑
+> `cloud-accept-week33.sh`（待补）。

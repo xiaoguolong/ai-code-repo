@@ -24,17 +24,25 @@ import com.aicode.enterprise.domain.model.IngestJob;
 import com.aicode.enterprise.domain.model.IngestJobStatus;
 import com.aicode.enterprise.domain.model.IngestJobStep;
 import com.aicode.enterprise.domain.model.IngestStepKey;
+import com.aicode.enterprise.domain.model.IngestStepStatus;
 import com.aicode.enterprise.domain.port.DocumentPort;
 import com.aicode.enterprise.domain.port.IngestJobPort;
 import com.aicode.enterprise.infrastructure.config.IngestProperties;
+import com.aicode.enterprise.infrastructure.ocr.PdfPageSplitter;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -75,6 +83,8 @@ public class IngestPipeline {
     private final RagRuntimeConfig ragConfig;
     private final ChatRuntimeConfig chatConfig;
     private final IngestProperties properties;
+    private final PdfPageSplitter pdfPageSplitter;
+    private final MeterRegistry meterRegistry;
     private final Clock clock;
 
     public IngestPipeline(
@@ -90,6 +100,8 @@ public class IngestPipeline {
             RagRuntimeConfig ragConfig,
             ChatRuntimeConfig chatConfig,
             IngestProperties properties,
+            PdfPageSplitter pdfPageSplitter,
+            MeterRegistry meterRegistry,
             Clock clock
     ) {
         this.jobs = jobs;
@@ -104,6 +116,8 @@ public class IngestPipeline {
         this.ragConfig = ragConfig;
         this.chatConfig = chatConfig;
         this.properties = properties;
+        this.pdfPageSplitter = pdfPageSplitter;
+        this.meterRegistry = meterRegistry;
         this.clock = clock;
     }
 
@@ -139,7 +153,9 @@ public class IngestPipeline {
             if (cancelled(jobId)) {
                 return;
             }
-            jobs.update(job.succeeded(job.documentId(), job.chunkCount(), now()));
+            IngestJob finished = job.succeeded(job.documentId(), job.chunkCount(), now());
+            jobs.update(finished);
+            recordJobMetric(finished);
             log.info("[ingest] job={} succeeded pages={} chunks={} documentId={}",
                     jobId, job.pageCount(), job.chunkCount(), job.documentId());
         } catch (RuntimeException ex) {
@@ -147,7 +163,9 @@ public class IngestPipeline {
                 return;
             }
             String message = rootMessage(ex);
-            jobs.update(load(jobId).failed(message, now()));
+            IngestJob failed = load(jobId).failed(message, now());
+            jobs.update(failed);
+            recordJobMetric(failed);
             log.warn("[ingest] job={} failed: {}", jobId, message);
         }
     }
@@ -199,42 +217,112 @@ public class IngestPipeline {
         if (job.status().terminal()) {
             return false;
         }
-        jobs.update(job.cancelled(now()));
+        IngestJob cancelled = job.cancelled(now());
+        jobs.update(cancelled);
+        recordJobMetric(cancelled);
         return true;
+    }
+
+    /**
+     * 落步骤并按终态记录 step 耗时指标。
+     *
+     * @param step 步骤
+     */
+    private void saveStep(IngestJobStep step) {
+        jobs.saveStep(step);
+        if (step.status() == IngestStepStatus.SUCCEEDED
+                || step.status() == IngestStepStatus.FAILED
+                || step.status() == IngestStepStatus.SKIPPED) {
+            Timer.builder("ingest.step.duration")
+                    .tag("step", step.key().apiKey())
+                    .tag("status", step.status().name().toLowerCase(Locale.ROOT))
+                    .register(meterRegistry)
+                    .record(step.durationMs(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /**
+     * 终态作业计数与耗时。
+     *
+     * @param job 终态作业
+     */
+    private void recordJobMetric(IngestJob job) {
+        String status = job.status().name().toLowerCase(Locale.ROOT);
+        Counter.builder("ingest.job").tag("status", status).register(meterRegistry).increment();
+        if (job.startedAt() != null && job.finishedAt() != null) {
+            Timer.builder("ingest.job.duration").tag("status", status).register(meterRegistry)
+                    .record(Duration.between(job.startedAt(), job.finishedAt()));
+        }
     }
 
     private IngestJob uploadStep(IngestJob job) {
         IngestJobStep base = baseStep(job, STEP_UPLOAD, IngestStepKey.UPLOAD,
                 "file=" + job.fileName() + "，hash=" + job.contentHash());
-        jobs.saveStep(base.running(now()));
-        jobs.saveStep(base.succeeded("fileId=" + job.fileId() + "，bytes 已落盘", "", "", null, 0, now()));
+        saveStep(base.running(now()));
+        saveStep(base.succeeded("fileId=" + job.fileId() + "，bytes 已落盘", "", "", null, 0, now()));
         return job;
     }
 
     private IngestJob ocrStep(IngestJob job) {
         IngestJobStep base = baseStep(job, STEP_OCR, IngestStepKey.OCR, "file=" + job.fileName());
         if (!job.ocrMarkdown().isBlank()) {
-            jobs.saveStep(base.skipped("已有 OCR 文本，跳过", now()));
+            saveStep(base.skipped("已有 OCR 文本，跳过", now()));
             return job;
         }
-        jobs.saveStep(base.running(now()));
+        saveStep(base.running(now()));
         long start = System.nanoTime();
         try {
             FileContent content = fileStoragePort.load(job.fileId());
-            String base64 = Base64.getEncoder().encodeToString(content.bytes());
-            OcrResult result = ocrPort.recognize(base64, OcrFileType.inferFromFileName(job.fileName()));
-            if (result.pageCount() > properties.getMaxPages()) {
-                throw new IllegalStateException("OCR 页数超限：" + result.pageCount()
-                        + " > " + properties.getMaxPages());
+            byte[] bytes = content.bytes();
+            int pages;
+            int batches = 1;
+            List<String> pageTexts = new ArrayList<>();
+            if (pdfPageSplitter.isPdf(job.fileName(), content.contentType())) {
+                PdfPageSplitter.Batches split = pdfPageSplitter.split(bytes, properties.getOcrBatchPages());
+                if (split.totalPages() > properties.getMaxPages()) {
+                    throw new IllegalStateException("PDF 页数超限：" + split.totalPages()
+                            + " > " + properties.getMaxPages());
+                }
+                batches = split.chunks().size();
+                pages = 0;
+                for (int i = 0; i < batches; i++) {
+                    OcrResult result = ocrPort.recognize(
+                            Base64.getEncoder().encodeToString(split.chunks().get(i)), OcrFileType.PDF);
+                    pages += split.counts().get(i);
+                    pageTexts.add(imageProcessor.clean(result, job.userId()));
+                    if (i < batches - 1) {
+                        pauseBetweenBatches();
+                    }
+                }
+            } else {
+                OcrResult result = ocrPort.recognize(
+                        Base64.getEncoder().encodeToString(bytes),
+                        OcrFileType.inferFromFileName(job.fileName()));
+                if (result.pageCount() > properties.getMaxPages()) {
+                    throw new IllegalStateException("OCR 页数超限：" + result.pageCount()
+                            + " > " + properties.getMaxPages());
+                }
+                pages = result.pageCount();
+                pageTexts.add(imageProcessor.clean(result, job.userId()));
             }
-            String markdown = imageProcessor.clean(result, job.userId());
-            jobs.saveStep(base.succeeded(
-                    "页数=" + result.pageCount() + "，字符=" + markdown.length(),
+            String markdown = String.join("\n\n", pageTexts);
+            saveStep(base.succeeded(
+                    "页数=" + pages + "，分批=" + batches + "，字符=" + markdown.length(),
                     "", "", null, elapsedMs(start), now()));
-            return job.withOcr(result.pageCount(), markdown);
+            return job.withOcr(pages, markdown);
         } catch (RuntimeException ex) {
-            jobs.saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
+            saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
             throw ex;
+        }
+    }
+
+    /** 批次之间稍作停顿，避免把厂商限流打满。 */
+    private void pauseBetweenBatches() {
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("interrupted while waiting between OCR batches", ex);
         }
     }
 
@@ -242,10 +330,10 @@ public class IngestPipeline {
         IngestJobStep base = baseStep(job, STEP_CLEAN, IngestStepKey.CLEAN,
                 "ocrChars=" + job.ocrMarkdown().length());
         if (!properties.isCleanEnabled()) {
-            jobs.saveStep(base.skipped("ingest.clean-enabled=false，OCR 原文直接切片", now()));
+            saveStep(base.skipped("ingest.clean-enabled=false，OCR 原文直接切片", now()));
             return job;
         }
-        jobs.saveStep(base.running(now()));
+        saveStep(base.running(now()));
         long start = System.nanoTime();
         try {
             PromptTemplate prompt = promptTemplatePort.render(CLEAN_PROMPT, Map.of());
@@ -255,16 +343,10 @@ public class IngestPipeline {
             StringBuilder cleaned = new StringBuilder();
             int promptTokens = 0;
             int completionTokens = 0;
-            String model = chatConfig.model();
+            String model = properties.getCleanModel().isBlank() ? chatConfig.model() : properties.getCleanModel();
             for (String segment : segments) {
-                ChatResult result = chatModelPort.chat(
-                        List.of(new ChatMessage(MessageRole.SYSTEM, prompt.content()),
-                                new ChatMessage(MessageRole.USER,
-                                        "请清洗下面的 OCR 文本，只输出清洗后的 markdown 正文：\n\n"
-                                                + segment)),
-                        new ChatOptions(chatConfig.model(), chatConfig.temperature(), chatConfig.maxTokens()));
-                String part = result.content() == null || result.content().isBlank()
-                        ? segment : sanitizeCleanOutput(result.content(), segment);
+                ChatResult result = cleanSegment(prompt, segment, model);
+                String part = acceptCleaned(result.content(), segment);
                 cleaned.append(part);
                 if (!cleaned.isEmpty() && cleaned.charAt(cleaned.length() - 1) != '\n') {
                     cleaned.append('\n');
@@ -276,14 +358,14 @@ public class IngestPipeline {
                 }
             }
             String text = cleaned.toString().trim();
-            jobs.saveStep(base.succeeded(
+            saveStep(base.succeeded(
                     "清洗后字符=" + text.length() + "，分段=" + segments.size() + "，模型=" + model,
                     prompt.version(), prompt.content(),
                     new TokenUsage(promptTokens, completionTokens, promptTokens + completionTokens),
                     elapsedMs(start), now()));
             return job.withClean(text);
         } catch (RuntimeException ex) {
-            jobs.saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
+            saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
             throw ex;
         }
     }
@@ -291,13 +373,13 @@ public class IngestPipeline {
     private IngestJob chunkStep(IngestJob job) {
         IngestJobStep base = baseStep(job, STEP_CHUNK, IngestStepKey.CHUNK,
                 "textChars=" + textOf(job).length());
-        jobs.saveStep(base.running(now()));
+        saveStep(base.running(now()));
         try {
             int count = TextChunker.split(textOf(job), ragConfig.chunkSize(), ragConfig.chunkOverlap()).size();
-            jobs.saveStep(base.succeeded("块数=" + count, "", "", null, 0, now()));
+            saveStep(base.succeeded("块数=" + count, "", "", null, 0, now()));
             return job.withDocument(job.documentId(), count);
         } catch (RuntimeException ex) {
-            jobs.saveStep(base.failed(rootMessage(ex), 0, now()));
+            saveStep(base.failed(rootMessage(ex), 0, now()));
             throw ex;
         }
     }
@@ -305,17 +387,17 @@ public class IngestPipeline {
     private IngestJob embedStep(IngestJob job) {
         List<String> chunks = TextChunker.split(textOf(job), ragConfig.chunkSize(), ragConfig.chunkOverlap());
         IngestJobStep base = baseStep(job, STEP_EMBED, IngestStepKey.EMBED, "块数=" + chunks.size());
-        jobs.saveStep(base.running(now()));
+        saveStep(base.running(now()));
         long start = System.nanoTime();
         int index = 0;
         try {
             for (; index < chunks.size(); index++) {
                 embeddingModelPort.embed(chunks.get(index));
             }
-            jobs.saveStep(base.succeeded("向量数=" + chunks.size(), "", "", null, elapsedMs(start), now()));
+            saveStep(base.succeeded("向量数=" + chunks.size(), "", "", null, elapsedMs(start), now()));
             return job;
         } catch (RuntimeException ex) {
-            jobs.saveStep(base.failed("第 " + (index + 1) + " 块失败：" + rootMessage(ex),
+            saveStep(base.failed("第 " + (index + 1) + " 块失败：" + rootMessage(ex),
                     elapsedMs(start), now()));
             throw ex;
         }
@@ -325,7 +407,7 @@ public class IngestPipeline {
         List<String> chunks = TextChunker.split(textOf(job), ragConfig.chunkSize(), ragConfig.chunkOverlap());
         String documentId = job.documentId().isBlank() ? "ingest-" + job.jobId() : job.documentId();
         IngestJobStep base = baseStep(job, STEP_INDEX, IngestStepKey.INDEX, "documentId=" + documentId);
-        jobs.saveStep(base.running(now()));
+        saveStep(base.running(now()));
         long start = System.nanoTime();
         try {
             // 先删切片再删文档：document_chunk.document_id 有外键指向 document，顺序反了会报 FK 错误。
@@ -338,11 +420,11 @@ public class IngestPipeline {
                 vectorStorePort.put(new DocumentChunk(documentId, job.kbId(), i, text),
                         embeddingModelPort.embed(text));
             }
-            jobs.saveStep(base.succeeded("documentId=" + documentId + "，块数=" + chunks.size(),
+            saveStep(base.succeeded("documentId=" + documentId + "，块数=" + chunks.size(),
                     "", "", null, elapsedMs(start), now()));
             return job.withDocument(documentId, chunks.size());
         } catch (RuntimeException ex) {
-            jobs.saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
+            saveStep(base.failed(rootMessage(ex), elapsedMs(start), now()));
             throw ex;
         }
     }
@@ -377,8 +459,51 @@ public class IngestPipeline {
         return heading >= 0 ? trimmed.substring(heading).trim() : fallback;
     }
 
-    private static int firstHeadingIndex(String text) {
-        int index = 0;
+    /**
+     * 调一次清洗；配置了独立模型且失败时回退到默认模型。
+     *
+     * @param prompt  提示模板
+     * @param segment 原始片段
+     * @param model   首选模型
+     * @return 模型结果
+     */
+    private ChatResult cleanSegment(PromptTemplate prompt, String segment, String model) {
+        List<ChatMessage> messages = List.of(
+                new ChatMessage(MessageRole.SYSTEM, prompt.content()),
+                new ChatMessage(MessageRole.USER,
+                        "请清洗下面的 OCR 文本，只输出清洗后的 markdown 正文：\n\n" + segment));
+        try {
+            return chatModelPort.chat(messages,
+                    new ChatOptions(model, chatConfig.temperature(), chatConfig.maxTokens()));
+        } catch (RuntimeException ex) {
+            if (model.equals(chatConfig.model())) {
+                throw ex;
+            }
+            log.warn("[ingest] clean model {} 调用失败，回退 {}：{}", model, chatConfig.model(), rootMessage(ex));
+            return chatModelPort.chat(messages, new ChatOptions(chatConfig.model(),
+                    chatConfig.temperature(), chatConfig.maxTokens()));
+        }
+    }
+
+    /**
+     * 清洗结果验收：太短或复述指令时退回原文，避免把模型分析写进知识库。
+     *
+     * @param text     模型输出
+     * @param fallback 原始片段
+     * @return 可入库正文
+     */
+    static String acceptCleaned(String text, String fallback) {
+        String cleaned = sanitizeCleanOutput(text, fallback);
+        if (cleaned.length() < Math.max(20, fallback.length() / 5)) {
+            return fallback;
+        }
+        if (cleaned.contains("用户要求清洗") || cleaned.contains("只输出清洗后的")) {
+            return fallback;
+        }
+        return cleaned;
+    }
+
+    private static int firstHeadingIndex(String text) {        int index = 0;
         while (index < text.length()) {
             int lineEnd = text.indexOf('\n', index);
             String line = (lineEnd < 0 ? text.substring(index) : text.substring(index, lineEnd)).trim();

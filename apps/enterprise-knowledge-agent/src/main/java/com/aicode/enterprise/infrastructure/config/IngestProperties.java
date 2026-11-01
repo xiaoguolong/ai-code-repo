@@ -19,6 +19,12 @@ public class IngestProperties {
     /** 单次 OCR 最大页数，超过直接失败（防跑飞）。 */
     private int maxPages = 200;
 
+    /** 每个 OCR 批次的页数（千帆单次 10 页上限，默认 8 留余量）。 */
+    private int ocrBatchPages = 8;
+
+    /** 清洗步骤模型；空 = 沿用 llm.model（生产建议 deepseek-chat 等非推理模型）。 */
+    private String cleanModel = "";
+
     /** 异步执行线程数（企业侧有界）。 */
     private int workerCount = 2;
 
@@ -39,6 +45,22 @@ public class IngestProperties {
 
     public void setMaxPages(int maxPages) {
         this.maxPages = maxPages;
+    }
+
+    public int getOcrBatchPages() {
+        return ocrBatchPages;
+    }
+
+    public void setOcrBatchPages(int ocrBatchPages) {
+        this.ocrBatchPages = ocrBatchPages;
+    }
+
+    public String getCleanModel() {
+        return cleanModel;
+    }
+
+    public void setCleanModel(String cleanModel) {
+        this.cleanModel = cleanModel;
     }
 
     public int getWorkerCount() {

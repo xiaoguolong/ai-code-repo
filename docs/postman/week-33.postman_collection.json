@@ -1,0 +1,29 @@
+{
+  "info": {
+    "name": "Week 33 — 分批 OCR / 指标 / prompt 治理",
+    "description": "clearPrompt（X-Admin-Token）与 Prometheus 指标；业务入库接口沿用 Week 32。",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://127.0.0.1:8081" },
+    { "key": "adminToken", "value": "<X-Admin-Token>" },
+    { "key": "jobId", "value": "<job-id>" }
+  ],
+  "item": [
+    {
+      "name": "清空 prompt 原文",
+      "request": {
+        "method": "DELETE",
+        "header": [{ "key": "X-Admin-Token", "value": "{{adminToken}}" }],
+        "url": { "raw": "{{baseUrl}}/api/v1/admin/ingest-jobs/{{jobId}}/prompt", "host": ["{{baseUrl}}"], "path": ["api", "v1", "admin", "ingest-jobs", "{{jobId}}", "prompt"] }
+      }
+    },
+    {
+      "name": "Prometheus 指标",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/actuator/prometheus", "host": ["{{baseUrl}}"], "path": ["actuator", "prometheus"] }
+      }
+    }
+  ]
+}
